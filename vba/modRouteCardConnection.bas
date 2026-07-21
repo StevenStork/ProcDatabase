@@ -9,7 +9,7 @@ Private Const HEADER_ACTIVE_PART As String = "Active Part"
 Private Const ASSEMBLY_NUMBER_PARAMETER As String = "@assembly_number"
 
 ' Updates the RouteCard connection command text so @assembly_number reflects
-' the active parts on the Home sheet summary table.
+' the active parts on the Home sheet summary table, then refreshes the query.
 Public Sub UpdateRouteCardConnection()
     Dim wsHome As Worksheet
     Dim summaryTable As ListObject
@@ -41,6 +41,7 @@ Public Sub UpdateRouteCardConnection()
     commandText = GetConnectionCommandText(conn)
     updatedCommandText = ReplaceAssemblyNumberParameter(commandText, assemblyNumbers)
     SetConnectionCommandText conn, updatedCommandText
+    RefreshConnection conn
 
 CleanUp:
     OptimizeExcel False
@@ -190,6 +191,17 @@ Private Sub SetConnectionCommandText(ByVal conn As WorkbookConnection, ByVal com
         Case Else
             Err.Raise vbObjectError + 521, "SetConnectionCommandText", "Connection '" & conn.Name & "' uses an unsupported connection type."
     End Select
+End Sub
+
+Private Sub RefreshConnection(ByVal conn As WorkbookConnection)
+    Select Case conn.Type
+        Case xlConnectionTypeOLEDB
+            conn.OLEDBConnection.BackgroundQuery = False
+        Case xlConnectionTypeODBC
+            conn.ODBCConnection.BackgroundQuery = False
+    End Select
+
+    conn.Refresh
 End Sub
 
 Private Sub SortStringArray(ByRef keys() As String)
