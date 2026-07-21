@@ -8,15 +8,16 @@ Option Explicit
 '   =AvgLaborHoursByBasePartAndOp(A2, B2)
 '
 ' Looks up the average LABOR HPS (HOURS) in the Operation Completions table for
-' the given base part number and op sequence. If that average does not exist or
-' is 0, falls back to the average RUN TIME (HOURS) in AssyStndTbl.
+' the given base part number and oper seq. Zero hour values are excluded from
+' the average. If no non-zero average exists, falls back to the average
+' non-zero RUN TIME (HOURS) in AssyStndTbl.
 '==============================================================================
 
 Private Const OP_COMPLETIONS_TABLE_NAME As String = "OperationCompletions"
 Private Const ASSY_STANDARDS_TABLE_NAME As String = "AssyStndTbl"
 
 Private Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
-Private Const COL_OP_SEQUENCE As String = "OP SEQUENCE"
+Private Const COL_OP_SEQUENCE As String = "OPER SEQ"
 Private Const COL_LABOR_HPS As String = "LABOR HPS (HOURS)"
 Private Const COL_RUN_TIME As String = "RUN TIME (HOURS)"
 
@@ -208,6 +209,8 @@ Private Function TryGetNumericHours(ByVal rawValue As Variant, ByRef hoursValue 
     If Not IsNumeric(rawValue) Then Exit Function
 
     hoursValue = CDbl(rawValue)
+    If hoursValue = 0 Then Exit Function
+
     TryGetNumericHours = True
 End Function
 
