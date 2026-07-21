@@ -2,6 +2,7 @@ Attribute VB_Name = "modRouteCardConnection"
 Option Explicit
 
 Private Const ROUTE_CARD_CONNECTION_NAME As String = "RouteCard"
+Private Const OPERATION_COMPLETIONS_CONNECTION_NAME As String = "OperationCompletions"
 Private Const SUMMARY_TABLE_NAME As String = "BasePartSummaryTbl"
 Private Const HEADER_BASE_PART As String = "Base Part Number"
 Private Const HEADER_DASH_CONDITIONS As String = "Dash Conditions"
@@ -11,6 +12,16 @@ Private Const ASSEMBLY_NUMBER_PARAMETER As String = "@assembly_number"
 ' Updates the RouteCard connection command text so @assembly_number reflects
 ' the active parts on the Home sheet summary table, then refreshes the query.
 Public Sub UpdateRouteCardConnection()
+    UpdateAssemblyNumberConnection ROUTE_CARD_CONNECTION_NAME
+End Sub
+
+' Updates the OperationCompletions connection command text so @assembly_number
+' reflects the active parts on the Home sheet summary table, then refreshes.
+Public Sub UpdateOperationCompletionsConnection()
+    UpdateAssemblyNumberConnection OPERATION_COMPLETIONS_CONNECTION_NAME
+End Sub
+
+Private Sub UpdateAssemblyNumberConnection(ByVal connectionName As String)
     Dim wsHome As Worksheet
     Dim summaryTable As ListObject
     Dim conn As WorkbookConnection
@@ -25,21 +36,21 @@ Public Sub UpdateRouteCardConnection()
     Set summaryTable = wsHome.ListObjects(SUMMARY_TABLE_NAME)
 
     If summaryTable Is Nothing Then
-        Err.Raise vbObjectError + 513, "UpdateRouteCardConnection", "Summary table '" & SUMMARY_TABLE_NAME & "' was not found on the Home sheet."
+        Err.Raise vbObjectError + 513, "UpdateAssemblyNumberConnection", "Summary table '" & SUMMARY_TABLE_NAME & "' was not found on the Home sheet."
     End If
 
     If summaryTable.DataBodyRange Is Nothing Then
-        Err.Raise vbObjectError + 514, "UpdateRouteCardConnection", "No summary rows are available to build the RouteCard assembly list."
+        Err.Raise vbObjectError + 514, "UpdateAssemblyNumberConnection", "No summary rows are available to build the assembly list."
     End If
 
-    Set conn = GetWorkbookConnection(ROUTE_CARD_CONNECTION_NAME)
+    Set conn = GetWorkbookConnection(connectionName)
     If conn Is Nothing Then
-        Err.Raise vbObjectError + 515, "UpdateRouteCardConnection", "Connection '" & ROUTE_CARD_CONNECTION_NAME & "' was not found."
+        Err.Raise vbObjectError + 515, "UpdateAssemblyNumberConnection", "Connection '" & connectionName & "' was not found."
     End If
 
     assemblyNumbers = BuildActiveAssemblyNumberList(summaryTable)
     commandText = GetConnectionCommandText(conn)
-    updatedCommandText = ReplaceAssemblyNumberParameter(commandText, assemblyNumbers)
+    updatedCommandText = ReplaceAssemblyNumberParameter(commandText, assemblyNumbers, connectionName)
     SetConnectionCommandText conn, updatedCommandText
     RefreshConnection conn
 
@@ -136,7 +147,7 @@ Private Function SplitDelimitedList(ByVal value As String) As String()
     SplitDelimitedList = Split(Replace$(value, ", ", ","), ",")
 End Function
 
-Private Function ReplaceAssemblyNumberParameter(ByVal commandText As String, ByVal assemblyNumbers As String) As String
+Private Function ReplaceAssemblyNumberParameter(ByVal commandText As String, ByVal assemblyNumbers As String, ByVal connectionName As String) As String
     Dim parameterPos As Long
     Dim equalsPos As Long
     Dim openingQuotePos As Long
@@ -144,22 +155,22 @@ Private Function ReplaceAssemblyNumberParameter(ByVal commandText As String, ByV
 
     parameterPos = InStr(1, commandText, ASSEMBLY_NUMBER_PARAMETER, vbTextCompare)
     If parameterPos = 0 Then
-        Err.Raise vbObjectError + 516, "ReplaceAssemblyNumberParameter", "Parameter '" & ASSEMBLY_NUMBER_PARAMETER & "' was not found in the RouteCard command text."
+        Err.Raise vbObjectError + 516, "ReplaceAssemblyNumberParameter", "Parameter '" & ASSEMBLY_NUMBER_PARAMETER & "' was not found in the " & connectionName & " command text."
     End If
 
     equalsPos = InStr(parameterPos, commandText, "=")
     If equalsPos = 0 Then
-        Err.Raise vbObjectError + 517, "ReplaceAssemblyNumberParameter", "Could not locate the assignment for '" & ASSEMBLY_NUMBER_PARAMETER & "'."
+        Err.Raise vbObjectError + 517, "ReplaceAssemblyNumberParameter", "Could not locate the assignment for '" & ASSEMBLY_NUMBER_PARAMETER & "' in " & connectionName & "."
     End If
 
     openingQuotePos = InStr(equalsPos, commandText, "'")
     If openingQuotePos = 0 Then
-        Err.Raise vbObjectError + 518, "ReplaceAssemblyNumberParameter", "Could not locate the opening quote for '" & ASSEMBLY_NUMBER_PARAMETER & "'."
+        Err.Raise vbObjectError + 518, "ReplaceAssemblyNumberParameter", "Could not locate the opening quote for '" & ASSEMBLY_NUMBER_PARAMETER & "' in " & connectionName & "."
     End If
 
     closingQuotePos = InStr(openingQuotePos + 1, commandText, "'")
     If closingQuotePos = 0 Then
-        Err.Raise vbObjectError + 519, "ReplaceAssemblyNumberParameter", "Could not locate the closing quote for '" & ASSEMBLY_NUMBER_PARAMETER & "'."
+        Err.Raise vbObjectError + 519, "ReplaceAssemblyNumberParameter", "Could not locate the closing quote for '" & ASSEMBLY_NUMBER_PARAMETER & "' in " & connectionName & "."
     End If
 
     ReplaceAssemblyNumberParameter = Left$(commandText, openingQuotePos) & assemblyNumbers & Mid$(commandText, closingQuotePos)
