@@ -18,9 +18,8 @@ Private Const DASH_CHECKBOX_COLUMN As String = "F"
 Private Const PRODUCT_LINE_VALUE_COLUMN As String = "G"
 Private Const PRODUCT_LINE_CHECKBOX_COLUMN As String = "H"
 
-Private Const FFA_CHECKBOX_PREFIX As String = "chkFFA_"
-Private Const DASH_CHECKBOX_PREFIX As String = "chkDash_"
-Private Const PRODUCT_LINE_CHECKBOX_PREFIX As String = "chkProd_"
+' Excel CellControl type for native in-cell checkboxes.
+Private Const XL_TYPE_CHECKBOX As Long = 2
 
 ' Call from ThisWorkbook.Workbook_SheetActivate:
 '   HandlePartSheetActivate Sh
@@ -56,9 +55,9 @@ Private Sub RefreshPartSheetLists(ByVal ws As Worksheet)
     dashConditions = GetDashConditionsForBasePart(basePart)
     productLines = GetReferenceColumnValues("D")
 
-    SyncValueCheckboxList ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN, ffaValues, FFA_CHECKBOX_PREFIX
-    SyncValueCheckboxList ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN, dashConditions, DASH_CHECKBOX_PREFIX
-    SyncValueCheckboxList ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN, productLines, PRODUCT_LINE_CHECKBOX_PREFIX
+    SyncValueCheckboxList ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN, ffaValues
+    SyncValueCheckboxList ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN, dashConditions
+    SyncValueCheckboxList ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN, productLines
 End Sub
 
 ' Writes values/checkboxes/borders only when the list or checkbox set needs updating.
@@ -66,127 +65,152 @@ Private Sub SyncValueCheckboxList( _
     ByVal ws As Worksheet, _
     ByVal valueColumn As String, _
     ByVal checkboxColumn As String, _
-    ByRef sourceValues() As String, _
-    ByVal checkboxNamePrefix As String)
+    ByRef sourceValues() As String)
 
     Dim currentValues() As String
     Dim sourceCount As Long
-    Dim expectedPrefix As String
 
     currentValues = ReadColumnList(ws, valueColumn)
     sourceCount = ArrayCount(sourceValues)
-    expectedPrefix = ControlNamePrefix(checkboxNamePrefix, ws.Name)
 
     If StringArraysEqual(currentValues, sourceValues) Then
-        If CountCheckBoxesWithPrefix(ws, expectedPrefix) = sourceCount Then
+        If CountCellCheckBoxes(ws, checkboxColumn, sourceCount) = sourceCount Then
             Exit Sub
         End If
     End If
 
-    ClearValueCheckboxList ws, valueColumn, checkboxColumn, expectedPrefix
+    ClearValueCheckboxList ws, valueColumn, checkboxColumn
 
     If sourceCount = 0 Then Exit Sub
 
-    PopulateValueCheckboxList ws, valueColumn, checkboxColumn, sourceValues, checkboxNamePrefix
+    PopulateValueCheckboxList ws, valueColumn, checkboxColumn, sourceValues
 End Sub
 
 Private Sub ClearValueCheckboxList( _
     ByVal ws As Worksheet, _
     ByVal valueColumn As String, _
-    ByVal checkboxColumn As String, _
-    ByVal expectedPrefix As String)
+    ByVal checkboxColumn As String)
 
     Dim lastRow As Long
     Dim clearRange As Range
-
-    DeleteCheckBoxesWithPrefix ws, expectedPrefix
+    Dim checkboxRange As Range
 
     lastRow = Application.WorksheetFunction.Max( _
-        LastUsedRowInColumn(ws, valueColumn), _
-        LastUsedRowInColumn(ws, checkboxColumn), _
+        LastNonEmptyRowFrom(ws, valueColumn, LIST_START_ROW), _
+        LastNonEmptyRowFrom(ws, checkboxColumn, LIST_START_ROW), _
         LIST_START_ROW)
 
-    If lastRow >= LIST_START_ROW Then
-        Set clearRange = ws.Range( _
-            ws.Cells(LIST_START_ROW, valueColumn), _
-            ws.Cells(lastRow, checkboxColumn))
-        clearRange.ClearContents
-        clearRange.Borders.LineStyle = xlNone
-    End If
+    Set clearRange = ws.Range( _
+        ws.Cells(LIST_START_ROW, valueColumn), _
+        ws.Cells(lastRow, checkboxColumn))
+    Set checkboxRange = ws.Range( _
+        ws.Cells(LIST_START_ROW, checkboxColumn), _
+        ws.Cells(lastRow, checkboxColumn))
+
+    RemoveCellCheckBoxes checkboxRange
+    clearRange.ClearContents
+    clearRange.Borders.LineStyle = xlNone
 End Sub
 
 Private Sub PopulateValueCheckboxList( _
     ByVal ws As Worksheet, _
     ByVal valueColumn As String, _
     ByVal checkboxColumn As String, _
-    ByRef values() As String, _
-    ByVal checkboxNamePrefix As String)
+    ByRef values() As String)
 
     Dim i As Long
-    Dim outputRow As Long
-    Dim valueCell As Range
-    Dim checkboxCell As Range
+    Dim sourceCount As Long
+    Dim endRow As Long
+    Dim valueRange As Range
+    Dim checkboxRange As Range
     Dim listRange As Range
+    Dim outputValues As Variant
+    Dim rowOffset As Long
 
-    outputRow = LIST_START_ROW
+    sourceCount = ArrayCount(values)
+    If sourceCount = 0 Then Exit Sub
+
+    endRow = LIST_START_ROW + sourceCount - 1
+    Set valueRange = ws.Range(ws.Cells(LIST_START_ROW, valueColumn), ws.Cells(endRow, valueColumn))
+    Set checkboxRange = ws.Range(ws.Cells(LIST_START_ROW, checkboxColumn), ws.Cells(endRow, checkboxColumn))
+    Set listRange = ws.Range(ws.Cells(LIST_START_ROW, valueColumn), ws.Cells(endRow, checkboxColumn))
+
+    ReDim outputValues(1 To sourceCount, 1 To 1)
+    rowOffset = 1
     For i = LBound(values) To UBound(values)
-        Set valueCell = ws.Cells(outputRow, valueColumn)
-        Set checkboxCell = ws.Cells(outputRow, checkboxColumn)
-
-        valueCell.Value = values(i)
-        valueCell.HorizontalAlignment = xlLeft
-        valueCell.VerticalAlignment = xlCenter
-
-        checkboxCell.HorizontalAlignment = xlCenter
-        checkboxCell.VerticalAlignment = xlCenter
-
-        AddActiveXCheckBox ws, checkboxCell, BuildControlName(checkboxNamePrefix, ws.Name, outputRow)
-
-        If listRange Is Nothing Then
-            Set listRange = ws.Range(valueCell, checkboxCell)
-        Else
-            Set listRange = Union(listRange, ws.Range(valueCell, checkboxCell))
-        End If
-
-        outputRow = outputRow + 1
+        outputValues(rowOffset, 1) = values(i)
+        rowOffset = rowOffset + 1
     Next i
 
-    If Not listRange Is Nothing Then
-        ApplyListBorders listRange
+    ' Write all values first, then apply cell-control checkboxes to the whole block.
+    valueRange.Value = outputValues
+    valueRange.HorizontalAlignment = xlLeft
+    valueRange.VerticalAlignment = xlCenter
+
+    checkboxRange.HorizontalAlignment = xlCenter
+    checkboxRange.VerticalAlignment = xlCenter
+    checkboxRange.Value = False
+    ApplyCellCheckBoxes checkboxRange
+
+    ApplyListBorders listRange
+End Sub
+
+Private Sub ApplyCellCheckBoxes(ByVal targetRange As Range)
+    On Error GoTo FailSetCheckbox
+    targetRange.CellControl.SetCheckbox
+    Exit Sub
+
+FailSetCheckbox:
+    Err.Raise vbObjectError + 700, "ApplyCellCheckBoxes", _
+        "Unable to add cell-control checkboxes. This requires Excel for Microsoft 365 with Insert > Checkbox support."
+End Sub
+
+Private Sub RemoveCellCheckBoxes(ByVal targetRange As Range)
+    Dim cell As Range
+
+    On Error Resume Next
+    ' Prefer a bulk clear when available; fall back to clearing cell by cell.
+    targetRange.CellControl.Clear
+    If Err.Number <> 0 Then
+        Err.Clear
+        For Each cell In targetRange.Cells
+            cell.CellControl.Clear
+            Err.Clear
+        Next cell
     End If
+    On Error GoTo 0
 End Sub
 
-Private Sub AddActiveXCheckBox(ByVal ws As Worksheet, ByVal targetCell As Range, ByVal checkboxName As String)
-    Dim ole As OLEObject
-    Dim boxSize As Double
-    Dim leftPos As Double
-    Dim topPos As Double
+Private Function CountCellCheckBoxes(ByVal ws As Worksheet, ByVal checkboxColumn As String, ByVal expectedCount As Long) As Long
+    Dim rowIndex As Long
+    Dim matchCount As Long
+    Dim endRow As Long
+    Dim cellType As Variant
 
-    boxSize = Application.WorksheetFunction.Min(targetCell.Width, targetCell.Height) - 4
-    If boxSize < 10 Then boxSize = 12
+    If expectedCount <= 0 Then
+        CountCellCheckBoxes = 0
+        Exit Function
+    End If
 
-    leftPos = targetCell.Left + (targetCell.Width - boxSize) / 2
-    topPos = targetCell.Top + (targetCell.Height - boxSize) / 2
+    endRow = LIST_START_ROW + expectedCount - 1
+    For rowIndex = LIST_START_ROW To endRow
+        On Error Resume Next
+        cellType = ws.Cells(rowIndex, checkboxColumn).CellControl.Type
+        If Err.Number <> 0 Then
+            Err.Clear
+            CountCellCheckBoxes = 0
+            On Error GoTo 0
+            Exit Function
+        End If
+        On Error GoTo 0
 
-    Set ole = ws.OLEObjects.Add( _
-        ClassType:="Forms.CheckBox.1", _
-        Link:=False, _
-        DisplayAsIcon:=False, _
-        Left:=leftPos, _
-        Top:=topPos, _
-        Width:=boxSize, _
-        Height:=boxSize)
+        If cellType = XL_TYPE_CHECKBOX Then
+            matchCount = matchCount + 1
+        End If
+    Next rowIndex
 
-    ole.Name = checkboxName
-    ole.Placement = xlMoveAndSize
-
-    With ole.Object
-        .Caption = vbNullString
-        .Value = False
-        .SpecialEffect = 0
-        .BackStyle = 0
-    End With
-End Sub
+    CountCellCheckBoxes = matchCount
+End Function
 
 Private Sub ApplyListBorders(ByVal listRange As Range)
     With listRange.Borders
@@ -198,31 +222,6 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
     listRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
 End Sub
 
-Private Sub DeleteCheckBoxesWithPrefix(ByVal ws As Worksheet, ByVal expectedPrefix As String)
-    Dim oleIndex As Long
-    Dim ole As OLEObject
-
-    For oleIndex = ws.OLEObjects.Count To 1 Step -1
-        Set ole = ws.OLEObjects(oleIndex)
-        If Left$(ole.Name, Len(expectedPrefix)) = expectedPrefix Then
-            ole.Delete
-        End If
-    Next oleIndex
-End Sub
-
-Private Function CountCheckBoxesWithPrefix(ByVal ws As Worksheet, ByVal expectedPrefix As String) As Long
-    Dim ole As OLEObject
-    Dim matchCount As Long
-
-    For Each ole In ws.OLEObjects
-        If Left$(ole.Name, Len(expectedPrefix)) = expectedPrefix Then
-            matchCount = matchCount + 1
-        End If
-    Next ole
-
-    CountCheckBoxesWithPrefix = matchCount
-End Function
-
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
     Dim lastRow As Long
     Dim rowIndex As Long
@@ -230,7 +229,7 @@ Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As Str
     Dim valueCount As Long
     Dim cellValue As String
 
-    lastRow = LastUsedRowInColumn(ws, columnLetter)
+    lastRow = LastNonEmptyRowFrom(ws, columnLetter, LIST_START_ROW)
     If lastRow < LIST_START_ROW Then
         ReadColumnList = EmptyStringArray()
         Exit Function
@@ -415,32 +414,24 @@ Private Function CompareListValues(ByVal leftValue As String, ByVal rightValue A
     End If
 End Function
 
-Private Function BuildControlName(ByVal prefix As String, ByVal sheetName As String, ByVal rowIndex As Long) As String
-    BuildControlName = ControlNamePrefix(prefix, sheetName) & CStr(rowIndex)
-End Function
+Private Function LastNonEmptyRowFrom(ByVal ws As Worksheet, ByVal columnLetter As String, ByVal startRow As Long) As Long
+    Dim rowIndex As Long
+    Dim lastRow As Long
 
-Private Function ControlNamePrefix(ByVal prefix As String, ByVal sheetName As String) As String
-    ControlNamePrefix = prefix & MakeControlSafe(sheetName) & "_"
-End Function
+    lastRow = LastUsedRowInColumn(ws, columnLetter)
+    If lastRow < startRow Then
+        LastNonEmptyRowFrom = startRow - 1
+        Exit Function
+    End If
 
-Private Function MakeControlSafe(ByVal textValue As String) As String
-    Dim cleaned As String
-    Dim i As Long
-    Dim character As String
+    For rowIndex = lastRow To startRow Step -1
+        If Len(Trim$(CStr(ws.Cells(rowIndex, columnLetter).Value))) > 0 Then
+            LastNonEmptyRowFrom = rowIndex
+            Exit Function
+        End If
+    Next rowIndex
 
-    cleaned = vbNullString
-    For i = 1 To Len(textValue)
-        character = Mid$(textValue, i, 1)
-        Select Case True
-            Case character Like "[A-Za-z0-9]"
-                cleaned = cleaned & character
-            Case Else
-                cleaned = cleaned & "_"
-        End Select
-    Next i
-
-    If Len(cleaned) = 0 Then cleaned = "Part"
-    MakeControlSafe = cleaned
+    LastNonEmptyRowFrom = startRow - 1
 End Function
 
 Private Function LastUsedRowInColumn(ByVal ws As Worksheet, ByVal columnLetter As String) As Long
