@@ -8,55 +8,79 @@ Private Const HEADER_BASE_PART As String = "Base Part Number"
 Private Const HEADER_DASH_CONDITIONS As String = "Dash Conditions"
 Private Const HEADER_ACTIVE_PART As String = "Active Part"
 Private Const ASSEMBLY_NUMBER_PARAMETER As String = "@assembly_number"
+Private Const ASSEMBLY_NUMBER_LIST_PARAMETER As String = "@assembly_number_list"
 
 ' Updates the RouteCard connection command text so @assembly_number reflects
 ' the active parts on the Home sheet summary table, then refreshes the query.
 Public Sub UpdateRouteCardConnection()
-    UpdateAssemblyNumberConnection ROUTE_CARD_CONNECTION_NAME
-End Sub
-
-' Updates the OperationCompletions connection command text so @assembly_number
-' reflects the active parts on the Home sheet summary table, then refreshes.
-Public Sub UpdateOperationCompletionsConnection()
-    UpdateAssemblyNumberConnection OPERATION_COMPLETIONS_CONNECTION_NAME
-End Sub
-
-Private Sub UpdateAssemblyNumberConnection(ByVal connectionName As String)
-    Dim wsHome As Worksheet
-    Dim summaryTable As ListObject
+    Dim commandText As String
     Dim conn As WorkbookConnection
     Dim assemblyNumbers As String
-    Dim commandText As String
-    Dim updatedCommandText As String
 
     On Error GoTo CleanUp
     OptimizeExcel True
 
-    Set wsHome = ThisWorkbook.Worksheets("Home")
-    Set summaryTable = wsHome.ListObjects(SUMMARY_TABLE_NAME)
-
-    If summaryTable Is Nothing Then
-        Err.Raise vbObjectError + 513, "UpdateAssemblyNumberConnection", "Summary table '" & SUMMARY_TABLE_NAME & "' was not found on the Home sheet."
-    End If
-
-    If summaryTable.DataBodyRange Is Nothing Then
-        Err.Raise vbObjectError + 514, "UpdateAssemblyNumberConnection", "No summary rows are available to build the assembly list."
-    End If
-
-    Set conn = GetWorkbookConnection(connectionName)
-    If conn Is Nothing Then
-        Err.Raise vbObjectError + 515, "UpdateAssemblyNumberConnection", "Connection '" & connectionName & "' was not found."
-    End If
-
-    assemblyNumbers = BuildActiveAssemblyNumberList(summaryTable)
+    Set conn = GetSummaryConnection(ROUTE_CARD_CONNECTION_NAME)
+    assemblyNumbers = BuildActiveAssemblyNumberList(GetSummaryTable())
     commandText = GetConnectionCommandText(conn)
-    updatedCommandText = ReplaceAssemblyNumberParameter(commandText, assemblyNumbers, connectionName)
-    SetConnectionCommandText conn, updatedCommandText
+    commandText = ReplaceQuotedParameterValue(commandText, ASSEMBLY_NUMBER_PARAMETER, assemblyNumbers, ROUTE_CARD_CONNECTION_NAME)
+    SetConnectionCommandText conn, commandText
     RefreshConnection conn
 
 CleanUp:
     OptimizeExcel False
 End Sub
+
+' Updates the OperationCompletions connection so @assembly_number is '%' and
+' @assembly_number_list reflects the active parts, then refreshes the query.
+Public Sub UpdateOperationCompletionsConnection()
+    Dim commandText As String
+    Dim conn As WorkbookConnection
+    Dim assemblyNumbers As String
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+
+    Set conn = GetSummaryConnection(OPERATION_COMPLETIONS_CONNECTION_NAME)
+    assemblyNumbers = BuildActiveAssemblyNumberList(GetSummaryTable())
+    commandText = GetConnectionCommandText(conn)
+    commandText = ReplaceQuotedParameterValue(commandText, ASSEMBLY_NUMBER_PARAMETER, "%", OPERATION_COMPLETIONS_CONNECTION_NAME)
+    commandText = ReplaceQuotedParameterValue(commandText, ASSEMBLY_NUMBER_LIST_PARAMETER, assemblyNumbers, OPERATION_COMPLETIONS_CONNECTION_NAME)
+    SetConnectionCommandText conn, commandText
+    RefreshConnection conn
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Function GetSummaryTable() As ListObject
+    Dim wsHome As Worksheet
+    Dim summaryTable As ListObject
+
+    Set wsHome = ThisWorkbook.Worksheets("Home")
+    Set summaryTable = wsHome.ListObjects(SUMMARY_TABLE_NAME)
+
+    If summaryTable Is Nothing Then
+        Err.Raise vbObjectError + 513, "GetSummaryTable", "Summary table '" & SUMMARY_TABLE_NAME & "' was not found on the Home sheet."
+    End If
+
+    If summaryTable.DataBodyRange Is Nothing Then
+        Err.Raise vbObjectError + 514, "GetSummaryTable", "No summary rows are available to build the assembly list."
+    End If
+
+    Set GetSummaryTable = summaryTable
+End Function
+
+Private Function GetSummaryConnection(ByVal connectionName As String) As WorkbookConnection
+    Dim conn As WorkbookConnection
+
+    Set conn = GetWorkbookConnection(connectionName)
+    If conn Is Nothing Then
+        Err.Raise vbObjectError + 515, "GetSummaryConnection", "Connection '" & connectionName & "' was not found."
+    End If
+
+    Set GetSummaryConnection = conn
+End Function
 
 Private Function BuildActiveAssemblyNumberList(ByVal summaryTable As ListObject) As String
     Dim rowIndex As Long
@@ -147,33 +171,69 @@ Private Function SplitDelimitedList(ByVal value As String) As String()
     SplitDelimitedList = Split(Replace$(value, ", ", ","), ",")
 End Function
 
-Private Function ReplaceAssemblyNumberParameter(ByVal commandText As String, ByVal assemblyNumbers As String, ByVal connectionName As String) As String
+Private Function ReplaceQuotedParameterValue( _
+    ByVal commandText As String, _
+    ByVal parameterName As String, _
+    ByVal parameterValue As String, _
+    ByVal connectionName As String) As String
     Dim parameterPos As Long
     Dim equalsPos As Long
     Dim openingQuotePos As Long
     Dim closingQuotePos As Long
 
-    parameterPos = InStr(1, commandText, ASSEMBLY_NUMBER_PARAMETER, vbTextCompare)
+    ' Prefer the longest exact match so @assembly_number does not match
+    ' @assembly_number_list when both appear in the same command text.
+    parameterPos = FindParameterPosition(commandText, parameterName)
     If parameterPos = 0 Then
-        Err.Raise vbObjectError + 516, "ReplaceAssemblyNumberParameter", "Parameter '" & ASSEMBLY_NUMBER_PARAMETER & "' was not found in the " & connectionName & " command text."
+        Err.Raise vbObjectError + 516, "ReplaceQuotedParameterValue", "Parameter '" & parameterName & "' was not found in the " & connectionName & " command text."
     End If
 
     equalsPos = InStr(parameterPos, commandText, "=")
     If equalsPos = 0 Then
-        Err.Raise vbObjectError + 517, "ReplaceAssemblyNumberParameter", "Could not locate the assignment for '" & ASSEMBLY_NUMBER_PARAMETER & "' in " & connectionName & "."
+        Err.Raise vbObjectError + 517, "ReplaceQuotedParameterValue", "Could not locate the assignment for '" & parameterName & "' in " & connectionName & "."
     End If
 
     openingQuotePos = InStr(equalsPos, commandText, "'")
     If openingQuotePos = 0 Then
-        Err.Raise vbObjectError + 518, "ReplaceAssemblyNumberParameter", "Could not locate the opening quote for '" & ASSEMBLY_NUMBER_PARAMETER & "' in " & connectionName & "."
+        Err.Raise vbObjectError + 518, "ReplaceQuotedParameterValue", "Could not locate the opening quote for '" & parameterName & "' in " & connectionName & "."
     End If
 
     closingQuotePos = InStr(openingQuotePos + 1, commandText, "'")
     If closingQuotePos = 0 Then
-        Err.Raise vbObjectError + 519, "ReplaceAssemblyNumberParameter", "Could not locate the closing quote for '" & ASSEMBLY_NUMBER_PARAMETER & "' in " & connectionName & "."
+        Err.Raise vbObjectError + 519, "ReplaceQuotedParameterValue", "Could not locate the closing quote for '" & parameterName & "' in " & connectionName & "."
     End If
 
-    ReplaceAssemblyNumberParameter = Left$(commandText, openingQuotePos) & assemblyNumbers & Mid$(commandText, closingQuotePos)
+    ReplaceQuotedParameterValue = Left$(commandText, openingQuotePos) & parameterValue & Mid$(commandText, closingQuotePos)
+End Function
+
+Private Function FindParameterPosition(ByVal commandText As String, ByVal parameterName As String) As Long
+    Dim searchPos As Long
+    Dim foundPos As Long
+    Dim nextChar As String
+
+    searchPos = 1
+
+    Do
+        foundPos = InStr(searchPos, commandText, parameterName, vbTextCompare)
+        If foundPos = 0 Then Exit Do
+
+        nextChar = Mid$(commandText, foundPos + Len(parameterName), 1)
+        If Len(nextChar) = 0 Or Not IsParameterNameContinuation(nextChar) Then
+            FindParameterPosition = foundPos
+            Exit Function
+        End If
+
+        searchPos = foundPos + 1
+    Loop
+End Function
+
+Private Function IsParameterNameContinuation(ByVal character As String) As Boolean
+    Select Case LCase$(character)
+        Case "a" To "z", "0" To "9", "_", "@"
+            IsParameterNameContinuation = True
+        Case Else
+            IsParameterNameContinuation = False
+    End Select
 End Function
 
 Private Function GetWorkbookConnection(ByVal connectionName As String) As WorkbookConnection
