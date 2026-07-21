@@ -9,7 +9,7 @@ Private Const ASSY_STANDARDS_TABLE_NAME As String = "AssyStndTbl"
 Private Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
 
 Private Const BASE_PART_COLUMN As String = "C"
-Private Const BASE_PART_START_ROW As Long = 2
+Private Const BASE_PART_START_ROW As Long = 3
 Private Const HEADER_BASE_PART As String = "Base Part Number"
 Private Const TEMPLATE_BASE_PART_CELL As String = "C2"
 Private Const PART_LABEL_CELL As String = "A1"
@@ -40,7 +40,7 @@ Public Sub CreateMissingPartNumberSheets()
     Set wsHome = ThisWorkbook.Worksheets(HOME_SHEET_NAME)
     Set wsTemplate = ThisWorkbook.Worksheets(TEMPLATE_SHEET_NAME)
 
-    lastRow = wsHome.Cells(wsHome.Rows.Count, BASE_PART_COLUMN).End(xlUp).Row
+    lastRow = LastUsedRowInColumn(wsHome, BASE_PART_COLUMN)
     If lastRow < BASE_PART_START_ROW Then
         GoTo CleanUp
     End If
@@ -53,12 +53,19 @@ Public Sub CreateMissingPartNumberSheets()
         ElseIf StrComp(basePart, HEADER_BASE_PART, vbTextCompare) = 0 Then
             ' Skip the column header if present.
         ElseIf Not SheetExists(basePart) Then
-            CreatePartNumberSheetFromTemplate wsTemplate, basePart
+            CreatePartNumberSheetFromTemplateSafe wsTemplate, basePart
         End If
     Next rowIndex
 
 CleanUp:
     OptimizeExcel False
+End Sub
+
+' Creates one part sheet; errors for a single part do not stop the remaining parts.
+Private Sub CreatePartNumberSheetFromTemplateSafe(ByVal wsTemplate As Worksheet, ByVal basePart As String)
+    On Error Resume Next
+    CreatePartNumberSheetFromTemplate wsTemplate, basePart
+    On Error GoTo 0
 End Sub
 
 Private Sub CreatePartNumberSheetFromTemplate(ByVal wsTemplate As Worksheet, ByVal basePart As String)
@@ -124,7 +131,7 @@ Private Sub PopulateValueCheckboxList( _
         checkboxCell.HorizontalAlignment = xlCenter
         checkboxCell.VerticalAlignment = xlCenter
 
-        AddActiveXCheckBox ws, checkboxCell, checkboxNamePrefix & outputRow
+        AddActiveXCheckBox ws, checkboxCell, BuildControlName(checkboxNamePrefix, ws.Name, outputRow)
 
         If listRange Is Nothing Then
             Set listRange = ws.Range(valueCell, checkboxCell)
@@ -194,7 +201,7 @@ Private Function GetReferenceFFAValues() As String()
     Set uniqueValues = CreateObject("Scripting.Dictionary")
     uniqueValues.CompareMode = vbTextCompare
 
-    lastRow = wsReferences.Cells(wsReferences.Rows.Count, "B").End(xlUp).Row
+    lastRow = LastUsedRowInColumn(wsReferences, "B")
     For rowIndex = 2 To lastRow
         ffaValue = Trim$(CStr(wsReferences.Cells(rowIndex, "B").Value))
         If Len(ffaValue) > 0 Then
@@ -316,6 +323,52 @@ Private Function CompareListValues(ByVal leftValue As String, ByVal rightValue A
         CompareListValues = Sgn(CDbl(leftValue) - CDbl(rightValue))
     Else
         CompareListValues = StrComp(leftValue, rightValue, vbTextCompare)
+    End If
+End Function
+
+Private Function BuildControlName(ByVal prefix As String, ByVal sheetName As String, ByVal rowIndex As Long) As String
+    ' ActiveX control names must be unique across the whole workbook.
+    BuildControlName = prefix & MakeControlSafe(sheetName) & "_" & CStr(rowIndex)
+End Function
+
+Private Function MakeControlSafe(ByVal textValue As String) As String
+    Dim cleaned As String
+    Dim i As Long
+    Dim character As String
+
+    cleaned = vbNullString
+    For i = 1 To Len(textValue)
+        character = Mid$(textValue, i, 1)
+        Select Case True
+            Case character Like "[A-Za-z0-9]"
+                cleaned = cleaned & character
+            Case Else
+                cleaned = cleaned & "_"
+        End Select
+    Next i
+
+    If Len(cleaned) = 0 Then cleaned = "Part"
+    MakeControlSafe = cleaned
+End Function
+
+Private Function LastUsedRowInColumn(ByVal ws As Worksheet, ByVal columnLetter As String) As Long
+    Dim foundCell As Range
+    Dim endUpRow As Long
+
+    endUpRow = ws.Cells(ws.Rows.Count, columnLetter).End(xlUp).Row
+
+    Set foundCell = ws.Columns(columnLetter).Find( _
+        What:="*", _
+        LookIn:=xlFormulas, _
+        SearchOrder:=xlByRows, _
+        SearchDirection:=xlPrevious)
+
+    If foundCell Is Nothing Then
+        LastUsedRowInColumn = endUpRow
+    ElseIf foundCell.Row > endUpRow Then
+        LastUsedRowInColumn = foundCell.Row
+    Else
+        LastUsedRowInColumn = endUpRow
     End If
 End Function
 
