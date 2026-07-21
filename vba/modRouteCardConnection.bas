@@ -21,7 +21,7 @@ Public Sub UpdateRouteCardConnection()
     OptimizeExcel True
 
     Set conn = GetSummaryConnection(ROUTE_CARD_CONNECTION_NAME)
-    assemblyNumbers = BuildActiveAssemblyNumberList(GetSummaryTable())
+    assemblyNumbers = BuildActiveAssemblyNumberList(GetSummaryTable(), False)
     commandText = GetConnectionCommandText(conn)
     commandText = ReplaceQuotedParameterValue(commandText, ASSEMBLY_NUMBER_PARAMETER, assemblyNumbers, ROUTE_CARD_CONNECTION_NAME)
     SetConnectionCommandText conn, commandText
@@ -32,7 +32,8 @@ CleanUp:
 End Sub
 
 ' Updates the OperationCompletions connection so @assembly_number is '%' and
-' @assembly_number_list reflects the active parts, then refreshes the query.
+' @assembly_number_list includes every dash condition for each active part,
+' then refreshes the query.
 Public Sub UpdateOperationCompletionsConnection()
     Dim commandText As String
     Dim conn As WorkbookConnection
@@ -42,7 +43,7 @@ Public Sub UpdateOperationCompletionsConnection()
     OptimizeExcel True
 
     Set conn = GetSummaryConnection(OPERATION_COMPLETIONS_CONNECTION_NAME)
-    assemblyNumbers = BuildActiveAssemblyNumberList(GetSummaryTable())
+    assemblyNumbers = BuildActiveAssemblyNumberList(GetSummaryTable(), True)
     commandText = GetConnectionCommandText(conn)
     commandText = ReplaceQuotedParameterValue(commandText, ASSEMBLY_NUMBER_PARAMETER, "%", OPERATION_COMPLETIONS_CONNECTION_NAME)
     commandText = ReplaceQuotedParameterValue(commandText, ASSEMBLY_NUMBER_LIST_PARAMETER, assemblyNumbers, OPERATION_COMPLETIONS_CONNECTION_NAME)
@@ -82,7 +83,7 @@ Private Function GetSummaryConnection(ByVal connectionName As String) As Workboo
     Set GetSummaryConnection = conn
 End Function
 
-Private Function BuildActiveAssemblyNumberList(ByVal summaryTable As ListObject) As String
+Private Function BuildActiveAssemblyNumberList(ByVal summaryTable As ListObject, ByVal includeAllDashConditions As Boolean) As String
     Dim rowIndex As Long
     Dim basePart As String
     Dim dashConditions As String
@@ -90,6 +91,9 @@ Private Function BuildActiveAssemblyNumberList(ByVal summaryTable As ListObject)
     Dim assemblyNumbers() As String
     Dim assemblyCount As Long
     Dim assemblyNo As String
+    Dim dashValues() As String
+    Dim dashIndex As Long
+    Dim dashCondition As String
 
     assemblyCount = 0
     ReDim assemblyNumbers(0 To 0)
@@ -100,12 +104,35 @@ Private Function BuildActiveAssemblyNumberList(ByVal summaryTable As ListObject)
         If isActive Then
             basePart = Trim$(CStr(summaryTable.ListColumns(HEADER_BASE_PART).DataBodyRange.Cells(rowIndex, 1).Value))
             dashConditions = Trim$(CStr(summaryTable.ListColumns(HEADER_DASH_CONDITIONS).DataBodyRange.Cells(rowIndex, 1).Value))
-            assemblyNo = BuildAssemblyNumber(basePart, dashConditions)
 
-            If Len(assemblyNo) > 0 Then
-                ReDim Preserve assemblyNumbers(0 To assemblyCount)
-                assemblyNumbers(assemblyCount) = assemblyNo
-                assemblyCount = assemblyCount + 1
+            If includeAllDashConditions Then
+                dashValues = SplitDelimitedList(dashConditions)
+
+                If UBound(dashValues) < LBound(dashValues) Or Len(Trim$(dashValues(LBound(dashValues)))) = 0 Then
+                    If Len(basePart) > 0 Then
+                        ReDim Preserve assemblyNumbers(0 To assemblyCount)
+                        assemblyNumbers(assemblyCount) = basePart
+                        assemblyCount = assemblyCount + 1
+                    End If
+                Else
+                    For dashIndex = LBound(dashValues) To UBound(dashValues)
+                        dashCondition = Trim$(dashValues(dashIndex))
+
+                        If Len(basePart) > 0 And Len(dashCondition) > 0 Then
+                            ReDim Preserve assemblyNumbers(0 To assemblyCount)
+                            assemblyNumbers(assemblyCount) = basePart & "-" & dashCondition
+                            assemblyCount = assemblyCount + 1
+                        End If
+                    Next dashIndex
+                End If
+            Else
+                assemblyNo = BuildAssemblyNumber(basePart, dashConditions)
+
+                If Len(assemblyNo) > 0 Then
+                    ReDim Preserve assemblyNumbers(0 To assemblyCount)
+                    assemblyNumbers(assemblyCount) = assemblyNo
+                    assemblyCount = assemblyCount + 1
+                End If
             End If
         End If
     Next rowIndex
