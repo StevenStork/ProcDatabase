@@ -51,6 +51,56 @@ CleanUp:
     OptimizeExcel False
 End Sub
 
+' Deletes every worksheet whose A1 cell is "Part", after a Yes/No warning.
+' Suppresses Excel's per-sheet delete prompts during the run and restores
+' DisplayAlerts afterward.
+Public Sub DeleteAllPartSheets()
+    Dim response As VbMsgBoxResult
+    Dim sheetNames As Collection
+    Dim ws As Worksheet
+    Dim sheetName As Variant
+    Dim savedDisplayAlerts As Boolean
+    Dim deletedCount As Long
+
+    response = MsgBox( _
+        "This will permanently delete all worksheets where cell A1 is ""Part""." & vbCrLf & vbCrLf & _
+        "This cannot be undone. Do you want to continue?", _
+        vbExclamation + vbYesNo + vbDefaultButton2, _
+        "Delete Part Sheets")
+
+    If response <> vbYes Then Exit Sub
+
+    Set sheetNames = New Collection
+    For Each ws In ThisWorkbook.Worksheets
+        If StrComp(Trim$(CStr(ws.Range(PART_LABEL_CELL).Value)), PART_LABEL_VALUE, vbTextCompare) = 0 Then
+            sheetNames.Add ws.Name
+        End If
+    Next ws
+
+    If sheetNames.Count = 0 Then
+        MsgBox "No Part sheets were found to delete.", vbInformation, "Delete Part Sheets"
+        Exit Sub
+    End If
+
+    savedDisplayAlerts = Application.DisplayAlerts
+    On Error GoTo CleanUpDelete
+    Application.DisplayAlerts = False
+
+    For Each sheetName In sheetNames
+        ThisWorkbook.Worksheets(CStr(sheetName)).Delete
+        deletedCount = deletedCount + 1
+    Next sheetName
+
+CleanUpDelete:
+    Application.DisplayAlerts = savedDisplayAlerts
+
+    If Err.Number <> 0 Then
+        MsgBox "Part sheet deletion stopped with an error after removing " & CStr(deletedCount) & _
+            " sheet(s)." & vbCrLf & vbCrLf & Err.Description, vbCritical, "Delete Part Sheets"
+        Err.Clear
+    End If
+End Sub
+
 ' Creates one part sheet; errors for a single part do not stop the remaining parts.
 Private Sub CreatePartNumberSheetFromTemplateSafe(ByVal wsTemplate As Worksheet, ByVal basePart As String)
     On Error Resume Next
