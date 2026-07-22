@@ -13,6 +13,9 @@ Private Const FFA_BUTTON_NAME_PREFIX As String = "btnPartFFA_"
 Private Const PART_FFA_VALUE_COLUMN As String = "C"
 Private Const PART_FFA_ACTIVE_COLUMN As String = "D"
 Private Const PART_LIST_START_ROW As Long = 9
+Private Const REFERENCES_SHEET_NAME As String = "References"
+Private Const REFERENCES_FFA_COLUMN As String = "B"
+Private Const REFERENCES_FFA_START_ROW As Long = 2
 
 Private Const BUTTON_WIDTH As Double = 140
 Private Const BUTTON_HEIGHT As Double = 24
@@ -97,11 +100,21 @@ Public Sub TogglePartFfaVisibility()
     Set wsHome = ThisWorkbook.Worksheets(HOME_SHEET_NAME)
 
     callerName = CStr(Application.Caller)
-    ffaValue = LabelFromButtonName(callerName, FFA_BUTTON_NAME_PREFIX, CollectActivePartFfas())
+    ffaValue = LabelFromButtonName(callerName, FFA_BUTTON_NAME_PREFIX, CollectReferenceFfas())
     If Len(ffaValue) = 0 Then
         ffaValue = LabelFromButtonCaption(wsHome.Buttons(callerName).Caption)
     End If
     If Len(ffaValue) = 0 Then GoTo CleanUp
+
+    If Not AnyPartSheetHasActiveFfa(ffaValue) Then
+        OptimizeExcel False
+        MsgBox "No parts have the FFA """ & ffaValue & """ assigned to them.", _
+            vbInformation, "FFA Visibility"
+        On Error Resume Next
+        wsHome.Activate
+        On Error GoTo 0
+        Exit Sub
+    End If
 
     If FfaHasVisiblePartSheets(ffaValue) Then
         targetState = xlSheetHidden
@@ -128,7 +141,6 @@ End Sub
 
 Private Sub SyncCategoryToggleButtons(ByVal wsHome As Worksheet)
     Dim categories As Object
-    Dim categoryKeys() As String
 
     Set categories = CollectSheetCategories(HomeCategory())
     SyncToggleButtons _
@@ -143,7 +155,7 @@ End Sub
 Private Sub SyncFfaToggleButtons(ByVal wsHome As Worksheet)
     Dim ffaValues As Object
 
-    Set ffaValues = CollectActivePartFfas()
+    Set ffaValues = CollectReferenceFfas()
     SyncToggleButtons _
         wsHome, _
         ffaValues, _
@@ -235,9 +247,9 @@ Private Function CollectSheetCategories(ByVal homeCategory As String) As Object
     Set CollectSheetCategories = categories
 End Function
 
-Private Function CollectActivePartFfas() As Object
+Private Function CollectReferenceFfas() As Object
     Dim ffaValues As Object
-    Dim ws As Worksheet
+    Dim wsReferences As Worksheet
     Dim rowIndex As Long
     Dim lastRow As Long
     Dim ffaValue As String
@@ -245,25 +257,32 @@ Private Function CollectActivePartFfas() As Object
     Set ffaValues = CreateObject("Scripting.Dictionary")
     ffaValues.CompareMode = vbTextCompare
 
+    Set wsReferences = ThisWorkbook.Worksheets(REFERENCES_SHEET_NAME)
+    lastRow = LastUsedRowInColumn(wsReferences, REFERENCES_FFA_COLUMN)
+
+    For rowIndex = REFERENCES_FFA_START_ROW To lastRow
+        ffaValue = Trim$(CStr(wsReferences.Cells(rowIndex, REFERENCES_FFA_COLUMN).Value))
+        If Len(ffaValue) > 0 Then
+            If Not ffaValues.Exists(ffaValue) Then
+                ffaValues.Add ffaValue, ffaValue
+            End If
+        End If
+    Next rowIndex
+
+    Set CollectReferenceFfas = ffaValues
+End Function
+
+Private Function AnyPartSheetHasActiveFfa(ByVal ffaValue As String) As Boolean
+    Dim ws As Worksheet
+
     For Each ws In ThisWorkbook.Worksheets
         If IsPartSheet(ws) Then
-            lastRow = LastUsedRowInColumn(ws, PART_FFA_VALUE_COLUMN)
-            If lastRow >= PART_LIST_START_ROW Then
-                For rowIndex = PART_LIST_START_ROW To lastRow
-                    ffaValue = Trim$(CStr(ws.Cells(rowIndex, PART_FFA_VALUE_COLUMN).Value))
-                    If Len(ffaValue) = 0 Then Exit For
-
-                    If IsActiveFlag(ws.Cells(rowIndex, PART_FFA_ACTIVE_COLUMN).Value) Then
-                        If Not ffaValues.Exists(ffaValue) Then
-                            ffaValues.Add ffaValue, ffaValue
-                        End If
-                    End If
-                Next rowIndex
+            If PartSheetHasActiveFfa(ws, ffaValue) Then
+                AnyPartSheetHasActiveFfa = True
+                Exit Function
             End If
         End If
     Next ws
-
-    Set CollectActivePartFfas = ffaValues
 End Function
 
 Private Sub AddToggleButton( _
