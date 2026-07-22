@@ -5,9 +5,11 @@ Private Const HOME_SHEET_NAME As String = "Home"
 Private Const CATEGORY_CELL As String = "A1"
 Private Const BUTTON_ANCHOR_CELL As String = "K5"
 Private Const BUTTON_NAME_PREFIX As String = "btnSheetCat_"
-Private Const BUTTON_WIDTH As Double = 120
+Private Const BUTTON_WIDTH As Double = 140
 Private Const BUTTON_HEIGHT As Double = 24
 Private Const BUTTON_VERTICAL_GAP As Double = 8
+Private Const BUTTON_CAPTION_SHOW_PREFIX As String = "Show "
+Private Const BUTTON_CAPTION_HIDE_PREFIX As String = "Hide "
 
 ' Call from ThisWorkbook.Workbook_SheetActivate:
 '   HandleHomeSheetActivate Sh
@@ -45,21 +47,11 @@ Public Sub ToggleSheetCategoryVisibility()
     callerName = CStr(Application.Caller)
     category = CategoryFromButtonName(callerName)
     If Len(category) = 0 Then
-        category = wsHome.Buttons(callerName).Caption
+        category = CategoryFromButtonCaption(wsHome.Buttons(callerName).Caption)
     End If
     If Len(category) = 0 Then GoTo CleanUp
 
-    anyVisible = False
-    For Each ws In ThisWorkbook.Worksheets
-        If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
-            If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), category, vbTextCompare) = 0 Then
-                If ws.Visible = xlSheetVisible Then
-                    anyVisible = True
-                    Exit For
-                End If
-            End If
-        End If
-    Next ws
+    anyVisible = CategoryHasVisibleSheets(category)
 
     If anyVisible Then
         targetState = xlSheetHidden
@@ -74,6 +66,8 @@ Public Sub ToggleSheetCategoryVisibility()
             End If
         End If
     Next ws
+
+    UpdateCategoryButtonCaption wsHome, category
 
 CleanUp:
     On Error Resume Next
@@ -101,7 +95,7 @@ Private Sub SyncCategoryToggleButtons(ByVal wsHome As Worksheet)
     For Each btn In wsHome.Buttons
         If Left$(btn.Name, Len(BUTTON_NAME_PREFIX)) = BUTTON_NAME_PREFIX Then
             categoryName = CategoryFromButtonName(btn.Name)
-            If Len(categoryName) = 0 Then categoryName = Trim$(btn.Caption)
+            If Len(categoryName) = 0 Then categoryName = CategoryFromButtonCaption(btn.Caption)
             If Not categories.Exists(categoryName) Then
                 buttonsToDelete.Add btn.Name
             End If
@@ -114,7 +108,7 @@ Private Sub SyncCategoryToggleButtons(ByVal wsHome As Worksheet)
 
     categoryKeys = DictionaryKeysToSortedArray(categories)
 
-    ' Create any missing category buttons.
+    ' Create any missing category buttons and refresh Show/Hide captions.
     If IsArrayInitialized(categoryKeys) Then
         For i = LBound(categoryKeys) To UBound(categoryKeys)
             categoryName = categoryKeys(i)
@@ -123,9 +117,8 @@ Private Sub SyncCategoryToggleButtons(ByVal wsHome As Worksheet)
             If Not ButtonExists(wsHome, buttonName) Then
                 AddCategoryButton wsHome, buttonName, categoryName
             Else
-                ' Keep caption in sync with the live category label.
-                wsHome.Buttons(buttonName).Caption = categoryName
                 wsHome.Buttons(buttonName).OnAction = "ToggleSheetCategoryVisibility"
+                UpdateCategoryButtonCaption wsHome, categoryName
             End If
         Next i
     End If
@@ -165,9 +158,55 @@ Private Sub AddCategoryButton(ByVal wsHome As Worksheet, ByVal buttonName As Str
     Set anchor = wsHome.Range(BUTTON_ANCHOR_CELL)
     Set btn = wsHome.Buttons.Add(anchor.Left, anchor.Top, BUTTON_WIDTH, BUTTON_HEIGHT)
     btn.Name = buttonName
-    btn.Caption = categoryName
     btn.OnAction = "ToggleSheetCategoryVisibility"
+    btn.Caption = BuildButtonCaption(categoryName)
 End Sub
+
+Private Sub UpdateCategoryButtonCaption(ByVal wsHome As Worksheet, ByVal categoryName As String)
+    Dim buttonName As String
+
+    buttonName = BuildButtonName(categoryName)
+    If ButtonExists(wsHome, buttonName) Then
+        wsHome.Buttons(buttonName).Caption = BuildButtonCaption(categoryName)
+    End If
+End Sub
+
+Private Function BuildButtonCaption(ByVal categoryName As String) As String
+    If CategoryHasVisibleSheets(categoryName) Then
+        BuildButtonCaption = BUTTON_CAPTION_HIDE_PREFIX & categoryName
+    Else
+        BuildButtonCaption = BUTTON_CAPTION_SHOW_PREFIX & categoryName
+    End If
+End Function
+
+Private Function CategoryHasVisibleSheets(ByVal categoryName As String) As Boolean
+    Dim ws As Worksheet
+
+    For Each ws In ThisWorkbook.Worksheets
+        If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
+            If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), categoryName, vbTextCompare) = 0 Then
+                If ws.Visible = xlSheetVisible Then
+                    CategoryHasVisibleSheets = True
+                    Exit Function
+                End If
+            End If
+        End If
+    Next ws
+End Function
+
+Private Function CategoryFromButtonCaption(ByVal caption As String) As String
+    Dim trimmedCaption As String
+
+    trimmedCaption = Trim$(caption)
+
+    If StrComp(Left$(trimmedCaption, Len(BUTTON_CAPTION_SHOW_PREFIX)), BUTTON_CAPTION_SHOW_PREFIX, vbTextCompare) = 0 Then
+        CategoryFromButtonCaption = Trim$(Mid$(trimmedCaption, Len(BUTTON_CAPTION_SHOW_PREFIX) + 1))
+    ElseIf StrComp(Left$(trimmedCaption, Len(BUTTON_CAPTION_HIDE_PREFIX)), BUTTON_CAPTION_HIDE_PREFIX, vbTextCompare) = 0 Then
+        CategoryFromButtonCaption = Trim$(Mid$(trimmedCaption, Len(BUTTON_CAPTION_HIDE_PREFIX) + 1))
+    Else
+        CategoryFromButtonCaption = trimmedCaption
+    End If
+End Function
 
 Private Sub LayoutCategoryButtons(ByVal wsHome As Worksheet, ByRef categoryKeys() As String)
     Dim i As Long
