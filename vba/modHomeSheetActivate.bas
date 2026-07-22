@@ -33,16 +33,19 @@ Public Sub ToggleSheetCategoryVisibility()
     Dim callerName As String
     Dim category As String
     Dim ws As Worksheet
+    Dim wsHome As Worksheet
     Dim anyVisible As Boolean
     Dim targetState As XlSheetVisibility
 
     On Error GoTo CleanUp
     OptimizeExcel True
 
+    Set wsHome = ThisWorkbook.Worksheets(HOME_SHEET_NAME)
+
     callerName = CStr(Application.Caller)
     category = CategoryFromButtonName(callerName)
     If Len(category) = 0 Then
-        category = ThisWorkbook.Worksheets(HOME_SHEET_NAME).Buttons(callerName).Caption
+        category = wsHome.Buttons(callerName).Caption
     End If
     If Len(category) = 0 Then GoTo CleanUp
 
@@ -73,6 +76,9 @@ Public Sub ToggleSheetCategoryVisibility()
     Next ws
 
 CleanUp:
+    On Error Resume Next
+    ThisWorkbook.Worksheets(HOME_SHEET_NAME).Activate
+    On Error GoTo 0
     OptimizeExcel False
 End Sub
 
