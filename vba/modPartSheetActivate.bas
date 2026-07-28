@@ -291,7 +291,7 @@ Private Sub SetColumnWidthPixels(ByVal columnRange As Range, ByVal pixelWidth As
     columnRange.ColumnWidth = sampleCol.ColumnWidth * (targetPoints / sampleCol.Width)
 End Sub
 
-' Adds cell-control checkboxes in U:V and selection formulas in W:X for each
+' Adds cell-control checkboxes in U:V and selection formulas in W:Y for each
 ' data row. Existing checkbox values are preserved.
 Private Sub EnsureDataTableCheckBoxesAndFormulas(ByVal ws As Worksheet)
     Dim lastRow As Long
@@ -301,8 +301,11 @@ Private Sub EnsureDataTableCheckBoxesAndFormulas(ByVal ws As Worksheet)
     Dim savedValues As Variant
     Dim formulaW As Variant
     Dim formulaX As Variant
+    Dim formulaY As Variant
     Dim expectedW As String
     Dim expectedX As String
+    Dim expectedY As String
+    Dim rowText As String
 
     lastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_INPUT_LAST_COLUMN)
     If lastRow < LIST_START_ROW Then Exit Sub
@@ -322,28 +325,37 @@ Private Sub EnsureDataTableCheckBoxesAndFormulas(ByVal ws As Worksheet)
         checkboxRange.Value = savedValues
     End If
 
-    expectedW = "=IF(AND(R" & CStr(LIST_START_ROW) & "<>"""",U" & CStr(LIST_START_ROW) & "=TRUE),R" & CStr(LIST_START_ROW) & ",O" & CStr(LIST_START_ROW) & ")"
-    expectedX = "=IF(AND(S" & CStr(LIST_START_ROW) & "<>"""",V" & CStr(LIST_START_ROW) & "=TRUE),S" & CStr(LIST_START_ROW) & ",P" & CStr(LIST_START_ROW) & ")"
+    rowText = CStr(LIST_START_ROW)
+    expectedW = "=IF(AND(R" & rowText & "<>"""",U" & rowText & "=TRUE),R" & rowText & ",O" & rowText & ")"
+    expectedX = "=IF(AND(S" & rowText & "<>"""",V" & rowText & "=TRUE),S" & rowText & ",P" & rowText & ")"
+    expectedY = "=IF(OR(Q" & rowText & "="""",W" & rowText & "="""",X" & rowText & "=""""),"""",(W" & rowText & "*X" & rowText & ")/Q" & rowText & ")"
 
     If StrComp(ws.Cells(LIST_START_ROW, "W").Formula, expectedW, vbTextCompare) = 0 _
         And StrComp(ws.Cells(LIST_START_ROW, "X").Formula, expectedX, vbTextCompare) = 0 _
+        And StrComp(ws.Cells(LIST_START_ROW, "Y").Formula, expectedY, vbTextCompare) = 0 _
         And Len(ws.Cells(lastRow, "W").Formula) > 0 _
-        And Len(ws.Cells(lastRow, "X").Formula) > 0 Then
+        And Len(ws.Cells(lastRow, "X").Formula) > 0 _
+        And Len(ws.Cells(lastRow, "Y").Formula) > 0 Then
         Exit Sub
     End If
 
     ReDim formulaW(1 To rowCount, 1 To 1)
     ReDim formulaX(1 To rowCount, 1 To 1)
+    ReDim formulaY(1 To rowCount, 1 To 1)
 
     For rowIndex = LIST_START_ROW To lastRow
+        rowText = CStr(rowIndex)
         formulaW(rowIndex - LIST_START_ROW + 1, 1) = _
-            "=IF(AND(R" & CStr(rowIndex) & "<>"""",U" & CStr(rowIndex) & "=TRUE),R" & CStr(rowIndex) & ",O" & CStr(rowIndex) & ")"
+            "=IF(AND(R" & rowText & "<>"""",U" & rowText & "=TRUE),R" & rowText & ",O" & rowText & ")"
         formulaX(rowIndex - LIST_START_ROW + 1, 1) = _
-            "=IF(AND(S" & CStr(rowIndex) & "<>"""",V" & CStr(rowIndex) & "=TRUE),S" & CStr(rowIndex) & ",P" & CStr(rowIndex) & ")"
+            "=IF(AND(S" & rowText & "<>"""",V" & rowText & "=TRUE),S" & rowText & ",P" & rowText & ")"
+        formulaY(rowIndex - LIST_START_ROW + 1, 1) = _
+            "=IF(OR(Q" & rowText & "="""",W" & rowText & "="""",X" & rowText & "=""""),"""",(W" & rowText & "*X" & rowText & ")/Q" & rowText & ")"
     Next rowIndex
 
     ws.Range(ws.Cells(LIST_START_ROW, "W"), ws.Cells(lastRow, "W")).Formula = formulaW
     ws.Range(ws.Cells(LIST_START_ROW, "X"), ws.Cells(lastRow, "X")).Formula = formulaX
+    ws.Range(ws.Cells(LIST_START_ROW, "Y"), ws.Cells(lastRow, "Y")).Formula = formulaY
 End Sub
 
 Private Sub NormalizeCheckboxSeedValues(ByRef values As Variant)
