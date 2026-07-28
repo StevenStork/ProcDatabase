@@ -9,7 +9,7 @@ Private Const ASSEMBLY_NUMBER_LIST_PARAMETER As String = "@assembly_number_list"
 Private Const HOME_SHEET_NAME As String = "Home"
 Private Const HOME_BASE_PART_COLUMN As String = "C"
 Private Const HOME_ACTIVE_COLUMN As String = "D"
-Private Const HOME_BASE_PART_START_ROW As Long = 3
+Private Const HOME_BASE_PART_START_ROW As Long = 6
 Private Const HEADER_BASE_PART As String = "Base Part Number"
 
 Private Const PART_SHEET_DASH_COLUMN As String = "E"

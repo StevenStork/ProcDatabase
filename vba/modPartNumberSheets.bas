@@ -5,13 +5,13 @@ Private Const HOME_SHEET_NAME As String = "Home"
 Private Const TEMPLATE_SHEET_NAME As String = "Part Number Template"
 Private Const BASE_PART_COLUMN As String = "C"
 Private Const ACTIVE_PART_COLUMN As String = "D"
-Private Const BASE_PART_START_ROW As Long = 3
+Private Const BASE_PART_START_ROW As Long = 6
 Private Const HEADER_BASE_PART As String = "Base Part Number"
 Private Const TEMPLATE_BASE_PART_CELL As String = "C2"
 Private Const PART_LABEL_CELL As String = "A1"
 Private Const PART_LABEL_VALUE As String = "Part"
 
-' For each active base part number listed in Home column C (starting at row 3),
+' For each active base part number listed in Home column C (starting at row 6),
 ' creates a worksheet named after that part (copied from Part Number Template)
 ' when one does not already exist, and writes the base part number into C2.
 ' A part is active when the same row in column D is True.
