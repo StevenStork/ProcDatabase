@@ -219,7 +219,7 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
 End Sub
 
 ' Formats the Part sheet M:Z table: borders, column widths, U/V checkboxes,
-' W/X selection formulas, alignment, fills, and number formats.
+' W:Y formulas, alignment, fills, and number formats.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
     FormatPartDataTableBorders ws
     SetPartDataTableColumnWidths ws
