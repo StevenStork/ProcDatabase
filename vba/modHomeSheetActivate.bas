@@ -367,7 +367,8 @@ Public Sub TogglePartFfaVisibility()
     EnsureFfaPresenceMaps
     For Each ws In ThisWorkbook.Worksheets
         If IsPartSheet(ws) Then
-            If PartSheetHasActiveFfa(ws, ffaValue) Then
+            If MarkedFfaListContains(GetMarkedFfaListForBasePart( _
+                Trim$(CStr(ws.Range(PART_SHEET_BASE_PART_CELL).Value))), ffaValue) Then
                 ws.Visible = targetState
             End If
         End If
@@ -567,11 +568,21 @@ End Sub
 Private Function GetMarkedFfaListForBasePart(ByVal basePart As String) As String
     EnsureFfaPresenceMaps
 
+    If Len(basePart) = 0 Then
+        GetMarkedFfaListForBasePart = vbNullString
+        Exit Function
+    End If
+
     If g_markedFfasByBasePartSession.Exists(basePart) Then
         GetMarkedFfaListForBasePart = CStr(g_markedFfasByBasePartSession(basePart))
     Else
         GetMarkedFfaListForBasePart = vbNullString
     End If
+End Function
+
+Private Function MarkedFfaListContains(ByVal ffaList As String, ByVal ffaValue As String) As Boolean
+    If Len(ffaList) = 0 Or Len(ffaValue) = 0 Then Exit Function
+    MarkedFfaListContains = (InStr(1, ", " & ffaList & ", ", ", " & ffaValue & ", ", vbTextCompare) > 0)
 End Function
 
 Private Function FindPartSheetByBasePart(ByVal basePart As String) As Worksheet
