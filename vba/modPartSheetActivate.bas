@@ -21,9 +21,7 @@ Private Const PRODUCT_LINE_CHECKBOX_COLUMN As String = "H"
 Private Const DATA_TABLE_FIRST_COLUMN As String = "M"
 Private Const DATA_TABLE_LAST_COLUMN As String = "Z"
 Private Const DATA_TABLE_HEADER_ROW As Long = 8
-Private Const DATA_TABLE_MIN_COLUMN_WIDTH As Double = 8
-Private Const DATA_TABLE_MAX_WRAPPED_COLUMN_WIDTH As Double = 15
-Private Const DATA_TABLE_COLUMN_WIDTH_PADDING As Double = 0.5
+Private Const DATA_TABLE_COLUMN_WIDTH_PIXELS As Double = 96
 
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
@@ -230,11 +228,11 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
     listRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
 End Sub
 
-' Formats the Part sheet M:Z table: borders on data rows, and wrapped
-' header sizing that keeps multi-line titles without forcing single-line widths.
+' Formats the Part sheet M:Z table: borders on data rows, and fixed
+' 96-pixel column widths for M:Z.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
     FormatPartDataTableBorders ws
-    ResizePartDataTableColumns ws
+    SetPartDataTableColumnWidths ws
 End Sub
 
 Private Sub FormatPartDataTableBorders(ByVal ws As Worksheet)
@@ -251,52 +249,36 @@ Private Sub FormatPartDataTableBorders(ByVal ws As Worksheet)
     ApplyListBorders tableRange
 End Sub
 
-Private Sub ResizePartDataTableColumns(ByVal ws As Worksheet)
-    Dim headerRange As Range
-    Dim lastDataRow As Long
+Private Sub SetPartDataTableColumnWidths(ByVal ws As Worksheet)
     Dim colIndex As Long
     Dim firstColIndex As Long
     Dim lastColIndex As Long
-    Dim dataColumnRange As Range
-    Dim fittedWidth As Double
-
-    Set headerRange = ws.Range( _
-        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_FIRST_COLUMN), _
-        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_LAST_COLUMN))
-
-    ' Keep header wrap enabled so titles can stay on multiple lines.
-    headerRange.WrapText = True
-    headerRange.VerticalAlignment = xlCenter
-    headerRange.HorizontalAlignment = xlCenter
-
-    lastDataRow = LastUsedRowInRangeColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_LAST_COLUMN, LIST_START_ROW)
-    If lastDataRow < LIST_START_ROW Then lastDataRow = LIST_START_ROW
+    Dim headerRange As Range
 
     firstColIndex = ws.Columns(DATA_TABLE_FIRST_COLUMN).Column
     lastColIndex = ws.Columns(DATA_TABLE_LAST_COLUMN).Column
 
     For colIndex = firstColIndex To lastColIndex
-        Set dataColumnRange = ws.Range( _
-            ws.Cells(LIST_START_ROW, colIndex), _
-            ws.Cells(lastDataRow, colIndex))
-
-        ' Size from data rows only so long wrapped headers do not force
-        ' the column out to a single full-width line.
-        If Application.WorksheetFunction.CountA(dataColumnRange) > 0 Then
-            dataColumnRange.Columns.AutoFit
-            fittedWidth = ws.Columns(colIndex).ColumnWidth + DATA_TABLE_COLUMN_WIDTH_PADDING
-        Else
-            fittedWidth = DATA_TABLE_MIN_COLUMN_WIDTH
-        End If
-
-        If fittedWidth < DATA_TABLE_MIN_COLUMN_WIDTH Then fittedWidth = DATA_TABLE_MIN_COLUMN_WIDTH
-        If fittedWidth > DATA_TABLE_MAX_WRAPPED_COLUMN_WIDTH Then fittedWidth = DATA_TABLE_MAX_WRAPPED_COLUMN_WIDTH
-
-        ws.Columns(colIndex).ColumnWidth = fittedWidth
+        SetColumnWidthPixels ws.Columns(colIndex), DATA_TABLE_COLUMN_WIDTH_PIXELS
     Next colIndex
 
-    ' With wrap still on, fit the header row height to the wrapped lines.
+    Set headerRange = ws.Range( _
+        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_FIRST_COLUMN), _
+        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_LAST_COLUMN))
+    headerRange.WrapText = True
     ws.Rows(DATA_TABLE_HEADER_ROW).AutoFit
+End Sub
+
+' Sets a column's width so its rendered width is the requested pixel size
+' at 96 DPI (Excel's Width property is in points).
+Private Sub SetColumnWidthPixels(ByVal columnRange As Range, ByVal pixelWidth As Double)
+    Dim targetPoints As Double
+
+    targetPoints = pixelWidth * 72# / 96#
+    columnRange.ColumnWidth = 10
+    If columnRange.Width <> 0 Then
+        columnRange.ColumnWidth = columnRange.ColumnWidth * (targetPoints / columnRange.Width)
+    End If
 End Sub
 
 Private Function LastUsedRowInRangeColumns( _
