@@ -130,6 +130,7 @@ Private Sub ClearValueCheckboxList( _
 
     RemoveCellCheckBoxes checkboxRange
     clearRange.ClearContents
+    clearRange.Interior.ColorIndex = xlNone
     clearRange.Borders.LineStyle = xlNone
 End Sub
 
@@ -373,7 +374,6 @@ End Function
 
 Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     Dim lastRow As Long
-    Dim listLastRow As Long
     Dim tableRange As Range
     Dim headerRange As Range
 
@@ -405,17 +405,78 @@ Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     ws.Range(ws.Cells(LIST_START_ROW, "O"), ws.Cells(lastRow, "S")).NumberFormat = "0.00"
     ws.Range(ws.Cells(LIST_START_ROW, "W"), ws.Cells(lastRow, "Y")).NumberFormat = "0.00"
 
-    listLastRow = Application.WorksheetFunction.Max( _
+    ' D/F/H lists can differ in length — clear shared leftover fills, then
+    ' highlight only cells that actually have checkbox controls.
+    ClearCheckboxColumnHighlights ws
+    HighlightCheckboxColumn ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN
+    HighlightCheckboxColumn ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN
+    HighlightCheckboxColumn ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN
+End Sub
+
+' Clears D/F/H fills through the farthest list row so shorter columns do not
+' keep highlight past their checkboxes.
+Private Sub ClearCheckboxColumnHighlights(ByVal ws As Worksheet)
+    Dim clearToRow As Long
+
+    clearToRow = Application.WorksheetFunction.Max( _
         FastLastUsedRowInColumn(ws, FFA_VALUE_COLUMN), _
         FastLastUsedRowInColumn(ws, DASH_VALUE_COLUMN), _
         FastLastUsedRowInColumn(ws, PRODUCT_LINE_VALUE_COLUMN), _
+        FastLastUsedRowInColumn(ws, FFA_CHECKBOX_COLUMN), _
+        FastLastUsedRowInColumn(ws, DASH_CHECKBOX_COLUMN), _
+        FastLastUsedRowInColumn(ws, PRODUCT_LINE_CHECKBOX_COLUMN), _
         LIST_START_ROW)
 
-    If listLastRow >= LIST_START_ROW Then
-        ws.Range(ws.Cells(LIST_START_ROW, FFA_CHECKBOX_COLUMN), ws.Cells(listLastRow, FFA_CHECKBOX_COLUMN)).Interior.Color = RGB(213, 229, 249)
-        ws.Range(ws.Cells(LIST_START_ROW, DASH_CHECKBOX_COLUMN), ws.Cells(listLastRow, DASH_CHECKBOX_COLUMN)).Interior.Color = RGB(213, 229, 249)
-        ws.Range(ws.Cells(LIST_START_ROW, PRODUCT_LINE_CHECKBOX_COLUMN), ws.Cells(listLastRow, PRODUCT_LINE_CHECKBOX_COLUMN)).Interior.Color = RGB(213, 229, 249)
+    If clearToRow < LIST_START_ROW Then Exit Sub
+
+    ws.Range( _
+        ws.Cells(LIST_START_ROW, FFA_CHECKBOX_COLUMN), _
+        ws.Cells(clearToRow, FFA_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone
+    ws.Range( _
+        ws.Cells(LIST_START_ROW, DASH_CHECKBOX_COLUMN), _
+        ws.Cells(clearToRow, DASH_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone
+    ws.Range( _
+        ws.Cells(LIST_START_ROW, PRODUCT_LINE_CHECKBOX_COLUMN), _
+        ws.Cells(clearToRow, PRODUCT_LINE_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone
+End Sub
+
+Private Sub HighlightCheckboxColumn(ByVal ws As Worksheet, ByVal valueColumn As String, ByVal checkboxColumn As String)
+    Dim lastRow As Long
+    Dim checkboxRange As Range
+
+    lastRow = FastLastUsedRowInColumn(ws, valueColumn)
+    If lastRow < LIST_START_ROW Then Exit Sub
+
+    Set checkboxRange = ws.Range( _
+        ws.Cells(LIST_START_ROW, checkboxColumn), _
+        ws.Cells(lastRow, checkboxColumn))
+
+    If RangeIsAllCheckBoxes(checkboxRange) Then
+        checkboxRange.Interior.Color = RGB(213, 229, 249)
+    Else
+        HighlightCheckboxCellsInRange checkboxRange
     End If
+End Sub
+
+Private Sub HighlightCheckboxCellsInRange(ByVal checkboxRange As Range)
+    Dim cell As Range
+    Dim cellType As Variant
+
+    For Each cell In checkboxRange.Cells
+        On Error Resume Next
+        cellType = cell.CellControl.Type
+        If Err.Number = 0 Then
+            If cellType = XL_TYPE_CHECKBOX Then
+                cell.Interior.Color = RGB(213, 229, 249)
+            Else
+                cell.Interior.ColorIndex = xlNone
+            End If
+        Else
+            Err.Clear
+            cell.Interior.ColorIndex = xlNone
+        End If
+        On Error GoTo 0
+    Next cell
 End Sub
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
