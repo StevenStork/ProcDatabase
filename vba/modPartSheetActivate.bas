@@ -27,6 +27,7 @@ Private Const DATA_TABLE_WIDTH_W_TO_Z_PIXELS As Double = 71
 Private Const DATA_TABLE_WIDTH_SELECTED_PIXELS As Double = 90
 Private Const DATA_TABLE_WIDTH_DEFAULT_PIXELS As Double = 96
 Private Const PIXELS_TO_POINTS As Double = 72# / 96#
+Private Const DATA_TABLE_LIGHT_BLUE As Long = 15921906 ' RGB(218, 238, 243)
 
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
@@ -217,11 +218,12 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
 End Sub
 
 ' Formats the Part sheet M:Z table: borders, column widths, U/V checkboxes,
-' and W/X selection formulas.
+' W/X selection formulas, alignment, fills, and number formats.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
     FormatPartDataTableBorders ws
     SetPartDataTableColumnWidths ws
     EnsureDataTableCheckBoxesAndFormulas ws
+    ApplyPartDataTableStyles ws
 End Sub
 
 Private Sub FormatPartDataTableBorders(ByVal ws As Worksheet)
@@ -368,6 +370,31 @@ Private Function CoerceCheckboxValue(ByVal rawValue As Variant) As Boolean
     CoerceCheckboxValue = CBool(rawValue)
     On Error GoTo 0
 End Function
+
+Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
+    Dim lastRow As Long
+    Dim tableRange As Range
+    Dim startRow As Long
+
+    startRow = DATA_TABLE_HEADER_ROW
+    lastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_LAST_COLUMN)
+    If lastRow < LIST_START_ROW Then lastRow = LIST_START_ROW
+    If lastRow < startRow Then Exit Sub
+
+    Set tableRange = ws.Range( _
+        ws.Cells(startRow, DATA_TABLE_FIRST_COLUMN), _
+        ws.Cells(lastRow, DATA_TABLE_LAST_COLUMN))
+
+    tableRange.HorizontalAlignment = xlCenter
+    tableRange.VerticalAlignment = xlCenter
+
+    ws.Range(ws.Cells(startRow, "M"), ws.Cells(lastRow, "Q")).Interior.Color = DATA_TABLE_LIGHT_BLUE
+    ws.Range(ws.Cells(startRow, "U"), ws.Cells(lastRow, "V")).Interior.Color = DATA_TABLE_LIGHT_BLUE
+    ws.Range(ws.Cells(startRow, "Z"), ws.Cells(lastRow, "Z")).Interior.Color = DATA_TABLE_LIGHT_BLUE
+
+    ws.Range(ws.Cells(startRow, "O"), ws.Cells(lastRow, "S")).NumberFormat = "0.00"
+    ws.Range(ws.Cells(startRow, "W"), ws.Cells(lastRow, "Y")).NumberFormat = "0.00"
+End Sub
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
     Dim lastRow As Long
