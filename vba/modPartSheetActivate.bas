@@ -21,8 +21,11 @@ Private Const PRODUCT_LINE_CHECKBOX_COLUMN As String = "H"
 Private Const DATA_TABLE_FIRST_COLUMN As String = "M"
 Private Const DATA_TABLE_LAST_COLUMN As String = "Z"
 Private Const DATA_TABLE_HEADER_ROW As Long = 8
-Private Const DATA_TABLE_COLUMN_WIDTH_PIXELS As Double = 96
-Private Const DATA_TABLE_COLUMN_WIDTH_POINTS As Double = 72# ' 96px at 96 DPI
+Private Const DATA_TABLE_WIDTH_N_TO_Q_PIXELS As Double = 68
+Private Const DATA_TABLE_WIDTH_W_TO_Z_PIXELS As Double = 71
+Private Const DATA_TABLE_WIDTH_SELECTED_PIXELS As Double = 90
+Private Const DATA_TABLE_WIDTH_DEFAULT_PIXELS As Double = 96
+Private Const PIXELS_TO_POINTS As Double = 72# / 96#
 
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
@@ -239,28 +242,48 @@ Private Sub FormatPartDataTableBorders(ByVal ws As Worksheet)
 End Sub
 
 Private Sub SetPartDataTableColumnWidths(ByVal ws As Worksheet)
-    Dim sampleCol As Range
-    Dim desiredColumnWidth As Double
     Dim headerRange As Range
 
-    Set sampleCol = ws.Columns(DATA_TABLE_FIRST_COLUMN)
+    If PartDataTableWidthsAreSet(ws) Then Exit Sub
 
-    ' Skip width + header AutoFit when columns are already ~96px.
-    If Abs(sampleCol.Width - DATA_TABLE_COLUMN_WIDTH_POINTS) < 0.75 Then
-        Exit Sub
-    End If
-
-    sampleCol.ColumnWidth = 10
-    If sampleCol.Width = 0 Then Exit Sub
-
-    desiredColumnWidth = sampleCol.ColumnWidth * (DATA_TABLE_COLUMN_WIDTH_POINTS / sampleCol.Width)
-    ws.Range(DATA_TABLE_FIRST_COLUMN & ":" & DATA_TABLE_LAST_COLUMN).ColumnWidth = desiredColumnWidth
+    SetColumnWidthPixels ws.Range("N:Q"), DATA_TABLE_WIDTH_N_TO_Q_PIXELS
+    SetColumnWidthPixels ws.Range("W:Z"), DATA_TABLE_WIDTH_W_TO_Z_PIXELS
+    SetColumnWidthPixels ws.Range("M:M"), DATA_TABLE_WIDTH_SELECTED_PIXELS
+    SetColumnWidthPixels ws.Range("R:S"), DATA_TABLE_WIDTH_SELECTED_PIXELS
+    SetColumnWidthPixels ws.Range("U:V"), DATA_TABLE_WIDTH_SELECTED_PIXELS
+    SetColumnWidthPixels ws.Range("T:T"), DATA_TABLE_WIDTH_DEFAULT_PIXELS
 
     Set headerRange = ws.Range( _
         ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_FIRST_COLUMN), _
         ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_LAST_COLUMN))
     headerRange.WrapText = True
     ws.Rows(DATA_TABLE_HEADER_ROW).AutoFit
+End Sub
+
+Private Function PartDataTableWidthsAreSet(ByVal ws As Worksheet) As Boolean
+    Const WIDTH_TOLERANCE_POINTS As Double = 0.75
+
+    If Abs(ws.Columns("N").Width - DATA_TABLE_WIDTH_N_TO_Q_PIXELS * PIXELS_TO_POINTS) >= WIDTH_TOLERANCE_POINTS Then Exit Function
+    If Abs(ws.Columns("W").Width - DATA_TABLE_WIDTH_W_TO_Z_PIXELS * PIXELS_TO_POINTS) >= WIDTH_TOLERANCE_POINTS Then Exit Function
+    If Abs(ws.Columns("M").Width - DATA_TABLE_WIDTH_SELECTED_PIXELS * PIXELS_TO_POINTS) >= WIDTH_TOLERANCE_POINTS Then Exit Function
+    If Abs(ws.Columns("R").Width - DATA_TABLE_WIDTH_SELECTED_PIXELS * PIXELS_TO_POINTS) >= WIDTH_TOLERANCE_POINTS Then Exit Function
+    If Abs(ws.Columns("U").Width - DATA_TABLE_WIDTH_SELECTED_PIXELS * PIXELS_TO_POINTS) >= WIDTH_TOLERANCE_POINTS Then Exit Function
+    If Abs(ws.Columns("T").Width - DATA_TABLE_WIDTH_DEFAULT_PIXELS * PIXELS_TO_POINTS) >= WIDTH_TOLERANCE_POINTS Then Exit Function
+
+    PartDataTableWidthsAreSet = True
+End Function
+
+' Sets column width so rendered width matches the requested pixel size at 96 DPI.
+Private Sub SetColumnWidthPixels(ByVal columnRange As Range, ByVal pixelWidth As Double)
+    Dim targetPoints As Double
+    Dim sampleCol As Range
+
+    targetPoints = pixelWidth * PIXELS_TO_POINTS
+    Set sampleCol = columnRange.Columns(1)
+    sampleCol.ColumnWidth = 10
+    If sampleCol.Width = 0 Then Exit Sub
+
+    columnRange.ColumnWidth = sampleCol.ColumnWidth * (targetPoints / sampleCol.Width)
 End Sub
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
