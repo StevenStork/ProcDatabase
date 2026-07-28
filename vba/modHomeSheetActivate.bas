@@ -23,6 +23,14 @@ Private Const BUTTON_VERTICAL_GAP As Double = 8
 Private Const BUTTON_CAPTION_SHOW_PREFIX As String = "Show "
 Private Const BUTTON_CAPTION_HIDE_PREFIX As String = "Hide "
 
+Private Const HOME_PART_TABLE_HEADER_ROW As Long = 5
+Private Const HOME_PART_TABLE_FIRST_DATA_ROW As Long = 6
+Private Const HOME_PART_TABLE_FIRST_COLUMN As String = "C"
+Private Const HOME_PART_TABLE_LAST_COLUMN As String = "F"
+Private Const HOME_PART_TABLE_HIGHLIGHT_COLUMN As String = "D"
+Private Const HOME_PART_TABLE_DATE_COLUMN As String = "E"
+Private Const HOME_PART_TABLE_STATUS_COLUMN As String = "F"
+
 ' Call from ThisWorkbook.Workbook_SheetActivate:
 '   HandleHomeSheetActivate Sh
 Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
@@ -38,6 +46,7 @@ Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     OptimizeExcel True
     SyncCategoryToggleButtons wsHome
     SyncFfaToggleButtons wsHome
+    FormatHomePartTable wsHome
 
 CleanUp:
     OptimizeExcel False
@@ -163,6 +172,106 @@ Private Sub SyncFfaToggleButtons(ByVal wsHome As Worksheet)
         FFA_BUTTON_ANCHOR_CELL, _
         "TogglePartFfaVisibility", _
         False
+End Sub
+
+' Formats the Home part table (C:F from header row 5 through the last used row):
+' thin + medium borders, center alignment, D fill, E short dates, F RAG colors.
+Private Sub FormatHomePartTable(ByVal ws As Worksheet)
+    Dim lastRow As Long
+    Dim tableRange As Range
+    Dim dataLastRow As Long
+
+    lastRow = HomePartTableLastRow(ws)
+    If lastRow < HOME_PART_TABLE_HEADER_ROW Then Exit Sub
+
+    Set tableRange = ws.Range( _
+        ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_FIRST_COLUMN), _
+        ws.Cells(lastRow, HOME_PART_TABLE_LAST_COLUMN))
+
+    ApplyHomeListBorders tableRange
+    tableRange.HorizontalAlignment = xlCenter
+    tableRange.VerticalAlignment = xlCenter
+
+    ' Keep the header row unfilled; style data rows when present.
+    ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_HIGHLIGHT_COLUMN).Interior.ColorIndex = xlNone
+
+    If lastRow < HOME_PART_TABLE_FIRST_DATA_ROW Then Exit Sub
+
+    dataLastRow = lastRow
+
+    ws.Range( _
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_HIGHLIGHT_COLUMN), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_HIGHLIGHT_COLUMN)).Interior.Color = RGB(213, 229, 249)
+
+    ws.Range( _
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_DATE_COLUMN), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_DATE_COLUMN)).NumberFormat = "m/d/yyyy"
+
+    ApplyHomeStatusColumnFormats ws.Range( _
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_STATUS_COLUMN), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_STATUS_COLUMN))
+End Sub
+
+Private Function HomePartTableLastRow(ByVal ws As Worksheet) As Long
+    Dim columnLetter As Variant
+    Dim columnLastRow As Long
+    Dim maxRow As Long
+
+    maxRow = HOME_PART_TABLE_HEADER_ROW - 1
+
+    For Each columnLetter In Array( _
+        HOME_PART_TABLE_FIRST_COLUMN, _
+        HOME_PART_TABLE_HIGHLIGHT_COLUMN, _
+        HOME_PART_TABLE_DATE_COLUMN, _
+        HOME_PART_TABLE_LAST_COLUMN)
+
+        columnLastRow = LastUsedRowInColumn(ws, CStr(columnLetter))
+        If columnLastRow > maxRow Then maxRow = columnLastRow
+    Next columnLetter
+
+    If maxRow < HOME_PART_TABLE_HEADER_ROW Then
+        HomePartTableLastRow = HOME_PART_TABLE_HEADER_ROW - 1
+    Else
+        HomePartTableLastRow = maxRow
+    End If
+End Function
+
+Private Sub ApplyHomeListBorders(ByVal listRange As Range)
+    With listRange.Borders
+        .LineStyle = xlContinuous
+        .Weight = xlThin
+        .ColorIndex = xlAutomatic
+    End With
+
+    listRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
+End Sub
+
+' Column F: red when > 90, yellow when > 30, green otherwise.
+Private Sub ApplyHomeStatusColumnFormats(ByVal targetRange As Range)
+    Dim formatCondition As FormatCondition
+
+    targetRange.FormatConditions.Delete
+
+    Set formatCondition = targetRange.FormatConditions.Add( _
+        Type:=xlCellValue, _
+        Operator:=xlGreater, _
+        Formula1:="90")
+    formatCondition.StopIfTrue = True
+    formatCondition.Interior.Color = RGB(255, 102, 102)
+
+    Set formatCondition = targetRange.FormatConditions.Add( _
+        Type:=xlCellValue, _
+        Operator:=xlGreater, _
+        Formula1:="30")
+    formatCondition.StopIfTrue = True
+    formatCondition.Interior.Color = RGB(255, 235, 132)
+
+    Set formatCondition = targetRange.FormatConditions.Add( _
+        Type:=xlCellValue, _
+        Operator:=xlLessEqual, _
+        Formula1:="30")
+    formatCondition.StopIfTrue = True
+    formatCondition.Interior.Color = RGB(146, 208, 80)
 End Sub
 
 Private Sub SyncToggleButtons( _
