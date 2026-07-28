@@ -3,6 +3,10 @@ Option Explicit
 
 Private Const PART_LABEL_CELL As String = "A1"
 Private Const PART_LABEL_VALUE As String = "Part"
+' Opaque activate cache (hidden via ;;;). Bump PART_CACHE_SCHEMA when
+' activate formatting/formula behavior changes so stamps invalidate.
+Private Const PART_CACHE_CELL As String = "A2"
+Private Const PART_CACHE_SCHEMA As String = "1"
 Private Const BASE_PART_CELL As String = "C2"
 
 Private Const REFERENCES_SHEET_NAME As String = "References"
@@ -31,10 +35,28 @@ Private Const PIXELS_TO_POINTS As Double = 72# / 96#
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
 
+' Session memoization for source lists (cleared on VBA reset).
+Private g_refBSig As String
+Private g_refBValues() As String
+Private g_refBCached As Boolean
+Private g_refDSig As String
+Private g_refDValues() As String
+Private g_refDCached As Boolean
+Private g_dashCacheBase As String
+Private g_dashCacheSig As String
+Private g_dashCacheValues() As String
+Private g_dashCached As Boolean
+
 ' Call from ThisWorkbook.Workbook_SheetActivate:
 '   HandlePartSheetActivate Sh
 Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     Dim ws As Worksheet
+    Dim basePart As String
+    Dim ffaValues() As String
+    Dim dashConditions() As String
+    Dim productLines() As String
+    Dim dataLastRow As Long
+    Dim cacheKey As String
 
     On Error GoTo CleanUp
 
@@ -45,32 +67,156 @@ Public Sub HandlePartSheetActivate(ByVal Sh As Object)
         Exit Sub
     End If
 
-    OptimizeExcel True
-    RefreshPartSheetLists ws
-    FormatPartDataTable ws
-    ActiveWindow.DisplayGridlines = False
-
-CleanUp:
-    OptimizeExcel False
-End Sub
-
-Private Sub RefreshPartSheetLists(ByVal ws As Worksheet)
-    Dim basePart As String
-    Dim ffaValues() As String
-    Dim dashConditions() As String
-    Dim productLines() As String
-
     basePart = Trim$(CStr(ws.Range(BASE_PART_CELL).Value))
     If Len(basePart) = 0 Then Exit Sub
 
     ffaValues = GetReferenceColumnValues("B")
     dashConditions = GetDashConditionsForBasePart(basePart)
     productLines = GetReferenceColumnValues("D")
+    dataLastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_INPUT_LAST_COLUMN)
+    cacheKey = BuildPartActivateCacheKey(basePart, ffaValues, dashConditions, productLines, dataLastRow)
 
+    ' A2 stamp matches current sources/data extent and spot-checks still pass:
+    ' skip list sync + table formatting.
+    If PartActivateCacheIsCurrent(ws, cacheKey, ffaValues, dashConditions, productLines, dataLastRow) Then
+        ActiveWindow.DisplayGridlines = False
+        Exit Sub
+    End If
+
+    OptimizeExcel True
     SyncValueCheckboxList ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN, ffaValues
     SyncValueCheckboxList ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN, dashConditions
     SyncValueCheckboxList ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN, productLines
+    FormatPartDataTable ws
+    WritePartActivateCache ws, cacheKey
+    ActiveWindow.DisplayGridlines = False
+
+CleanUp:
+    OptimizeExcel False
 End Sub
+
+Private Function BuildPartActivateCacheKey( _
+    ByVal basePart As String, _
+    ByRef ffaValues() As String, _
+    ByRef dashConditions() As String, _
+    ByRef productLines() As String, _
+    ByVal dataLastRow As Long) As String
+
+    BuildPartActivateCacheKey = _
+        PART_CACHE_SCHEMA & Chr$(31) & _
+        UCase$(basePart) & Chr$(31) & _
+        JoinStringArray(ffaValues) & Chr$(31) & _
+        JoinStringArray(dashConditions) & Chr$(31) & _
+        JoinStringArray(productLines) & Chr$(31) & _
+        CStr(dataLastRow)
+End Function
+
+Private Function PartActivateCacheIsCurrent( _
+    ByVal ws As Worksheet, _
+    ByVal cacheKey As String, _
+    ByRef ffaValues() As String, _
+    ByRef dashConditions() As String, _
+    ByRef productLines() As String, _
+    ByVal dataLastRow As Long) As Boolean
+
+    If StrComp(CStr(ws.Range(PART_CACHE_CELL).Value2), cacheKey, vbBinaryCompare) <> 0 Then
+        Exit Function
+    End If
+
+    If Not SpotCheckListCheckBoxes(ws, FFA_CHECKBOX_COLUMN, ArrayCount(ffaValues)) Then Exit Function
+    If Not SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then Exit Function
+    If Not SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then Exit Function
+
+    If dataLastRow >= LIST_START_ROW Then
+        If Len(ws.Cells(LIST_START_ROW, "W").Formula) = 0 Then Exit Function
+        If Len(ws.Cells(LIST_START_ROW, "X").Formula) = 0 Then Exit Function
+        If Len(ws.Cells(LIST_START_ROW, "Y").Formula) = 0 Then Exit Function
+        If Len(ws.Cells(dataLastRow, "Y").Formula) = 0 Then Exit Function
+    End If
+
+    PartActivateCacheIsCurrent = True
+End Function
+
+Private Function SpotCheckListCheckBoxes( _
+    ByVal ws As Worksheet, _
+    ByVal checkboxColumn As String, _
+    ByVal itemCount As Long) As Boolean
+
+    Dim endRow As Long
+
+    If itemCount <= 0 Then
+        SpotCheckListCheckBoxes = True
+        Exit Function
+    End If
+
+    endRow = LIST_START_ROW + itemCount - 1
+    If Not CellIsCheckBox(ws.Cells(LIST_START_ROW, checkboxColumn)) Then Exit Function
+    If endRow > LIST_START_ROW Then
+        If Not CellIsCheckBox(ws.Cells(endRow, checkboxColumn)) Then Exit Function
+    End If
+
+    SpotCheckListCheckBoxes = True
+End Function
+
+Private Function CellIsCheckBox(ByVal cell As Range) As Boolean
+    Dim cellType As Variant
+
+    On Error Resume Next
+    cellType = cell.CellControl.Type
+    If Err.Number <> 0 Then
+        Err.Clear
+        CellIsCheckBox = False
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    CellIsCheckBox = (cellType = XL_TYPE_CHECKBOX)
+End Function
+
+Private Sub WritePartActivateCache(ByVal ws As Worksheet, ByVal cacheKey As String)
+    With ws.Range(PART_CACHE_CELL)
+        .NumberFormat = ";;;"
+        .Value2 = cacheKey
+    End With
+End Sub
+
+Private Function JoinStringArray(ByRef values() As String) As String
+    Dim i As Long
+    Dim parts() As String
+    Dim count As Long
+
+    count = ArrayCount(values)
+    If count = 0 Then
+        JoinStringArray = vbNullString
+        Exit Function
+    End If
+
+    ReDim parts(0 To count - 1)
+    For i = 0 To count - 1
+        parts(i) = values(LBound(values) + i)
+    Next i
+
+    JoinStringArray = Join(parts, Chr$(30))
+End Function
+
+Private Function CloneStringArray(ByRef values() As String) As String()
+    Dim result() As String
+    Dim i As Long
+    Dim count As Long
+
+    count = ArrayCount(values)
+    If count = 0 Then
+        CloneStringArray = EmptyStringArray()
+        Exit Function
+    End If
+
+    ReDim result(LBound(values) To UBound(values))
+    For i = LBound(values) To UBound(values)
+        result(i) = values(i)
+    Next i
+
+    CloneStringArray = result
+End Function
 
 ' Writes values/checkboxes/borders only when the list or checkbox set needs updating.
 Private Sub SyncValueCheckboxList( _
@@ -540,27 +686,67 @@ End Function
 Private Function GetReferenceColumnValues(ByVal columnLetter As String) As String()
     Dim wsReferences As Worksheet
     Dim lastRow As Long
+    Dim rawValues As Variant
+    Dim sourceSig As String
+    Dim values() As String
+
+    Set wsReferences = ThisWorkbook.Worksheets(REFERENCES_SHEET_NAME)
+    lastRow = FastLastUsedRowInColumn(wsReferences, columnLetter)
+
+    If lastRow < 2 Then
+        sourceSig = columnLetter & Chr$(31) & "0"
+        rawValues = Empty
+    Else
+        rawValues = wsReferences.Range( _
+            wsReferences.Cells(2, columnLetter), _
+            wsReferences.Cells(lastRow, columnLetter)).Value2
+        sourceSig = columnLetter & Chr$(31) & CStr(lastRow) & Chr$(31) & HashVariantColumn(rawValues)
+    End If
+
+    If StrComp(columnLetter, "B", vbTextCompare) = 0 Then
+        If g_refBCached And StrComp(g_refBSig, sourceSig, vbBinaryCompare) = 0 Then
+            GetReferenceColumnValues = CloneStringArray(g_refBValues)
+            Exit Function
+        End If
+    ElseIf StrComp(columnLetter, "D", vbTextCompare) = 0 Then
+        If g_refDCached And StrComp(g_refDSig, sourceSig, vbBinaryCompare) = 0 Then
+            GetReferenceColumnValues = CloneStringArray(g_refDValues)
+            Exit Function
+        End If
+    End If
+
+    values = UniqueSortedValuesFromColumn(rawValues)
+
+    If StrComp(columnLetter, "B", vbTextCompare) = 0 Then
+        g_refBSig = sourceSig
+        g_refBValues = CloneStringArray(values)
+        g_refBCached = True
+    ElseIf StrComp(columnLetter, "D", vbTextCompare) = 0 Then
+        g_refDSig = sourceSig
+        g_refDValues = CloneStringArray(values)
+        g_refDCached = True
+    End If
+
+    GetReferenceColumnValues = values
+End Function
+
+Private Function UniqueSortedValuesFromColumn(ByVal rawValues As Variant) As String()
     Dim rowIndex As Long
     Dim cellValue As String
     Dim uniqueValues As Object
-    Dim rawValues As Variant
 
-    Set wsReferences = ThisWorkbook.Worksheets(REFERENCES_SHEET_NAME)
     Set uniqueValues = CreateObject("Scripting.Dictionary")
     uniqueValues.CompareMode = vbTextCompare
 
-    lastRow = FastLastUsedRowInColumn(wsReferences, columnLetter)
-    If lastRow < 2 Then
-        GetReferenceColumnValues = EmptyStringArray()
+    If IsEmpty(rawValues) Then
+        UniqueSortedValuesFromColumn = EmptyStringArray()
         Exit Function
     End If
-
-    rawValues = wsReferences.Range(wsReferences.Cells(2, columnLetter), wsReferences.Cells(lastRow, columnLetter)).Value2
 
     If Not IsArray(rawValues) Then
         cellValue = Trim$(CStr(Nz(rawValues)))
         If Len(cellValue) > 0 Then uniqueValues.Add cellValue, cellValue
-        GetReferenceColumnValues = DictionaryKeysToSortedArray(uniqueValues)
+        UniqueSortedValuesFromColumn = DictionaryKeysToSortedArray(uniqueValues)
         Exit Function
     End If
 
@@ -573,30 +759,70 @@ Private Function GetReferenceColumnValues(ByVal columnLetter As String) As Strin
         End If
     Next rowIndex
 
-    GetReferenceColumnValues = DictionaryKeysToSortedArray(uniqueValues)
+    UniqueSortedValuesFromColumn = DictionaryKeysToSortedArray(uniqueValues)
 End Function
 
 Private Function GetDashConditionsForBasePart(ByVal basePart As String) As String()
     Dim wsStandards As Worksheet
     Dim tbl As ListObject
+    Dim assemblyValues As Variant
+    Dim sourceSig As String
+    Dim values() As String
+    Dim rowCount As Long
+
+    Set wsStandards = ThisWorkbook.Worksheets(ASSEMBLY_STANDARDS_SHEET_NAME)
+    Set tbl = wsStandards.ListObjects(ASSY_STANDARDS_TABLE_NAME)
+
+    If tbl.DataBodyRange Is Nothing Then
+        sourceSig = "0"
+        assemblyValues = Empty
+    Else
+        rowCount = tbl.DataBodyRange.Rows.Count
+        assemblyValues = ColumnValues(tbl.ListColumns(COL_ASSEMBLY_NO))
+        sourceSig = CStr(rowCount) & Chr$(31) & HashVariantColumn(assemblyValues)
+    End If
+
+    If g_dashCached _
+        And StrComp(g_dashCacheBase, basePart, vbTextCompare) = 0 _
+        And StrComp(g_dashCacheSig, sourceSig, vbBinaryCompare) = 0 Then
+        GetDashConditionsForBasePart = CloneStringArray(g_dashCacheValues)
+        Exit Function
+    End If
+
+    values = ExtractDashConditions(assemblyValues, basePart)
+    g_dashCacheBase = basePart
+    g_dashCacheSig = sourceSig
+    g_dashCacheValues = CloneStringArray(values)
+    g_dashCached = True
+    GetDashConditionsForBasePart = values
+End Function
+
+Private Function ExtractDashConditions(ByVal assemblyValues As Variant, ByVal basePart As String) As String()
     Dim rowIndex As Long
     Dim assemblyVal As String
     Dim rowBasePart As String
     Dim dashCondition As String
     Dim uniqueValues As Object
-    Dim assemblyValues As Variant
 
-    Set wsStandards = ThisWorkbook.Worksheets(ASSEMBLY_STANDARDS_SHEET_NAME)
-    Set tbl = wsStandards.ListObjects(ASSY_STANDARDS_TABLE_NAME)
     Set uniqueValues = CreateObject("Scripting.Dictionary")
     uniqueValues.CompareMode = vbTextCompare
 
-    If tbl.DataBodyRange Is Nothing Then
-        GetDashConditionsForBasePart = EmptyStringArray()
+    If IsEmpty(assemblyValues) Then
+        ExtractDashConditions = EmptyStringArray()
         Exit Function
     End If
 
-    assemblyValues = ColumnValues(tbl.ListColumns(COL_ASSEMBLY_NO))
+    If Not IsArray(assemblyValues) Then
+        assemblyVal = Trim$(CStr(Nz(assemblyValues)))
+        If Len(assemblyVal) > 0 Then
+            SplitAssemblyNo assemblyVal, rowBasePart, dashCondition
+            If StrComp(rowBasePart, basePart, vbTextCompare) = 0 And Len(dashCondition) > 0 Then
+                uniqueValues.Add dashCondition, dashCondition
+            End If
+        End If
+        ExtractDashConditions = DictionaryKeysToSortedArray(uniqueValues)
+        Exit Function
+    End If
 
     For rowIndex = 1 To UBound(assemblyValues, 1)
         assemblyVal = Trim$(CStr(Nz(assemblyValues(rowIndex, 1))))
@@ -610,7 +836,42 @@ Private Function GetDashConditionsForBasePart(ByVal basePart As String) As Strin
         End If
     Next rowIndex
 
-    GetDashConditionsForBasePart = DictionaryKeysToSortedArray(uniqueValues)
+    ExtractDashConditions = DictionaryKeysToSortedArray(uniqueValues)
+End Function
+
+' Lightweight content fingerprint — avoids building giant joined strings.
+Private Function HashVariantColumn(ByVal values As Variant) As String
+    Dim rowIndex As Long
+    Dim cellValue As String
+    Dim totalLen As Long
+    Dim checkSum As Long
+    Dim count As Long
+    Dim firstValue As String
+    Dim lastValue As String
+
+    If IsEmpty(values) Then
+        HashVariantColumn = "0:0:0:"
+        Exit Function
+    End If
+
+    If Not IsArray(values) Then
+        cellValue = Trim$(CStr(Nz(values)))
+        HashVariantColumn = "1:" & CStr(Len(cellValue)) & ":" & CStr(Len(cellValue)) & ":" & cellValue
+        Exit Function
+    End If
+
+    count = UBound(values, 1)
+    For rowIndex = 1 To count
+        cellValue = Trim$(CStr(Nz(values(rowIndex, 1))))
+        totalLen = totalLen + Len(cellValue)
+        If Len(cellValue) > 0 Then
+            checkSum = (checkSum + AscW(Left$(cellValue, 1)) + AscW(Right$(cellValue, 1)) + Len(cellValue)) Mod 2147483647
+            If Len(firstValue) = 0 Then firstValue = cellValue
+            lastValue = cellValue
+        End If
+    Next rowIndex
+
+    HashVariantColumn = CStr(count) & ":" & CStr(totalLen) & ":" & CStr(checkSum) & ":" & firstValue & Chr$(30) & lastValue
 End Function
 
 Private Function ColumnValues(ByVal col As ListColumn) As Variant
