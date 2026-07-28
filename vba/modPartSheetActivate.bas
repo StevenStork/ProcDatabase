@@ -48,7 +48,6 @@ Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     OptimizeExcel True
     RefreshPartSheetLists ws
     FormatPartDataTable ws
-    ws.Activate
     ActiveWindow.DisplayGridlines = False
 
 CleanUp:
@@ -374,6 +373,7 @@ End Function
 
 Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     Dim lastRow As Long
+    Dim listLastRow As Long
     Dim tableRange As Range
     Dim headerRange As Range
 
@@ -394,14 +394,28 @@ Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     tableRange.HorizontalAlignment = xlCenter
     tableRange.VerticalAlignment = xlCenter
 
-    ws.Range(ws.Cells(LIST_START_ROW, "M"), ws.Cells(lastRow, "Q")).Interior.Color = RGB(213, 229, 249)
+    ' Clear previous M:N highlighting if present, then apply the current fills.
+    ws.Range(ws.Cells(LIST_START_ROW, "M"), ws.Cells(lastRow, "N")).Interior.ColorIndex = xlNone
+
+    ws.Range(ws.Cells(LIST_START_ROW, "O"), ws.Cells(lastRow, "Q")).Interior.Color = RGB(213, 229, 249)
+    ws.Range(ws.Cells(LIST_START_ROW, "T"), ws.Cells(lastRow, "T")).Interior.Color = RGB(213, 229, 249)
     ws.Range(ws.Cells(LIST_START_ROW, "U"), ws.Cells(lastRow, "V")).Interior.Color = RGB(213, 229, 249)
     ws.Range(ws.Cells(LIST_START_ROW, "Z"), ws.Cells(lastRow, "Z")).Interior.Color = RGB(213, 229, 249)
 
     ws.Range(ws.Cells(LIST_START_ROW, "O"), ws.Cells(lastRow, "S")).NumberFormat = "0.00"
     ws.Range(ws.Cells(LIST_START_ROW, "W"), ws.Cells(lastRow, "Y")).NumberFormat = "0.00"
-    ws.Range(ws.Cells(DATA_TABLE_HEADER_ROW, "O"), ws.Cells(DATA_TABLE_HEADER_ROW, "S")).NumberFormat = "@"
-    ws.Range(ws.Cells(DATA_TABLE_HEADER_ROW, "W"), ws.Cells(DATA_TABLE_HEADER_ROW, "Y")).NumberFormat = "@"
+
+    listLastRow = Application.WorksheetFunction.Max( _
+        FastLastUsedRowInColumn(ws, FFA_VALUE_COLUMN), _
+        FastLastUsedRowInColumn(ws, DASH_VALUE_COLUMN), _
+        FastLastUsedRowInColumn(ws, PRODUCT_LINE_VALUE_COLUMN), _
+        LIST_START_ROW)
+
+    If listLastRow >= LIST_START_ROW Then
+        ws.Range(ws.Cells(LIST_START_ROW, FFA_CHECKBOX_COLUMN), ws.Cells(listLastRow, FFA_CHECKBOX_COLUMN)).Interior.Color = RGB(213, 229, 249)
+        ws.Range(ws.Cells(LIST_START_ROW, DASH_CHECKBOX_COLUMN), ws.Cells(listLastRow, DASH_CHECKBOX_COLUMN)).Interior.Color = RGB(213, 229, 249)
+        ws.Range(ws.Cells(LIST_START_ROW, PRODUCT_LINE_CHECKBOX_COLUMN), ws.Cells(listLastRow, PRODUCT_LINE_CHECKBOX_COLUMN)).Interior.Color = RGB(213, 229, 249)
+    End If
 End Sub
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
