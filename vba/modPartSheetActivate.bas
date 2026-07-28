@@ -18,6 +18,9 @@ Private Const DASH_CHECKBOX_COLUMN As String = "F"
 Private Const PRODUCT_LINE_VALUE_COLUMN As String = "G"
 Private Const PRODUCT_LINE_CHECKBOX_COLUMN As String = "H"
 
+Private Const DATA_TABLE_FIRST_COLUMN As String = "M"
+Private Const DATA_TABLE_LAST_COLUMN As String = "Z"
+
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
 
@@ -37,6 +40,7 @@ Public Sub HandlePartSheetActivate(ByVal Sh As Object)
 
     OptimizeExcel True
     RefreshPartSheetLists ws
+    FormatPartDataTableBorders ws
 
 CleanUp:
     OptimizeExcel False
@@ -221,6 +225,61 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
 
     listRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
 End Sub
+
+' Formats the Part sheet data block in columns M:Z starting at row 9 with
+' thin inner borders and a medium outer border.
+Private Sub FormatPartDataTableBorders(ByVal ws As Worksheet)
+    Dim lastRow As Long
+    Dim tableRange As Range
+
+    lastRow = LastUsedRowInRangeColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_LAST_COLUMN, LIST_START_ROW)
+    If lastRow < LIST_START_ROW Then Exit Sub
+
+    Set tableRange = ws.Range( _
+        ws.Cells(LIST_START_ROW, DATA_TABLE_FIRST_COLUMN), _
+        ws.Cells(lastRow, DATA_TABLE_LAST_COLUMN))
+
+    ApplyListBorders tableRange
+End Sub
+
+Private Function LastUsedRowInRangeColumns( _
+    ByVal ws As Worksheet, _
+    ByVal firstColumn As String, _
+    ByVal lastColumn As String, _
+    ByVal startRow As Long) As Long
+
+    Dim colIndex As Long
+    Dim firstColIndex As Long
+    Dim lastColIndex As Long
+    Dim columnLastRow As Long
+    Dim maxRow As Long
+
+    firstColIndex = ws.Columns(firstColumn).Column
+    lastColIndex = ws.Columns(lastColumn).Column
+    maxRow = startRow - 1
+
+    For colIndex = firstColIndex To lastColIndex
+        columnLastRow = LastNonEmptyRowFrom(ws, ColumnLetter(colIndex), startRow)
+        If columnLastRow > maxRow Then maxRow = columnLastRow
+    Next colIndex
+
+    LastUsedRowInRangeColumns = maxRow
+End Function
+
+Private Function ColumnLetter(ByVal columnIndex As Long) As String
+    Dim dividend As Long
+    Dim modulo As Long
+    Dim result As String
+
+    dividend = columnIndex
+    Do
+        modulo = (dividend - 1) Mod 26
+        result = Chr$(65 + modulo) & result
+        dividend = (dividend - modulo) \ 26
+    Loop While dividend > 0
+
+    ColumnLetter = result
+End Function
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
     Dim lastRow As Long
