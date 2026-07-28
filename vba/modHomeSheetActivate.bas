@@ -39,7 +39,7 @@ Private Const PART_SHEET_BASE_PART_CELL As String = "C2"
 
 ' Opaque Home activate cache (hidden via ;;;). Bump schema when formatting logic changes.
 Private Const HOME_CACHE_CELL As String = "A2"
-Private Const HOME_CACHE_SCHEMA As String = "1"
+Private Const HOME_CACHE_SCHEMA As String = "2"
 
 ' Per-activate session caches (reset at the start of each Home activate).
 Private g_partSheetsByBase As Object
@@ -69,13 +69,17 @@ Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     markedFfasByBasePart.CompareMode = vbTextCompare
 
     cacheKey = BuildHomeActivateCacheKey(wsHome, lastRow, markedFfasByBasePart)
-    If HomeActivateCacheIsCurrent(wsHome, cacheKey, lastRow) Then Exit Sub
 
     OptimizeExcel True
+    ' Always recreate/sync toggle buttons. A2 cache only skips table formatting so
+    ' manually deleted buttons still come back on the next Home activate.
     SyncCategoryToggleButtons wsHome
     SyncFfaToggleButtons wsHome
-    FormatHomePartTable wsHome, lastRow, markedFfasByBasePart
-    WriteHomeActivateCache wsHome, cacheKey
+
+    If Not HomeActivateCacheIsCurrent(wsHome, cacheKey, lastRow) Then
+        FormatHomePartTable wsHome, lastRow, markedFfasByBasePart
+        WriteHomeActivateCache wsHome, cacheKey
+    End If
 
 CleanUp:
     OptimizeExcel False
@@ -410,7 +414,7 @@ Private Sub SyncFfaToggleButtons(ByVal wsHome As Worksheet)
 End Sub
 
 ' Formats the Home part table (C:I from header row 5 through the last used row):
-' thin + medium borders, thick header border, center alignment, D/G fill,
+' thin + medium borders (including medium header border), center alignment, D/G fill,
 ' E short dates, F days-since formulas with RAG colors, H marked FFAs, I factories.
 Private Sub FormatHomePartTable( _
     ByVal ws As Worksheet, _
@@ -436,7 +440,7 @@ Private Sub FormatHomePartTable( _
         ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_LAST_COLUMN))
 
     ApplyHomeListBorders tableRange
-    headerRange.BorderAround LineStyle:=xlContinuous, Weight:=xlThick, ColorIndex:=xlAutomatic
+    headerRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
 
     tableRange.HorizontalAlignment = xlCenter
     tableRange.VerticalAlignment = xlCenter
