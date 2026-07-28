@@ -21,8 +21,9 @@ Private Const PRODUCT_LINE_CHECKBOX_COLUMN As String = "H"
 Private Const DATA_TABLE_FIRST_COLUMN As String = "M"
 Private Const DATA_TABLE_LAST_COLUMN As String = "Z"
 Private Const DATA_TABLE_HEADER_ROW As Long = 8
-Private Const DATA_TABLE_COLUMN_WIDTH_PADDING As Double = 2
-Private Const DATA_TABLE_MAX_COLUMN_WIDTH As Double = 45
+Private Const DATA_TABLE_MIN_COLUMN_WIDTH As Double = 8
+Private Const DATA_TABLE_MAX_WRAPPED_COLUMN_WIDTH As Double = 15
+Private Const DATA_TABLE_COLUMN_WIDTH_PADDING As Double = 0.5
 
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
@@ -229,8 +230,8 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
     listRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
 End Sub
 
-' Formats the Part sheet M:Z table: borders on data rows, and column/header
-' sizing so wrapped titles in row 8 do not orphan a single letter.
+' Formats the Part sheet M:Z table: borders on data rows, and wrapped
+' header sizing that keeps multi-line titles without forcing single-line widths.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
     FormatPartDataTableBorders ws
     ResizePartDataTableColumns ws
@@ -252,78 +253,50 @@ End Sub
 
 Private Sub ResizePartDataTableColumns(ByVal ws As Worksheet)
     Dim headerRange As Range
-    Dim fitRange As Range
     Dim lastDataRow As Long
     Dim colIndex As Long
     Dim firstColIndex As Long
     Dim lastColIndex As Long
-    Dim columnRange As Range
+    Dim dataColumnRange As Range
     Dim fittedWidth As Double
 
     Set headerRange = ws.Range( _
         ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_FIRST_COLUMN), _
         ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_LAST_COLUMN))
 
+    ' Keep header wrap enabled so titles can stay on multiple lines.
+    headerRange.WrapText = True
+    headerRange.VerticalAlignment = xlCenter
+    headerRange.HorizontalAlignment = xlCenter
+
     lastDataRow = LastUsedRowInRangeColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_LAST_COLUMN, LIST_START_ROW)
     If lastDataRow < LIST_START_ROW Then lastDataRow = LIST_START_ROW
-
-    Set fitRange = ws.Range( _
-        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_FIRST_COLUMN), _
-        ws.Cells(lastDataRow, DATA_TABLE_LAST_COLUMN))
-
-    ' AutoFit is unreliable while WrapText is on; size columns with wrap off first.
-    fitRange.WrapText = False
-    headerRange.WrapText = False
 
     firstColIndex = ws.Columns(DATA_TABLE_FIRST_COLUMN).Column
     lastColIndex = ws.Columns(DATA_TABLE_LAST_COLUMN).Column
 
     For colIndex = firstColIndex To lastColIndex
-        Set columnRange = ws.Range( _
-            ws.Cells(DATA_TABLE_HEADER_ROW, colIndex), _
+        Set dataColumnRange = ws.Range( _
+            ws.Cells(LIST_START_ROW, colIndex), _
             ws.Cells(lastDataRow, colIndex))
 
-        columnRange.Columns.AutoFit
-        fittedWidth = ws.Columns(colIndex).ColumnWidth + DATA_TABLE_COLUMN_WIDTH_PADDING
-        If fittedWidth > DATA_TABLE_MAX_COLUMN_WIDTH Then fittedWidth = DATA_TABLE_MAX_COLUMN_WIDTH
-        If fittedWidth < 8 Then fittedWidth = 8
+        ' Size from data rows only so long wrapped headers do not force
+        ' the column out to a single full-width line.
+        If Application.WorksheetFunction.CountA(dataColumnRange) > 0 Then
+            dataColumnRange.Columns.AutoFit
+            fittedWidth = ws.Columns(colIndex).ColumnWidth + DATA_TABLE_COLUMN_WIDTH_PADDING
+        Else
+            fittedWidth = DATA_TABLE_MIN_COLUMN_WIDTH
+        End If
+
+        If fittedWidth < DATA_TABLE_MIN_COLUMN_WIDTH Then fittedWidth = DATA_TABLE_MIN_COLUMN_WIDTH
+        If fittedWidth > DATA_TABLE_MAX_WRAPPED_COLUMN_WIDTH Then fittedWidth = DATA_TABLE_MAX_WRAPPED_COLUMN_WIDTH
+
         ws.Columns(colIndex).ColumnWidth = fittedWidth
     Next colIndex
 
-    ' Restore wrapped headers and size the header row to the final column widths.
-    headerRange.WrapText = True
-    headerRange.VerticalAlignment = xlCenter
-    headerRange.HorizontalAlignment = xlCenter
-
-    ' Widen columns that are only barely too narrow for the header text,
-    ' which is what causes a single letter to drop to the next line.
-    ExpandColumnsToReduceOrphanWraps headerRange
+    ' With wrap still on, fit the header row height to the wrapped lines.
     ws.Rows(DATA_TABLE_HEADER_ROW).AutoFit
-End Sub
-
-' Widens columns where wrapped header text is only barely overflowing.
-Private Sub ExpandColumnsToReduceOrphanWraps(ByVal headerRange As Range)
-    Dim cell As Range
-    Dim textLength As Long
-    Dim currentWidth As Double
-    Dim attempt As Long
-
-    For Each cell In headerRange.Cells
-        textLength = Len(Trim$(CStr(cell.Value)))
-        If textLength = 0 Then GoTo NextHeaderCell
-
-        For attempt = 1 To 6
-            currentWidth = cell.ColumnWidth
-            ' Near-miss: text is only a few characters wider than the column.
-            If textLength <= currentWidth Then Exit For
-            If textLength > currentWidth + 6 Then Exit For
-            If currentWidth + 1 > DATA_TABLE_MAX_COLUMN_WIDTH Then Exit For
-
-            cell.EntireColumn.ColumnWidth = currentWidth + 1
-        Next attempt
-
-NextHeaderCell:
-    Next cell
 End Sub
 
 Private Function LastUsedRowInRangeColumns( _
