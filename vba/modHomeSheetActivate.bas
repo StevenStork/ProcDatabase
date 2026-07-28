@@ -37,10 +37,24 @@ Private Const HOME_PART_TABLE_FFA_COLUMN As String = "H"
 Private Const HOME_PART_TABLE_FACTORY_COLUMN As String = "I"
 Private Const PART_SHEET_BASE_PART_CELL As String = "C2"
 
+' Opaque Home activate cache (hidden via ;;;). Bump schema when formatting logic changes.
+Private Const HOME_CACHE_CELL As String = "A2"
+Private Const HOME_CACHE_SCHEMA As String = "1"
+
+' Per-activate session caches (reset at the start of each Home activate).
+Private g_partSheetsByBase As Object
+Private g_ffaCheckedMap As Object
+Private g_ffaVisibleCheckedMap As Object
+Private g_categoryVisibleMap As Object
+Private g_markedFfasByBasePartSession As Object
+
 ' Call from ThisWorkbook.Workbook_SheetActivate:
 '   HandleHomeSheetActivate Sh
 Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     Dim wsHome As Worksheet
+    Dim lastRow As Long
+    Dim markedFfasByBasePart As Object
+    Dim cacheKey As String
 
     On Error GoTo CleanUp
 
@@ -48,15 +62,225 @@ Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     If StrComp(Sh.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then Exit Sub
 
     Set wsHome = Sh
+    ResetHomeSessionCaches
+
+    lastRow = HomePartTableLastRow(wsHome)
+    Set markedFfasByBasePart = CreateObject("Scripting.Dictionary")
+    markedFfasByBasePart.CompareMode = vbTextCompare
+
+    cacheKey = BuildHomeActivateCacheKey(wsHome, lastRow, markedFfasByBasePart)
+    If HomeActivateCacheIsCurrent(wsHome, cacheKey, lastRow) Then Exit Sub
 
     OptimizeExcel True
     SyncCategoryToggleButtons wsHome
     SyncFfaToggleButtons wsHome
-    FormatHomePartTable wsHome
+    FormatHomePartTable wsHome, lastRow, markedFfasByBasePart
+    WriteHomeActivateCache wsHome, cacheKey
 
 CleanUp:
     OptimizeExcel False
 End Sub
+
+Private Sub ResetHomeSessionCaches()
+    Set g_partSheetsByBase = Nothing
+    Set g_ffaCheckedMap = Nothing
+    Set g_ffaVisibleCheckedMap = Nothing
+    Set g_categoryVisibleMap = Nothing
+    Set g_markedFfasByBasePartSession = Nothing
+End Sub
+
+Private Function BuildHomeActivateCacheKey( _
+    ByVal ws As Worksheet, _
+    ByVal lastRow As Long, _
+    ByVal markedFfasByBasePart As Object) As String
+
+    BuildHomeActivateCacheKey = _
+        HOME_CACHE_SCHEMA & Chr$(31) & _
+        BuildHomeTableInputSignature(ws, lastRow) & Chr$(31) & _
+        CollectAndSignMarkedFfas(ws, lastRow, markedFfasByBasePart) & Chr$(31) & _
+        BuildReferencesFactorySignature() & Chr$(31) & _
+        BuildHomeButtonSignature()
+End Function
+
+Private Function HomeActivateCacheIsCurrent( _
+    ByVal ws As Worksheet, _
+    ByVal cacheKey As String, _
+    ByVal lastRow As Long) As Boolean
+
+    If StrComp(CStr(Nz(ws.Range(HOME_CACHE_CELL).Value2)), cacheKey, vbBinaryCompare) <> 0 Then
+        Exit Function
+    End If
+
+    If lastRow >= HOME_PART_TABLE_FIRST_DATA_ROW Then
+        If InStr(1, ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_DAYS_COLUMN).Formula, "TODAY()", vbTextCompare) = 0 Then
+            Exit Function
+        End If
+    End If
+
+    HomeActivateCacheIsCurrent = True
+End Function
+
+Private Sub WriteHomeActivateCache(ByVal ws As Worksheet, ByVal cacheKey As String)
+    With ws.Range(HOME_CACHE_CELL)
+        .NumberFormat = ";;;"
+        .Value2 = cacheKey
+    End With
+End Sub
+
+Private Function BuildHomeTableInputSignature(ByVal ws As Worksheet, ByVal lastRow As Long) As String
+    Dim rowIndex As Long
+    Dim parts() As String
+    Dim partCount As Long
+
+    If lastRow < HOME_PART_TABLE_FIRST_DATA_ROW Then
+        BuildHomeTableInputSignature = CStr(lastRow)
+        Exit Function
+    End If
+
+    partCount = lastRow - HOME_PART_TABLE_FIRST_DATA_ROW + 1
+    ReDim parts(1 To partCount)
+
+    For rowIndex = HOME_PART_TABLE_FIRST_DATA_ROW To lastRow
+        parts(rowIndex - HOME_PART_TABLE_FIRST_DATA_ROW + 1) = _
+            Trim$(CStr(ws.Cells(rowIndex, HOME_PART_TABLE_BASE_PART_COLUMN).Value)) & Chr$(30) & _
+            CStr(IsActiveFlag(ws.Cells(rowIndex, HOME_PART_TABLE_ACTIVE_COLUMN).Value)) & Chr$(30) & _
+            CStr(ws.Cells(rowIndex, HOME_PART_TABLE_DATE_COLUMN).Value2) & Chr$(30) & _
+            Trim$(CStr(ws.Cells(rowIndex, HOME_PART_TABLE_HIGHLIGHT_COLUMN_G).Value))
+    Next rowIndex
+
+    BuildHomeTableInputSignature = CStr(lastRow) & Chr$(31) & Join(parts, Chr$(29))
+End Function
+
+Private Function CollectAndSignMarkedFfas( _
+    ByVal ws As Worksheet, _
+    ByVal lastRow As Long, _
+    ByVal markedFfasByBasePart As Object) As String
+
+    Dim rowIndex As Long
+    Dim basePart As String
+    Dim ffaList As String
+    Dim parts As Collection
+    Dim sigParts() As String
+    Dim i As Long
+
+    Set parts = New Collection
+    If lastRow < HOME_PART_TABLE_FIRST_DATA_ROW Then
+        CollectAndSignMarkedFfas = vbNullString
+        Exit Function
+    End If
+
+    EnsurePartSheetIndex
+    EnsureFfaPresenceMaps
+
+    For rowIndex = HOME_PART_TABLE_FIRST_DATA_ROW To lastRow
+        basePart = Trim$(CStr(ws.Cells(rowIndex, HOME_PART_TABLE_BASE_PART_COLUMN).Value))
+        If Len(basePart) = 0 Then GoTo NextRow
+        If Not IsActiveFlag(ws.Cells(rowIndex, HOME_PART_TABLE_ACTIVE_COLUMN).Value) Then GoTo NextRow
+
+        If markedFfasByBasePart.Exists(basePart) Then
+            ffaList = CStr(markedFfasByBasePart(basePart))
+        Else
+            ffaList = GetMarkedFfaListForBasePart(basePart)
+            markedFfasByBasePart.Add basePart, ffaList
+        End If
+
+        parts.Add basePart & "=" & ffaList
+NextRow:
+    Next rowIndex
+
+    If parts.Count = 0 Then
+        CollectAndSignMarkedFfas = vbNullString
+        Exit Function
+    End If
+
+    ReDim sigParts(1 To parts.Count)
+    For i = 1 To parts.Count
+        sigParts(i) = CStr(parts(i))
+    Next i
+
+    CollectAndSignMarkedFfas = Join(sigParts, Chr$(29))
+End Function
+
+Private Function BuildReferencesFactorySignature() As String
+    Dim wsReferences As Worksheet
+    Dim lastRow As Long
+    Dim rowIndex As Long
+    Dim parts() As String
+    Dim partCount As Long
+
+    Set wsReferences = ThisWorkbook.Worksheets(REFERENCES_SHEET_NAME)
+    lastRow = LastUsedRowInColumn(wsReferences, REFERENCES_FFA_COLUMN)
+    If lastRow < REFERENCES_FFA_START_ROW Then
+        BuildReferencesFactorySignature = "0"
+        Exit Function
+    End If
+
+    partCount = lastRow - REFERENCES_FFA_START_ROW + 1
+    ReDim parts(1 To partCount)
+
+    For rowIndex = REFERENCES_FFA_START_ROW To lastRow
+        parts(rowIndex - REFERENCES_FFA_START_ROW + 1) = _
+            Trim$(CStr(wsReferences.Cells(rowIndex, REFERENCES_FFA_COLUMN).Value)) & Chr$(30) & _
+            Trim$(CStr(wsReferences.Cells(rowIndex, REFERENCES_FACTORY_COLUMN).Value))
+    Next rowIndex
+
+    BuildReferencesFactorySignature = CStr(lastRow) & Chr$(31) & Join(parts, Chr$(29))
+End Function
+
+Private Function BuildHomeButtonSignature() As String
+    Dim categories As Object
+    Dim ffaValues As Object
+    Dim categoryKeys() As String
+    Dim ffaKeys() As String
+    Dim i As Long
+    Dim labelName As String
+    Dim parts As Collection
+    Dim sigParts() As String
+
+    Set categories = CollectSheetCategories(HomeCategory())
+    Set ffaValues = CollectReferenceFfas()
+    EnsureCategoryVisibilityMap
+    EnsureFfaPresenceMaps
+
+    Set parts = New Collection
+    categoryKeys = DictionaryKeysToSortedArray(categories)
+    If IsArrayInitialized(categoryKeys) Then
+        For i = LBound(categoryKeys) To UBound(categoryKeys)
+            labelName = categoryKeys(i)
+            parts.Add "C:" & labelName & "=" & CStr(CategoryHasVisibleSheets(labelName))
+        Next i
+    End If
+
+    ffaKeys = DictionaryKeysToSortedArray(ffaValues)
+    If IsArrayInitialized(ffaKeys) Then
+        For i = LBound(ffaKeys) To UBound(ffaKeys)
+            labelName = ffaKeys(i)
+            parts.Add "F:" & labelName & "=" & CStr(FfaHasVisiblePartSheets(labelName))
+        Next i
+    End If
+
+    If parts.Count = 0 Then
+        BuildHomeButtonSignature = vbNullString
+        Exit Function
+    End If
+
+    ReDim sigParts(1 To parts.Count)
+    For i = 1 To parts.Count
+        sigParts(i) = CStr(parts(i))
+    Next i
+
+    BuildHomeButtonSignature = Join(sigParts, Chr$(29))
+End Function
+
+Private Function Nz(ByVal value As Variant) As Variant
+    If IsError(value) Then
+        Nz = vbNullString
+    ElseIf IsEmpty(value) Or IsNull(value) Then
+        Nz = vbNullString
+    Else
+        Nz = value
+    End If
+End Function
 
 ' OnAction handler for sheet-category toggle buttons on the Home sheet.
 Public Sub ToggleSheetCategoryVisibility()
@@ -68,6 +292,7 @@ Public Sub ToggleSheetCategoryVisibility()
 
     On Error GoTo CleanUp
     OptimizeExcel True
+    ResetHomeSessionCaches
 
     Set wsHome = ThisWorkbook.Worksheets(HOME_SHEET_NAME)
 
@@ -92,7 +317,7 @@ Public Sub ToggleSheetCategoryVisibility()
         End If
     Next ws
 
-    UpdateToggleButtonCaption wsHome, CATEGORY_BUTTON_NAME_PREFIX, category, CategoryHasVisibleSheets(category)
+    UpdateToggleButtonCaption wsHome, CATEGORY_BUTTON_NAME_PREFIX, category, (targetState = xlSheetVisible)
 
 CleanUp:
     On Error Resume Next
@@ -111,6 +336,7 @@ Public Sub TogglePartFfaVisibility()
 
     On Error GoTo CleanUp
     OptimizeExcel True
+    ResetHomeSessionCaches
 
     Set wsHome = ThisWorkbook.Worksheets(HOME_SHEET_NAME)
 
@@ -137,6 +363,8 @@ Public Sub TogglePartFfaVisibility()
         targetState = xlSheetVisible
     End If
 
+    EnsurePartSheetIndex
+    EnsureFfaPresenceMaps
     For Each ws In ThisWorkbook.Worksheets
         If IsPartSheet(ws) Then
             If PartSheetHasActiveFfa(ws, ffaValue) Then
@@ -145,7 +373,7 @@ Public Sub TogglePartFfaVisibility()
         End If
     Next ws
 
-    UpdateToggleButtonCaption wsHome, FFA_BUTTON_NAME_PREFIX, ffaValue, FfaHasVisiblePartSheets(ffaValue)
+    UpdateToggleButtonCaption wsHome, FFA_BUTTON_NAME_PREFIX, ffaValue, (targetState = xlSheetVisible)
 
 CleanUp:
     On Error Resume Next
@@ -183,8 +411,11 @@ End Sub
 ' Formats the Home part table (C:I from header row 5 through the last used row):
 ' thin + medium borders, thick header border, center alignment, D/G fill,
 ' E short dates, F days-since formulas with RAG colors, H marked FFAs, I factories.
-Private Sub FormatHomePartTable(ByVal ws As Worksheet)
-    Dim lastRow As Long
+Private Sub FormatHomePartTable( _
+    ByVal ws As Worksheet, _
+    ByVal lastRow As Long, _
+    ByVal markedFfasByBasePart As Object)
+
     Dim tableRange As Range
     Dim headerRange As Range
     Dim dataLastRow As Long
@@ -194,7 +425,6 @@ Private Sub FormatHomePartTable(ByVal ws As Worksheet)
     Dim ffaFactoryMap As Object
     Dim formulaDays As Variant
 
-    lastRow = HomePartTableLastRow(ws)
     If lastRow < HOME_PART_TABLE_HEADER_ROW Then Exit Sub
 
     Set tableRange = ws.Range( _
@@ -259,7 +489,11 @@ Private Sub FormatHomePartTable(ByVal ws As Worksheet)
             ws.Cells(rowIndex, HOME_PART_TABLE_FFA_COLUMN).Value = vbNullString
             ws.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = vbNullString
         Else
-            ffaList = GetMarkedFfaListForBasePart(basePart)
+            If markedFfasByBasePart.Exists(basePart) Then
+                ffaList = CStr(markedFfasByBasePart(basePart))
+            Else
+                ffaList = GetMarkedFfaListForBasePart(basePart)
+            End If
             ws.Cells(rowIndex, HOME_PART_TABLE_FFA_COLUMN).Value = ffaList
             ws.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = _
                 FactoriesForFfaList(ffaList, ffaFactoryMap)
@@ -331,76 +565,153 @@ Private Sub ApplyHomeStatusColumnFormats(ByVal targetRange As Range)
 End Sub
 
 Private Function GetMarkedFfaListForBasePart(ByVal basePart As String) As String
-    Dim wsPart As Worksheet
+    EnsureFfaPresenceMaps
+
+    If g_markedFfasByBasePartSession.Exists(basePart) Then
+        GetMarkedFfaListForBasePart = CStr(g_markedFfasByBasePartSession(basePart))
+    Else
+        GetMarkedFfaListForBasePart = vbNullString
+    End If
+End Function
+
+Private Function FindPartSheetByBasePart(ByVal basePart As String) As Worksheet
+    EnsurePartSheetIndex
+
+    If g_partSheetsByBase.Exists(basePart) Then
+        Set FindPartSheetByBasePart = g_partSheetsByBase(basePart)
+    End If
+End Function
+
+Private Sub EnsurePartSheetIndex()
+    Dim ws As Worksheet
+    Dim basePart As String
+
+    If Not g_partSheetsByBase Is Nothing Then Exit Sub
+
+    Set g_partSheetsByBase = CreateObject("Scripting.Dictionary")
+    g_partSheetsByBase.CompareMode = vbTextCompare
+
+    For Each ws In ThisWorkbook.Worksheets
+        If IsPartSheet(ws) Then
+            basePart = Trim$(CStr(ws.Range(PART_SHEET_BASE_PART_CELL).Value))
+            If Len(basePart) = 0 Then basePart = ws.Name
+
+            If Not g_partSheetsByBase.Exists(basePart) Then
+                g_partSheetsByBase.Add basePart, ws
+            End If
+
+            If Not g_partSheetsByBase.Exists(ws.Name) Then
+                g_partSheetsByBase.Add ws.Name, ws
+            End If
+        End If
+    Next ws
+End Sub
+
+Private Sub EnsureFfaPresenceMaps()
+    Dim sheetKey As Variant
+    Dim visitedSheets As Object
+    Dim ws As Worksheet
     Dim lastRow As Long
     Dim rowIndex As Long
     Dim ffaValue As String
+    Dim basePart As String
     Dim markedFfas As Object
     Dim ffaKeys() As String
     Dim ffaKey As Variant
     Dim keyIndex As Long
+    Dim ffaList As String
 
-    Set wsPart = FindPartSheetByBasePart(basePart)
-    If wsPart Is Nothing Then
-        GetMarkedFfaListForBasePart = vbNullString
-        Exit Function
-    End If
+    If Not g_ffaCheckedMap Is Nothing Then Exit Sub
 
-    Set markedFfas = CreateObject("Scripting.Dictionary")
-    markedFfas.CompareMode = vbTextCompare
+    EnsurePartSheetIndex
+    Set g_ffaCheckedMap = CreateObject("Scripting.Dictionary")
+    g_ffaCheckedMap.CompareMode = vbTextCompare
+    Set g_ffaVisibleCheckedMap = CreateObject("Scripting.Dictionary")
+    g_ffaVisibleCheckedMap.CompareMode = vbTextCompare
+    Set g_markedFfasByBasePartSession = CreateObject("Scripting.Dictionary")
+    g_markedFfasByBasePartSession.CompareMode = vbTextCompare
+    Set visitedSheets = CreateObject("Scripting.Dictionary")
+    visitedSheets.CompareMode = vbTextCompare
 
-    lastRow = LastUsedRowInColumn(wsPart, PART_FFA_VALUE_COLUMN)
-    If lastRow >= PART_LIST_START_ROW Then
-        For rowIndex = PART_LIST_START_ROW To lastRow
-            ffaValue = Trim$(CStr(wsPart.Cells(rowIndex, PART_FFA_VALUE_COLUMN).Value))
-            If Len(ffaValue) > 0 Then
-                If IsActiveFlag(wsPart.Cells(rowIndex, PART_FFA_ACTIVE_COLUMN).Value) Then
+    For Each sheetKey In g_partSheetsByBase.Keys
+        Set ws = g_partSheetsByBase(sheetKey)
+        If visitedSheets.Exists(ws.Name) Then GoTo NextSheet
+        visitedSheets.Add ws.Name, True
+
+        basePart = Trim$(CStr(ws.Range(PART_SHEET_BASE_PART_CELL).Value))
+        If Len(basePart) = 0 Then basePart = ws.Name
+
+        Set markedFfas = CreateObject("Scripting.Dictionary")
+        markedFfas.CompareMode = vbTextCompare
+
+        lastRow = ws.Cells(ws.Rows.Count, PART_FFA_VALUE_COLUMN).End(xlUp).Row
+        If lastRow >= PART_LIST_START_ROW Then
+            For rowIndex = PART_LIST_START_ROW To lastRow
+                ffaValue = Trim$(CStr(ws.Cells(rowIndex, PART_FFA_VALUE_COLUMN).Value))
+                If Len(ffaValue) = 0 Then Exit For
+
+                If IsActiveFlag(ws.Cells(rowIndex, PART_FFA_ACTIVE_COLUMN).Value) Then
                     If Not markedFfas.Exists(ffaValue) Then
                         markedFfas.Add ffaValue, ffaValue
                     End If
+                    If Not g_ffaCheckedMap.Exists(ffaValue) Then
+                        g_ffaCheckedMap.Add ffaValue, True
+                    End If
+                    If ws.Visible = xlSheetVisible Then
+                        If Not g_ffaVisibleCheckedMap.Exists(ffaValue) Then
+                            g_ffaVisibleCheckedMap.Add ffaValue, True
+                        End If
+                    End If
                 End If
-            End If
-        Next rowIndex
-    End If
-
-    If markedFfas.Count = 0 Then
-        GetMarkedFfaListForBasePart = vbNullString
-        Exit Function
-    End If
-
-    ReDim ffaKeys(0 To markedFfas.Count - 1)
-    keyIndex = 0
-    For Each ffaKey In markedFfas.Keys
-        ffaKeys(keyIndex) = CStr(ffaKey)
-        keyIndex = keyIndex + 1
-    Next ffaKey
-
-    GetMarkedFfaListForBasePart = Join(ffaKeys, ", ")
-End Function
-
-Private Function FindPartSheetByBasePart(ByVal basePart As String) As Worksheet
-    Dim ws As Worksheet
-
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(basePart)
-    On Error GoTo 0
-
-    If Not ws Is Nothing Then
-        If IsPartSheet(ws) Then
-            Set FindPartSheetByBasePart = ws
-            Exit Function
+            Next rowIndex
         End If
-    End If
+
+        If markedFfas.Count = 0 Then
+            ffaList = vbNullString
+        Else
+            ReDim ffaKeys(0 To markedFfas.Count - 1)
+            keyIndex = 0
+            For Each ffaKey In markedFfas.Keys
+                ffaKeys(keyIndex) = CStr(ffaKey)
+                keyIndex = keyIndex + 1
+            Next ffaKey
+            ffaList = Join(ffaKeys, ", ")
+        End If
+
+        If Not g_markedFfasByBasePartSession.Exists(basePart) Then
+            g_markedFfasByBasePartSession.Add basePart, ffaList
+        End If
+NextSheet:
+    Next sheetKey
+End Sub
+
+Private Sub EnsureCategoryVisibilityMap()
+    Dim ws As Worksheet
+    Dim categoryName As String
+    Dim homeCategoryName As String
+
+    If Not g_categoryVisibleMap Is Nothing Then Exit Sub
+
+    homeCategoryName = HomeCategory()
+    Set g_categoryVisibleMap = CreateObject("Scripting.Dictionary")
+    g_categoryVisibleMap.CompareMode = vbTextCompare
 
     For Each ws In ThisWorkbook.Worksheets
-        If IsPartSheet(ws) Then
-            If StrComp(Trim$(CStr(ws.Range(PART_SHEET_BASE_PART_CELL).Value)), basePart, vbTextCompare) = 0 Then
-                Set FindPartSheetByBasePart = ws
-                Exit Function
+        If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
+            categoryName = Trim$(CStr(ws.Range(CATEGORY_CELL).Value))
+            If Len(categoryName) > 0 Then
+                If StrComp(categoryName, homeCategoryName, vbTextCompare) <> 0 Then
+                    If Not g_categoryVisibleMap.Exists(categoryName) Then
+                        g_categoryVisibleMap.Add categoryName, False
+                    End If
+                    If ws.Visible = xlSheetVisible Then
+                        g_categoryVisibleMap(categoryName) = True
+                    End If
+                End If
             End If
         End If
     Next ws
-End Function
+End Sub
 
 Private Function BuildFfaFactoryMap() As Object
     Dim wsReferences As Worksheet
@@ -584,16 +895,8 @@ Private Function CollectReferenceFfas() As Object
 End Function
 
 Private Function AnyPartSheetHasActiveFfa(ByVal ffaValue As String) As Boolean
-    Dim ws As Worksheet
-
-    For Each ws In ThisWorkbook.Worksheets
-        If IsPartSheet(ws) Then
-            If PartSheetHasActiveFfa(ws, ffaValue) Then
-                AnyPartSheetHasActiveFfa = True
-                Exit Function
-            End If
-        End If
-    Next ws
+    EnsureFfaPresenceMaps
+    AnyPartSheetHasActiveFfa = g_ffaCheckedMap.Exists(ffaValue)
 End Function
 
 Private Sub AddToggleButton( _
@@ -637,33 +940,15 @@ Private Function BuildButtonCaption(ByVal labelName As String, ByVal isVisible A
 End Function
 
 Private Function CategoryHasVisibleSheets(ByVal categoryName As String) As Boolean
-    Dim ws As Worksheet
-
-    For Each ws In ThisWorkbook.Worksheets
-        If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
-            If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), categoryName, vbTextCompare) = 0 Then
-                If ws.Visible = xlSheetVisible Then
-                    CategoryHasVisibleSheets = True
-                    Exit Function
-                End If
-            End If
-        End If
-    Next ws
+    EnsureCategoryVisibilityMap
+    If g_categoryVisibleMap.Exists(categoryName) Then
+        CategoryHasVisibleSheets = CBool(g_categoryVisibleMap(categoryName))
+    End If
 End Function
 
 Private Function FfaHasVisiblePartSheets(ByVal ffaValue As String) As Boolean
-    Dim ws As Worksheet
-
-    For Each ws In ThisWorkbook.Worksheets
-        If IsPartSheet(ws) Then
-            If PartSheetHasActiveFfa(ws, ffaValue) Then
-                If ws.Visible = xlSheetVisible Then
-                    FfaHasVisiblePartSheets = True
-                    Exit Function
-                End If
-            End If
-        End If
-    Next ws
+    EnsureFfaPresenceMaps
+    FfaHasVisiblePartSheets = g_ffaVisibleCheckedMap.Exists(ffaValue)
 End Function
 
 Private Function PartSheetHasActiveFfa(ByVal ws As Worksheet, ByVal ffaValue As String) As Boolean
