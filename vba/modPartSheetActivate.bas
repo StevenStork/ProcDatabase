@@ -27,7 +27,6 @@ Private Const DATA_TABLE_WIDTH_W_TO_Z_PIXELS As Double = 71
 Private Const DATA_TABLE_WIDTH_SELECTED_PIXELS As Double = 90
 Private Const DATA_TABLE_WIDTH_DEFAULT_PIXELS As Double = 96
 Private Const PIXELS_TO_POINTS As Double = 72# / 96#
-Private Const DATA_TABLE_LIGHT_BLUE As Long = 15921906 ' RGB(218, 238, 243)
 
 ' Excel CellControl type for native in-cell checkboxes.
 Private Const XL_TYPE_CHECKBOX As Long = 2
@@ -49,6 +48,8 @@ Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     OptimizeExcel True
     RefreshPartSheetLists ws
     FormatPartDataTable ws
+    ws.Activate
+    ActiveWindow.DisplayGridlines = False
 
 CleanUp:
     OptimizeExcel False
@@ -374,26 +375,33 @@ End Function
 Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     Dim lastRow As Long
     Dim tableRange As Range
-    Dim startRow As Long
+    Dim headerRange As Range
 
-    startRow = DATA_TABLE_HEADER_ROW
     lastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_LAST_COLUMN)
     If lastRow < LIST_START_ROW Then lastRow = LIST_START_ROW
-    If lastRow < startRow Then Exit Sub
+
+    Set headerRange = ws.Range( _
+        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_FIRST_COLUMN), _
+        ws.Cells(DATA_TABLE_HEADER_ROW, DATA_TABLE_LAST_COLUMN))
+    headerRange.Interior.ColorIndex = xlNone
+    headerRange.HorizontalAlignment = xlCenter
+    headerRange.VerticalAlignment = xlCenter
 
     Set tableRange = ws.Range( _
-        ws.Cells(startRow, DATA_TABLE_FIRST_COLUMN), _
+        ws.Cells(LIST_START_ROW, DATA_TABLE_FIRST_COLUMN), _
         ws.Cells(lastRow, DATA_TABLE_LAST_COLUMN))
 
     tableRange.HorizontalAlignment = xlCenter
     tableRange.VerticalAlignment = xlCenter
 
-    ws.Range(ws.Cells(startRow, "M"), ws.Cells(lastRow, "Q")).Interior.Color = DATA_TABLE_LIGHT_BLUE
-    ws.Range(ws.Cells(startRow, "U"), ws.Cells(lastRow, "V")).Interior.Color = DATA_TABLE_LIGHT_BLUE
-    ws.Range(ws.Cells(startRow, "Z"), ws.Cells(lastRow, "Z")).Interior.Color = DATA_TABLE_LIGHT_BLUE
+    ws.Range(ws.Cells(LIST_START_ROW, "M"), ws.Cells(lastRow, "Q")).Interior.Color = RGB(213, 229, 249)
+    ws.Range(ws.Cells(LIST_START_ROW, "U"), ws.Cells(lastRow, "V")).Interior.Color = RGB(213, 229, 249)
+    ws.Range(ws.Cells(LIST_START_ROW, "Z"), ws.Cells(lastRow, "Z")).Interior.Color = RGB(213, 229, 249)
 
-    ws.Range(ws.Cells(startRow, "O"), ws.Cells(lastRow, "S")).NumberFormat = "0.00"
-    ws.Range(ws.Cells(startRow, "W"), ws.Cells(lastRow, "Y")).NumberFormat = "0.00"
+    ws.Range(ws.Cells(LIST_START_ROW, "O"), ws.Cells(lastRow, "S")).NumberFormat = "0.00"
+    ws.Range(ws.Cells(LIST_START_ROW, "W"), ws.Cells(lastRow, "Y")).NumberFormat = "0.00"
+    ws.Range(ws.Cells(DATA_TABLE_HEADER_ROW, "O"), ws.Cells(DATA_TABLE_HEADER_ROW, "S")).NumberFormat = "@"
+    ws.Range(ws.Cells(DATA_TABLE_HEADER_ROW, "W"), ws.Cells(DATA_TABLE_HEADER_ROW, "Y")).NumberFormat = "@"
 End Sub
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
