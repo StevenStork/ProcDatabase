@@ -15,6 +15,7 @@ Private Const PART_FFA_ACTIVE_COLUMN As String = "D"
 Private Const PART_LIST_START_ROW As Long = 9
 Private Const REFERENCES_SHEET_NAME As String = "References"
 Private Const REFERENCES_FFA_COLUMN As String = "B"
+Private Const REFERENCES_FACTORY_COLUMN As String = "C"
 Private Const REFERENCES_FFA_START_ROW As Long = 2
 
 Private Const BUTTON_WIDTH As Double = 140
@@ -26,10 +27,15 @@ Private Const BUTTON_CAPTION_HIDE_PREFIX As String = "Hide "
 Private Const HOME_PART_TABLE_HEADER_ROW As Long = 5
 Private Const HOME_PART_TABLE_FIRST_DATA_ROW As Long = 6
 Private Const HOME_PART_TABLE_FIRST_COLUMN As String = "C"
-Private Const HOME_PART_TABLE_LAST_COLUMN As String = "F"
-Private Const HOME_PART_TABLE_HIGHLIGHT_COLUMN As String = "D"
+Private Const HOME_PART_TABLE_LAST_COLUMN As String = "I"
+Private Const HOME_PART_TABLE_BASE_PART_COLUMN As String = "C"
+Private Const HOME_PART_TABLE_ACTIVE_COLUMN As String = "D"
 Private Const HOME_PART_TABLE_DATE_COLUMN As String = "E"
-Private Const HOME_PART_TABLE_STATUS_COLUMN As String = "F"
+Private Const HOME_PART_TABLE_DAYS_COLUMN As String = "F"
+Private Const HOME_PART_TABLE_HIGHLIGHT_COLUMN_G As String = "G"
+Private Const HOME_PART_TABLE_FFA_COLUMN As String = "H"
+Private Const HOME_PART_TABLE_FACTORY_COLUMN As String = "I"
+Private Const PART_SHEET_BASE_PART_CELL As String = "C2"
 
 ' Call from ThisWorkbook.Workbook_SheetActivate:
 '   HandleHomeSheetActivate Sh
@@ -174,12 +180,19 @@ Private Sub SyncFfaToggleButtons(ByVal wsHome As Worksheet)
         False
 End Sub
 
-' Formats the Home part table (C:F from header row 5 through the last used row):
-' thin + medium borders, center alignment, D fill, E short dates, F RAG colors.
+' Formats the Home part table (C:I from header row 5 through the last used row):
+' thin + medium borders, thick header border, center alignment, D/G fill,
+' E short dates, F days-since formulas with RAG colors, H marked FFAs, I factories.
 Private Sub FormatHomePartTable(ByVal ws As Worksheet)
     Dim lastRow As Long
     Dim tableRange As Range
+    Dim headerRange As Range
     Dim dataLastRow As Long
+    Dim rowIndex As Long
+    Dim basePart As String
+    Dim ffaList As String
+    Dim ffaFactoryMap As Object
+    Dim formulaDays As Variant
 
     lastRow = HomePartTableLastRow(ws)
     If lastRow < HOME_PART_TABLE_HEADER_ROW Then Exit Sub
@@ -187,29 +200,71 @@ Private Sub FormatHomePartTable(ByVal ws As Worksheet)
     Set tableRange = ws.Range( _
         ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_FIRST_COLUMN), _
         ws.Cells(lastRow, HOME_PART_TABLE_LAST_COLUMN))
+    Set headerRange = ws.Range( _
+        ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_FIRST_COLUMN), _
+        ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_LAST_COLUMN))
 
     ApplyHomeListBorders tableRange
+    headerRange.BorderAround LineStyle:=xlContinuous, Weight:=xlThick, ColorIndex:=xlAutomatic
+
     tableRange.HorizontalAlignment = xlCenter
     tableRange.VerticalAlignment = xlCenter
 
-    ' Keep the header row unfilled; style data rows when present.
-    ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_HIGHLIGHT_COLUMN).Interior.ColorIndex = xlNone
+    ' Keep header highlight cells unfilled.
+    headerRange.Interior.ColorIndex = xlNone
 
     If lastRow < HOME_PART_TABLE_FIRST_DATA_ROW Then Exit Sub
 
     dataLastRow = lastRow
 
     ws.Range( _
-        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_HIGHLIGHT_COLUMN), _
-        ws.Cells(dataLastRow, HOME_PART_TABLE_HIGHLIGHT_COLUMN)).Interior.Color = RGB(213, 229, 249)
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_ACTIVE_COLUMN), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_ACTIVE_COLUMN)).Interior.Color = RGB(213, 229, 249)
+
+    ws.Range( _
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_HIGHLIGHT_COLUMN_G), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_HIGHLIGHT_COLUMN_G)).Interior.Color = RGB(213, 229, 249)
 
     ws.Range( _
         ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_DATE_COLUMN), _
         ws.Cells(dataLastRow, HOME_PART_TABLE_DATE_COLUMN)).NumberFormat = "m/d/yyyy"
 
+    ReDim formulaDays(1 To dataLastRow - HOME_PART_TABLE_FIRST_DATA_ROW + 1, 1 To 1)
+    For rowIndex = HOME_PART_TABLE_FIRST_DATA_ROW To dataLastRow
+        formulaDays(rowIndex - HOME_PART_TABLE_FIRST_DATA_ROW + 1, 1) = _
+            "=IF(E" & CStr(rowIndex) & "="""","""",TODAY()-E" & CStr(rowIndex) & ")"
+    Next rowIndex
+
+    With ws.Range( _
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_DAYS_COLUMN), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_DAYS_COLUMN))
+        .Formula = formulaDays
+        .NumberFormat = "0"
+    End With
+
     ApplyHomeStatusColumnFormats ws.Range( _
-        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_STATUS_COLUMN), _
-        ws.Cells(dataLastRow, HOME_PART_TABLE_STATUS_COLUMN))
+        ws.Cells(HOME_PART_TABLE_FIRST_DATA_ROW, HOME_PART_TABLE_DAYS_COLUMN), _
+        ws.Cells(dataLastRow, HOME_PART_TABLE_DAYS_COLUMN))
+
+    Set ffaFactoryMap = BuildFfaFactoryMap()
+
+    For rowIndex = HOME_PART_TABLE_FIRST_DATA_ROW To dataLastRow
+        basePart = Trim$(CStr(ws.Cells(rowIndex, HOME_PART_TABLE_BASE_PART_COLUMN).Value))
+
+        If Len(basePart) = 0 Then
+            ws.Cells(rowIndex, HOME_PART_TABLE_FFA_COLUMN).Value = vbNullString
+            ws.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = vbNullString
+        ElseIf Not IsActiveFlag(ws.Cells(rowIndex, HOME_PART_TABLE_ACTIVE_COLUMN).Value) Then
+            ' H/I are only filled for active Home parts.
+            ws.Cells(rowIndex, HOME_PART_TABLE_FFA_COLUMN).Value = vbNullString
+            ws.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = vbNullString
+        Else
+            ffaList = GetMarkedFfaListForBasePart(basePart)
+            ws.Cells(rowIndex, HOME_PART_TABLE_FFA_COLUMN).Value = ffaList
+            ws.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = _
+                FactoriesForFfaList(ffaList, ffaFactoryMap)
+        End If
+    Next rowIndex
 End Sub
 
 Private Function HomePartTableLastRow(ByVal ws As Worksheet) As Long
@@ -219,11 +274,12 @@ Private Function HomePartTableLastRow(ByVal ws As Worksheet) As Long
 
     maxRow = HOME_PART_TABLE_HEADER_ROW - 1
 
+    ' Size from input columns only so formula/populated columns do not stretch the table.
     For Each columnLetter In Array( _
-        HOME_PART_TABLE_FIRST_COLUMN, _
-        HOME_PART_TABLE_HIGHLIGHT_COLUMN, _
+        HOME_PART_TABLE_BASE_PART_COLUMN, _
+        HOME_PART_TABLE_ACTIVE_COLUMN, _
         HOME_PART_TABLE_DATE_COLUMN, _
-        HOME_PART_TABLE_LAST_COLUMN)
+        HOME_PART_TABLE_HIGHLIGHT_COLUMN_G)
 
         columnLastRow = LastUsedRowInColumn(ws, CStr(columnLetter))
         If columnLastRow > maxRow Then maxRow = columnLastRow
@@ -273,6 +329,152 @@ Private Sub ApplyHomeStatusColumnFormats(ByVal targetRange As Range)
     formatCondition.StopIfTrue = True
     formatCondition.Interior.Color = RGB(146, 208, 80)
 End Sub
+
+Private Function GetMarkedFfaListForBasePart(ByVal basePart As String) As String
+    Dim wsPart As Worksheet
+    Dim lastRow As Long
+    Dim rowIndex As Long
+    Dim ffaValue As String
+    Dim markedFfas As Object
+    Dim ffaKeys() As String
+    Dim ffaKey As Variant
+    Dim keyIndex As Long
+
+    Set wsPart = FindPartSheetByBasePart(basePart)
+    If wsPart Is Nothing Then
+        GetMarkedFfaListForBasePart = vbNullString
+        Exit Function
+    End If
+
+    Set markedFfas = CreateObject("Scripting.Dictionary")
+    markedFfas.CompareMode = vbTextCompare
+
+    lastRow = LastUsedRowInColumn(wsPart, PART_FFA_VALUE_COLUMN)
+    If lastRow >= PART_LIST_START_ROW Then
+        For rowIndex = PART_LIST_START_ROW To lastRow
+            ffaValue = Trim$(CStr(wsPart.Cells(rowIndex, PART_FFA_VALUE_COLUMN).Value))
+            If Len(ffaValue) > 0 Then
+                If IsActiveFlag(wsPart.Cells(rowIndex, PART_FFA_ACTIVE_COLUMN).Value) Then
+                    If Not markedFfas.Exists(ffaValue) Then
+                        markedFfas.Add ffaValue, ffaValue
+                    End If
+                End If
+            End If
+        Next rowIndex
+    End If
+
+    If markedFfas.Count = 0 Then
+        GetMarkedFfaListForBasePart = vbNullString
+        Exit Function
+    End If
+
+    ReDim ffaKeys(0 To markedFfas.Count - 1)
+    keyIndex = 0
+    For Each ffaKey In markedFfas.Keys
+        ffaKeys(keyIndex) = CStr(ffaKey)
+        keyIndex = keyIndex + 1
+    Next ffaKey
+
+    GetMarkedFfaListForBasePart = Join(ffaKeys, ", ")
+End Function
+
+Private Function FindPartSheetByBasePart(ByVal basePart As String) As Worksheet
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(basePart)
+    On Error GoTo 0
+
+    If Not ws Is Nothing Then
+        If IsPartSheet(ws) Then
+            Set FindPartSheetByBasePart = ws
+            Exit Function
+        End If
+    End If
+
+    For Each ws In ThisWorkbook.Worksheets
+        If IsPartSheet(ws) Then
+            If StrComp(Trim$(CStr(ws.Range(PART_SHEET_BASE_PART_CELL).Value)), basePart, vbTextCompare) = 0 Then
+                Set FindPartSheetByBasePart = ws
+                Exit Function
+            End If
+        End If
+    Next ws
+End Function
+
+Private Function BuildFfaFactoryMap() As Object
+    Dim wsReferences As Worksheet
+    Dim lastRow As Long
+    Dim rowIndex As Long
+    Dim ffaValue As String
+    Dim factoryName As String
+    Dim factoryMap As Object
+
+    Set factoryMap = CreateObject("Scripting.Dictionary")
+    factoryMap.CompareMode = vbTextCompare
+
+    Set wsReferences = ThisWorkbook.Worksheets(REFERENCES_SHEET_NAME)
+    lastRow = LastUsedRowInColumn(wsReferences, REFERENCES_FFA_COLUMN)
+    If lastRow < REFERENCES_FFA_START_ROW Then
+        Set BuildFfaFactoryMap = factoryMap
+        Exit Function
+    End If
+
+    For rowIndex = REFERENCES_FFA_START_ROW To lastRow
+        ffaValue = Trim$(CStr(wsReferences.Cells(rowIndex, REFERENCES_FFA_COLUMN).Value))
+        factoryName = Trim$(CStr(wsReferences.Cells(rowIndex, REFERENCES_FACTORY_COLUMN).Value))
+        If Len(ffaValue) > 0 Then
+            If Not factoryMap.Exists(ffaValue) Then
+                factoryMap.Add ffaValue, factoryName
+            End If
+        End If
+    Next rowIndex
+
+    Set BuildFfaFactoryMap = factoryMap
+End Function
+
+Private Function FactoriesForFfaList(ByVal ffaList As String, ByVal ffaFactoryMap As Object) As String
+    Dim ffaParts As Variant
+    Dim i As Long
+    Dim ffaValue As String
+    Dim factoryName As String
+    Dim factories As Collection
+    Dim factoryItems() As String
+    Dim factoryIndex As Long
+
+    If Len(Trim$(ffaList)) = 0 Then
+        FactoriesForFfaList = vbNullString
+        Exit Function
+    End If
+
+    Set factories = New Collection
+    ffaParts = Split(ffaList, ",")
+
+    For i = LBound(ffaParts) To UBound(ffaParts)
+        ffaValue = Trim$(CStr(ffaParts(i)))
+        If Len(ffaValue) > 0 Then
+            factoryName = vbNullString
+            If Not ffaFactoryMap Is Nothing Then
+                If ffaFactoryMap.Exists(ffaValue) Then
+                    factoryName = CStr(ffaFactoryMap(ffaValue))
+                End If
+            End If
+            factories.Add factoryName
+        End If
+    Next i
+
+    If factories.Count = 0 Then
+        FactoriesForFfaList = vbNullString
+        Exit Function
+    End If
+
+    ReDim factoryItems(0 To factories.Count - 1)
+    For factoryIndex = 1 To factories.Count
+        factoryItems(factoryIndex - 1) = CStr(factories(factoryIndex))
+    Next factoryIndex
+
+    FactoriesForFfaList = Join(factoryItems, ", ")
+End Function
 
 Private Sub SyncToggleButtons( _
     ByVal wsHome As Worksheet, _
