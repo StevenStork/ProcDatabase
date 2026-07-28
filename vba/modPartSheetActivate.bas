@@ -119,7 +119,7 @@ Private Function PartActivateCacheIsCurrent( _
     ByRef productLines() As String, _
     ByVal dataLastRow As Long) As Boolean
 
-    If StrComp(CStr(ws.Range(PART_CACHE_CELL).Value2), cacheKey, vbBinaryCompare) <> 0 Then
+    If StrComp(CStr(Nz(ws.Range(PART_CACHE_CELL).Value2)), cacheKey, vbBinaryCompare) <> 0 Then
         Exit Function
     End If
 
