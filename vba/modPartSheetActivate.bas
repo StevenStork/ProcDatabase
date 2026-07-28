@@ -21,6 +21,7 @@ Private Const PRODUCT_LINE_CHECKBOX_COLUMN As String = "H"
 Private Const DATA_TABLE_FIRST_COLUMN As String = "M"
 Private Const DATA_TABLE_LAST_COLUMN As String = "Z"
 Private Const DATA_TABLE_HEADER_ROW As Long = 8
+Private Const DATA_TABLE_INPUT_LAST_COLUMN As String = "S"
 Private Const DATA_TABLE_WIDTH_N_TO_Q_PIXELS As Double = 68
 Private Const DATA_TABLE_WIDTH_W_TO_Z_PIXELS As Double = 71
 Private Const DATA_TABLE_WIDTH_SELECTED_PIXELS As Double = 90
@@ -215,11 +216,12 @@ Private Sub ApplyListBorders(ByVal listRange As Range)
     listRange.BorderAround LineStyle:=xlContinuous, Weight:=xlMedium, ColorIndex:=xlAutomatic
 End Sub
 
-' Formats the Part sheet M:Z table: borders on data rows, and fixed
-' 96-pixel column widths for M:Z. Skips work that is already applied.
+' Formats the Part sheet M:Z table: borders, column widths, U/V checkboxes,
+' and W/X selection formulas.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
     FormatPartDataTableBorders ws
     SetPartDataTableColumnWidths ws
+    EnsureDataTableCheckBoxesAndFormulas ws
 End Sub
 
 Private Sub FormatPartDataTableBorders(ByVal ws As Worksheet)
@@ -285,6 +287,87 @@ Private Sub SetColumnWidthPixels(ByVal columnRange As Range, ByVal pixelWidth As
 
     columnRange.ColumnWidth = sampleCol.ColumnWidth * (targetPoints / sampleCol.Width)
 End Sub
+
+' Adds cell-control checkboxes in U:V and selection formulas in W:X for each
+' data row. Existing checkbox values are preserved.
+Private Sub EnsureDataTableCheckBoxesAndFormulas(ByVal ws As Worksheet)
+    Dim lastRow As Long
+    Dim rowCount As Long
+    Dim rowIndex As Long
+    Dim checkboxRange As Range
+    Dim savedValues As Variant
+    Dim formulaW As Variant
+    Dim formulaX As Variant
+    Dim expectedW As String
+    Dim expectedX As String
+
+    lastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_INPUT_LAST_COLUMN)
+    If lastRow < LIST_START_ROW Then Exit Sub
+
+    rowCount = lastRow - LIST_START_ROW + 1
+    Set checkboxRange = ws.Range( _
+        ws.Cells(LIST_START_ROW, "U"), _
+        ws.Cells(lastRow, "V"))
+
+    If Not RangeIsAllCheckBoxes(checkboxRange) Then
+        savedValues = checkboxRange.Value2
+        NormalizeCheckboxSeedValues savedValues
+        checkboxRange.HorizontalAlignment = xlCenter
+        checkboxRange.VerticalAlignment = xlCenter
+        checkboxRange.Value = savedValues
+        ApplyCellCheckBoxes checkboxRange
+        checkboxRange.Value = savedValues
+    End If
+
+    expectedW = "=IF(AND(R" & CStr(LIST_START_ROW) & "<>"""",U" & CStr(LIST_START_ROW) & "=TRUE),R" & CStr(LIST_START_ROW) & ",O" & CStr(LIST_START_ROW) & ")"
+    expectedX = "=IF(AND(S" & CStr(LIST_START_ROW) & "<>"""",V" & CStr(LIST_START_ROW) & "=TRUE),S" & CStr(LIST_START_ROW) & ",P" & CStr(LIST_START_ROW) & ")"
+
+    If StrComp(ws.Cells(LIST_START_ROW, "W").Formula, expectedW, vbTextCompare) = 0 _
+        And StrComp(ws.Cells(LIST_START_ROW, "X").Formula, expectedX, vbTextCompare) = 0 _
+        And Len(ws.Cells(lastRow, "W").Formula) > 0 _
+        And Len(ws.Cells(lastRow, "X").Formula) > 0 Then
+        Exit Sub
+    End If
+
+    ReDim formulaW(1 To rowCount, 1 To 1)
+    ReDim formulaX(1 To rowCount, 1 To 1)
+
+    For rowIndex = LIST_START_ROW To lastRow
+        formulaW(rowIndex - LIST_START_ROW + 1, 1) = _
+            "=IF(AND(R" & CStr(rowIndex) & "<>"""",U" & CStr(rowIndex) & "=TRUE),R" & CStr(rowIndex) & ",O" & CStr(rowIndex) & ")"
+        formulaX(rowIndex - LIST_START_ROW + 1, 1) = _
+            "=IF(AND(S" & CStr(rowIndex) & "<>"""",V" & CStr(rowIndex) & "=TRUE),S" & CStr(rowIndex) & ",P" & CStr(rowIndex) & ")"
+    Next rowIndex
+
+    ws.Range(ws.Cells(LIST_START_ROW, "W"), ws.Cells(lastRow, "W")).Formula = formulaW
+    ws.Range(ws.Cells(LIST_START_ROW, "X"), ws.Cells(lastRow, "X")).Formula = formulaX
+End Sub
+
+Private Sub NormalizeCheckboxSeedValues(ByRef values As Variant)
+    Dim rowIndex As Long
+    Dim colIndex As Long
+
+    If Not IsArray(values) Then
+        values = CoerceCheckboxValue(values)
+        Exit Sub
+    End If
+
+    For rowIndex = LBound(values, 1) To UBound(values, 1)
+        For colIndex = LBound(values, 2) To UBound(values, 2)
+            values(rowIndex, colIndex) = CoerceCheckboxValue(values(rowIndex, colIndex))
+        Next colIndex
+    Next rowIndex
+End Sub
+
+Private Function CoerceCheckboxValue(ByVal rawValue As Variant) As Boolean
+    If IsError(rawValue) Then Exit Function
+    If IsEmpty(rawValue) Or IsNull(rawValue) Then Exit Function
+    If Len(Trim$(CStr(rawValue))) = 0 Then Exit Function
+
+    On Error Resume Next
+    CoerceCheckboxValue = CBool(rawValue)
+    On Error GoTo 0
+End Function
 
 Private Function ReadColumnList(ByVal ws As Worksheet, ByVal columnLetter As String) As String()
     Dim lastRow As Long
