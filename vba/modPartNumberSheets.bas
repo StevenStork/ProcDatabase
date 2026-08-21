@@ -4,15 +4,17 @@ Option Explicit
 Private Const HOME_SHEET_NAME As String = "Home"
 Private Const TEMPLATE_SHEET_NAME As String = "Part Number Template"
 Private Const BASE_PART_COLUMN As String = "C"
-Private Const BASE_PART_START_ROW As Long = 3
+Private Const ACTIVE_PART_COLUMN As String = "D"
+Private Const BASE_PART_START_ROW As Long = 6
 Private Const HEADER_BASE_PART As String = "Base Part Number"
 Private Const TEMPLATE_BASE_PART_CELL As String = "C2"
 Private Const PART_LABEL_CELL As String = "A1"
 Private Const PART_LABEL_VALUE As String = "Part"
 
-' For each base part number listed in Home column C (starting at row 3),
+' For each active base part number listed in Home column C (starting at row 6),
 ' creates a worksheet named after that part (copied from Part Number Template)
 ' when one does not already exist, and writes the base part number into C2.
+' A part is active when the same row in column D is True.
 Public Sub CreateMissingPartNumberSheets()
     Dim wsHome As Worksheet
     Dim wsTemplate As Worksheet
@@ -38,6 +40,8 @@ Public Sub CreateMissingPartNumberSheets()
             ' Skip blank cells in the list.
         ElseIf StrComp(basePart, HEADER_BASE_PART, vbTextCompare) = 0 Then
             ' Skip the column header if present.
+        ElseIf Not IsActivePart(wsHome.Cells(rowIndex, ACTIVE_PART_COLUMN).Value) Then
+            ' Skip parts that are not marked active in column D.
         ElseIf Not SheetExists(basePart) Then
             CreatePartNumberSheetFromTemplateSafe wsTemplate, basePart
         End If
@@ -45,6 +49,56 @@ Public Sub CreateMissingPartNumberSheets()
 
 CleanUp:
     OptimizeExcel False
+End Sub
+
+' Deletes every worksheet whose A1 cell is "Part", after a Yes/No warning.
+' Suppresses Excel's per-sheet delete prompts during the run and restores
+' DisplayAlerts afterward.
+Public Sub DeleteAllPartSheets()
+    Dim response As VbMsgBoxResult
+    Dim sheetNames As Collection
+    Dim ws As Worksheet
+    Dim sheetName As Variant
+    Dim savedDisplayAlerts As Boolean
+    Dim deletedCount As Long
+
+    response = MsgBox( _
+        "This will permanently delete all worksheets where cell A1 is ""Part""." & vbCrLf & vbCrLf & _
+        "This cannot be undone. Do you want to continue?", _
+        vbExclamation + vbYesNo + vbDefaultButton2, _
+        "Delete Part Sheets")
+
+    If response <> vbYes Then Exit Sub
+
+    Set sheetNames = New Collection
+    For Each ws In ThisWorkbook.Worksheets
+        If StrComp(Trim$(CStr(ws.Range(PART_LABEL_CELL).Value)), PART_LABEL_VALUE, vbTextCompare) = 0 Then
+            sheetNames.Add ws.Name
+        End If
+    Next ws
+
+    If sheetNames.Count = 0 Then
+        MsgBox "No Part sheets were found to delete.", vbInformation, "Delete Part Sheets"
+        Exit Sub
+    End If
+
+    savedDisplayAlerts = Application.DisplayAlerts
+    On Error GoTo CleanUpDelete
+    Application.DisplayAlerts = False
+
+    For Each sheetName In sheetNames
+        ThisWorkbook.Worksheets(CStr(sheetName)).Delete
+        deletedCount = deletedCount + 1
+    Next sheetName
+
+CleanUpDelete:
+    Application.DisplayAlerts = savedDisplayAlerts
+
+    If Err.Number <> 0 Then
+        MsgBox "Part sheet deletion stopped with an error after removing " & CStr(deletedCount) & _
+            " sheet(s)." & vbCrLf & vbCrLf & Err.Description, vbCritical, "Delete Part Sheets"
+        Err.Clear
+    End If
 End Sub
 
 ' Creates one part sheet; errors for a single part do not stop the remaining parts.
@@ -67,6 +121,26 @@ Private Sub CreatePartNumberSheetFromTemplate(ByVal wsTemplate As Worksheet, ByV
     wsNew.Range(PART_LABEL_CELL).Value = PART_LABEL_VALUE
     wsNew.Range(TEMPLATE_BASE_PART_CELL).Value = basePart
 End Sub
+
+Private Function IsActivePart(ByVal activeValue As Variant) As Boolean
+    If IsError(activeValue) Then Exit Function
+    If IsEmpty(activeValue) Or IsNull(activeValue) Then Exit Function
+
+    If VarType(activeValue) = vbBoolean Then
+        IsActivePart = CBool(activeValue)
+        Exit Function
+    End If
+
+    If IsNumeric(activeValue) Then
+        IsActivePart = (CDbl(activeValue) <> 0)
+        Exit Function
+    End If
+
+    Select Case LCase$(Trim$(CStr(activeValue)))
+        Case "true", "yes", "y", "1"
+            IsActivePart = True
+    End Select
+End Function
 
 Private Function LastUsedRowInColumn(ByVal ws As Worksheet, ByVal columnLetter As String) As Long
     Dim foundCell As Range

@@ -6,13 +6,13 @@ Private Const HEADER_DASH_CONDITIONS As String = "Dash Conditions"
 Private Const HEADER_FFA As String = "FFA"
 Private Const HEADER_ACTIVE_PART As String = "Active Part"
 Private Const SUMMARY_TABLE_NAME As String = "BasePartSummaryTbl"
-Private Const SUMMARY_HEADER_ROW As Long = 2
-Private Const SUMMARY_FIRST_DATA_ROW As Long = 3
+Private Const SUMMARY_HEADER_ROW As Long = 5
+Private Const SUMMARY_FIRST_DATA_ROW As Long = 6
 Private Const CHECKBOX_NAME_PREFIX As String = "chkActivePart_"
 
 ' Builds a formatted summary table of unique base part numbers, dash
 ' conditions, and FFA values from AssyStndTbl on the Assembly Standards
-' sheet, then writes the results to the Home sheet starting at C2.
+' sheet, then writes the results to the Home sheet starting at C5.
 Public Sub ListAssemblyFFAValues()
     Dim wsSource As Worksheet
     Dim wsHome As Worksheet
