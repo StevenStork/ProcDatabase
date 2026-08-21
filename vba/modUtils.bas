@@ -370,7 +370,7 @@ Public Sub SplitAssemblyNo(ByVal assemblyNo As String, ByRef basePart As String,
         basePart = Trim$(assemblyNo)
         dashCondition = vbNullString
     End If
-End Function
+End Sub
 
 Public Function UniqueSortedValuesFromColumn(ByVal rawValues As Variant) As String()
     Dim rowIndex As Long
