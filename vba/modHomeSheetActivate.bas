@@ -39,7 +39,9 @@ Private Const PART_SHEET_BASE_PART_CELL As String = "C2"
 
 ' Opaque Home activate cache (hidden via ;;;). Bump schema when formatting logic changes.
 Private Const HOME_CACHE_CELL As String = "A2"
-Private Const HOME_CACHE_SCHEMA As String = "2"
+Private Const HOME_CACHE_SCHEMA As String = "3"
+Private Const REFS_LABEL_VALUE As String = "Refs"
+Private Const EXPORT_LABEL_VALUE As String = "Export"
 
 ' Per-activate session caches (reset at the start of each Home activate).
 Private g_partSheetsByBase As Object
@@ -62,6 +64,7 @@ Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     If StrComp(Sh.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then Exit Sub
 
     Set wsHome = Sh
+    EnsureReferencesSheet
     ResetHomeSessionCaches
 
     lastRow = HomePartTableLastRow(wsHome)
@@ -315,8 +318,10 @@ Public Sub ToggleSheetCategoryVisibility()
 
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
-            If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), category, vbTextCompare) = 0 Then
-                ws.Visible = targetState
+            If IsToggleableSheetCategory(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), HomeCategory()) Then
+                If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), category, vbTextCompare) = 0 Then
+                    ws.Visible = targetState
+                End If
             End If
         End If
     Next ws
@@ -714,14 +719,12 @@ Private Sub EnsureCategoryVisibilityMap()
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
             categoryName = Trim$(CStr(ws.Range(CATEGORY_CELL).Value))
-            If Len(categoryName) > 0 Then
-                If StrComp(categoryName, homeCategoryName, vbTextCompare) <> 0 Then
-                    If Not g_categoryVisibleMap.Exists(categoryName) Then
-                        g_categoryVisibleMap.Add categoryName, False
-                    End If
-                    If ws.Visible = xlSheetVisible Then
-                        g_categoryVisibleMap(categoryName) = True
-                    End If
+            If IsToggleableSheetCategory(categoryName, homeCategoryName) Then
+                If Not g_categoryVisibleMap.Exists(categoryName) Then
+                    g_categoryVisibleMap.Add categoryName, False
+                End If
+                If ws.Visible = xlSheetVisible Then
+                    g_categoryVisibleMap(categoryName) = True
                 End If
             End If
         End If
@@ -870,12 +873,9 @@ Private Function CollectSheetCategories(ByVal homeCategory As String) As Object
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
             categoryName = Trim$(CStr(ws.Range(CATEGORY_CELL).Value))
-
-            If Len(categoryName) > 0 Then
-                If StrComp(categoryName, homeCategory, vbTextCompare) <> 0 Then
-                    If Not categories.Exists(categoryName) Then
-                        categories.Add categoryName, categoryName
-                    End If
+            If IsToggleableSheetCategory(categoryName, homeCategory) Then
+                If Not categories.Exists(categoryName) Then
+                    categories.Add categoryName, categoryName
                 End If
             End If
         End If
@@ -985,6 +985,14 @@ Private Function PartSheetHasActiveFfa(ByVal ws As Worksheet, ByVal ffaValue As 
             End If
         End If
     Next rowIndex
+End Function
+
+Private Function IsToggleableSheetCategory(ByVal categoryName As String, ByVal homeCategory As String) As Boolean
+    If Len(categoryName) = 0 Then Exit Function
+    If StrComp(categoryName, homeCategory, vbTextCompare) = 0 Then Exit Function
+    If StrComp(categoryName, REFS_LABEL_VALUE, vbTextCompare) = 0 Then Exit Function
+    If StrComp(categoryName, EXPORT_LABEL_VALUE, vbTextCompare) = 0 Then Exit Function
+    IsToggleableSheetCategory = True
 End Function
 
 Private Function IsPartSheet(ByVal ws As Worksheet) As Boolean
