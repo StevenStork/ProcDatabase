@@ -1,7 +1,23 @@
 ' Paste this into the ThisWorkbook module in the VBA editor
 ' (Alt+F11 → double-click ThisWorkbook).
+'
+' Also import every .bas / .frm in the repo vba folder into this workbook.
+' File → Import File... (or run ImportSourceModules if VBA project access is trusted).
+
+Private Sub Workbook_Open()
+    EnsureDataSheet
+    EnsureReferencesSheet
+End Sub
 
 Private Sub Workbook_SheetActivate(ByVal Sh As Object)
     HandleHomeSheetActivate Sh
     HandlePartSheetActivate Sh
+End Sub
+
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+    HandleWorkbookSheetChange Sh, Target
+End Sub
+
+Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+    HandleWorkbookBeforeSave
 End Sub

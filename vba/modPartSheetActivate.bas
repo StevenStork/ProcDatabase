@@ -55,44 +55,64 @@ Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     Dim ffaValues() As String
     Dim dashConditions() As String
     Dim productLines() As String
-    Dim dataLastRow As Long
-    Dim cacheKey As String
+    Dim currentSig As String
+    Dim storedSig As String
 
     On Error GoTo CleanUp
 
     If TypeName(Sh) <> "Worksheet" Then Exit Sub
     Set ws = Sh
 
-    If StrComp(Trim$(CStr(ws.Range(PART_LABEL_CELL).Value)), PART_LABEL_VALUE, vbTextCompare) <> 0 Then
-        Exit Sub
-    End If
+    If Not IsPartSheet(ws) Then Exit Sub
 
     basePart = Trim$(CStr(ws.Range(BASE_PART_CELL).Value))
     If Len(basePart) = 0 Then Exit Sub
 
-    ffaValues = GetReferenceColumnValues("B")
-    dashConditions = GetDashConditionsForBasePart(basePart)
-    productLines = GetReferenceColumnValues("D")
-    dataLastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_INPUT_LAST_COLUMN)
-    cacheKey = BuildPartActivateCacheKey(basePart, ffaValues, dashConditions, productLines, dataLastRow)
+    EnsureDataSheet
+    ClearLegacyPartCacheCells ws
 
-    ' A2 stamp matches current sources/data extent and spot-checks still pass:
-    ' skip list sync + table formatting.
-    If PartActivateCacheIsCurrent(ws, cacheKey, ffaValues, dashConditions, productLines, dataLastRow) Then
-        ActiveWindow.DisplayGridlines = False
-        Exit Sub
+    ffaValues = ReferenceColumnValues("B")
+    dashConditions = DashConditionsForBasePart(basePart)
+    productLines = ReferenceColumnValues("D")
+    currentSig = BuildListSignature(basePart)
+    storedSig = PartListSig(ws)
+
+    If StrComp(storedSig, currentSig, vbBinaryCompare) = 0 Then
+        If SpotCheckListCheckBoxes(ws, FFA_CHECKBOX_COLUMN, ArrayCount(ffaValues)) Then
+            If SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then
+                If SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then
+                    EnsurePartOpsTable ws
+                    ActiveWindow.DisplayGridlines = False
+                    Exit Sub
+                End If
+            End If
+        End If
     End If
 
     OptimizeExcel True
     SyncValueCheckboxList ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN, ffaValues
     SyncValueCheckboxList ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN, dashConditions
     SyncValueCheckboxList ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN, productLines
+    EnsurePartOpsTable ws
     FormatPartDataTable ws
-    WritePartActivateCache ws, cacheKey
+    SyncPartToStore ws
     ActiveWindow.DisplayGridlines = False
 
 CleanUp:
     OptimizeExcel False
+End Sub
+
+Private Sub ClearLegacyPartCacheCells(ByVal ws As Worksheet)
+    On Error Resume Next
+    If ws.Range("A2").NumberFormat = ";;;" Then
+        ws.Range("A2").ClearContents
+        ws.Range("A2").NumberFormat = "General"
+    End If
+    If ws.Range("A3").NumberFormat = ";;;" Then
+        ws.Range("A3").ClearContents
+        ws.Range("A3").NumberFormat = "General"
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Function BuildPartActivateCacheKey( _
@@ -367,6 +387,7 @@ End Sub
 ' Formats the Part sheet M:Z table: borders, column widths, U/V checkboxes,
 ' W:Y formulas, alignment, fills, and number formats.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
+    EnsurePartOpsTable ws
     FormatPartDataTableBorders ws
     SetPartDataTableColumnWidths ws
     EnsureDataTableCheckBoxesAndFormulas ws
