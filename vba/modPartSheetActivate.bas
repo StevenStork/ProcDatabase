@@ -15,8 +15,6 @@ Private Const ASSY_STANDARDS_TABLE_NAME As String = "AssyStndTbl"
 Private Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
 
 Private Const LIST_START_ROW As Long = 9
-Private Const FFA_VALUE_COLUMN As String = "C"
-Private Const FFA_CHECKBOX_COLUMN As String = "D"
 Private Const DASH_VALUE_COLUMN As String = "E"
 Private Const DASH_CHECKBOX_COLUMN As String = "F"
 Private Const PRODUCT_LINE_VALUE_COLUMN As String = "G"
@@ -52,47 +50,64 @@ Private g_dashCached As Boolean
 Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     Dim ws As Worksheet
     Dim basePart As String
-    Dim ffaValues() As String
     Dim dashConditions() As String
     Dim productLines() As String
-    Dim dataLastRow As Long
-    Dim cacheKey As String
+    Dim currentSig As String
+    Dim storedSig As String
+    Dim migratedHomeFfa As Boolean
 
     On Error GoTo CleanUp
 
     If TypeName(Sh) <> "Worksheet" Then Exit Sub
     Set ws = Sh
 
-    If StrComp(Trim$(CStr(ws.Range(PART_LABEL_CELL).Value)), PART_LABEL_VALUE, vbTextCompare) <> 0 Then
-        Exit Sub
-    End If
+    If Not IsPartSheet(ws) Then Exit Sub
 
     basePart = Trim$(CStr(ws.Range(BASE_PART_CELL).Value))
     If Len(basePart) = 0 Then Exit Sub
 
-    ffaValues = GetReferenceColumnValues("B")
-    dashConditions = GetDashConditionsForBasePart(basePart)
-    productLines = GetReferenceColumnValues("D")
-    dataLastRow = FastLastUsedRowInColumns(ws, DATA_TABLE_FIRST_COLUMN, DATA_TABLE_INPUT_LAST_COLUMN)
-    cacheKey = BuildPartActivateCacheKey(basePart, ffaValues, dashConditions, productLines, dataLastRow)
+    EnsureDataSheet
+    ClearLegacyPartCacheCells ws
 
-    ' A2 stamp matches current sources/data extent and spot-checks still pass:
-    ' skip list sync + table formatting.
-    If PartActivateCacheIsCurrent(ws, cacheKey, ffaValues, dashConditions, productLines, dataLastRow) Then
-        ActiveWindow.DisplayGridlines = False
-        Exit Sub
+    migratedHomeFfa = EnsureHomeFfaField(ws)
+    dashConditions = DashConditionsForBasePart(basePart)
+    productLines = ReferenceColumnValues("D")
+    currentSig = BuildListSignature(basePart)
+    storedSig = PartListSig(ws)
+
+    If (Not migratedHomeFfa) And StrComp(storedSig, currentSig, vbBinaryCompare) = 0 Then
+        If SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then
+            If SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then
+                EnsurePartOpsTable ws
+                ActiveWindow.DisplayGridlines = False
+                Exit Sub
+            End If
+        End If
     End If
 
     OptimizeExcel True
-    SyncValueCheckboxList ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN, ffaValues
     SyncValueCheckboxList ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN, dashConditions
     SyncValueCheckboxList ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN, productLines
+    EnsurePartOpsTable ws
     FormatPartDataTable ws
-    WritePartActivateCache ws, cacheKey
+    SyncPartToStore ws
     ActiveWindow.DisplayGridlines = False
 
 CleanUp:
     OptimizeExcel False
+End Sub
+
+Private Sub ClearLegacyPartCacheCells(ByVal ws As Worksheet)
+    On Error Resume Next
+    If ws.Range("A2").NumberFormat = ";;;" Then
+        ws.Range("A2").ClearContents
+        ws.Range("A2").NumberFormat = "General"
+    End If
+    If ws.Range("A3").NumberFormat = ";;;" Then
+        ws.Range("A3").ClearContents
+        ws.Range("A3").NumberFormat = "General"
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Function BuildPartActivateCacheKey( _
@@ -123,7 +138,6 @@ Private Function PartActivateCacheIsCurrent( _
         Exit Function
     End If
 
-    If Not SpotCheckListCheckBoxes(ws, FFA_CHECKBOX_COLUMN, ArrayCount(ffaValues)) Then Exit Function
     If Not SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then Exit Function
     If Not SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then Exit Function
 
@@ -367,6 +381,7 @@ End Sub
 ' Formats the Part sheet M:Z table: borders, column widths, U/V checkboxes,
 ' W:Y formulas, alignment, fills, and number formats.
 Private Sub FormatPartDataTable(ByVal ws As Worksheet)
+    EnsurePartOpsTable ws
     FormatPartDataTableBorders ws
     SetPartDataTableColumnWidths ws
     EnsureDataTableCheckBoxesAndFormulas ws
@@ -566,7 +581,6 @@ Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     ' D/F/H lists can differ in length — clear shared leftover fills, then
     ' highlight only cells that actually have checkbox controls.
     ClearCheckboxColumnHighlights ws
-    HighlightCheckboxColumn ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN
     HighlightCheckboxColumn ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN
     HighlightCheckboxColumn ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN
 End Sub
@@ -577,19 +591,14 @@ Private Sub ClearCheckboxColumnHighlights(ByVal ws As Worksheet)
     Dim clearToRow As Long
 
     clearToRow = Application.WorksheetFunction.Max( _
-        FastLastUsedRowInColumn(ws, FFA_VALUE_COLUMN), _
         FastLastUsedRowInColumn(ws, DASH_VALUE_COLUMN), _
         FastLastUsedRowInColumn(ws, PRODUCT_LINE_VALUE_COLUMN), _
-        FastLastUsedRowInColumn(ws, FFA_CHECKBOX_COLUMN), _
         FastLastUsedRowInColumn(ws, DASH_CHECKBOX_COLUMN), _
         FastLastUsedRowInColumn(ws, PRODUCT_LINE_CHECKBOX_COLUMN), _
         LIST_START_ROW)
 
     If clearToRow < LIST_START_ROW Then Exit Sub
 
-    ws.Range( _
-        ws.Cells(LIST_START_ROW, FFA_CHECKBOX_COLUMN), _
-        ws.Cells(clearToRow, FFA_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone
     ws.Range( _
         ws.Cells(LIST_START_ROW, DASH_CHECKBOX_COLUMN), _
         ws.Cells(clearToRow, DASH_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone
