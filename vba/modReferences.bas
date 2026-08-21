@@ -31,53 +31,19 @@ Public Const REFS_CATEGORY_FFA As String = "FFA"
 Public Const REFS_CATEGORY_PRODUCT_LINE As String = "Product Line"
 Public Const REFS_CATEGORY_EQUIPMENT As String = "Equipment"
 
-' Creates the sheet if missing, stamps A1/headers, and keeps it very hidden.
-Public Sub EnsureReferencesSheet()
-    Dim ws As Worksheet
-    Dim created As Boolean
-
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(REFS_SHEET_NAME)
-    On Error GoTo 0
-
-    If ws Is Nothing Then
-        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-        On Error Resume Next
-        ws.Name = REFS_SHEET_NAME
-        On Error GoTo 0
-        created = True
-    End If
-
-    ws.Range(REFS_LABEL_CELL).Value = REFS_LABEL_VALUE
-    ws.Cells(REFS_HEADER_ROW, REFS_FFA_COLUMN).Value = REFS_HEADER_FFA
-    ws.Cells(REFS_HEADER_ROW, REFS_FACTORY_COLUMN).Value = REFS_HEADER_FACTORY
-    ws.Cells(REFS_HEADER_ROW, REFS_PRODUCT_LINE_COLUMN).Value = REFS_HEADER_PRODUCT_LINE
-    ws.Cells(REFS_HEADER_ROW, REFS_EQUIPMENT_COLUMN).Value = REFS_HEADER_EQUIPMENT
-    ws.Cells(REFS_HEADER_ROW, REFS_EQUIPMENT_OWNERS_COLUMN).Value = REFS_HEADER_OWNERS
-
-    If created Then
-        ws.Range("A1:F1").Font.Bold = True
-    End If
-
-    HideReferencesSheet ws
-End Sub
-
-Public Sub HideReferencesSheet(Optional ByVal ws As Worksheet)
-    If ws Is Nothing Then
-        On Error Resume Next
-        Set ws = ThisWorkbook.Worksheets(REFS_SHEET_NAME)
-        On Error GoTo 0
-        If ws Is Nothing Then Exit Sub
-    End If
-
-    On Error Resume Next
-    ws.Visible = xlSheetVeryHidden
-    On Error GoTo 0
-End Sub
-
 Public Sub ShowUpdateReferences()
+    Dim frm As Object
+
     EnsureReferencesSheet
-    frmReferences.Show vbModal
+    On Error GoTo FailForm
+    Set frm = UserForms.Add("frmReferences")
+    frm.Show vbModal
+    Exit Sub
+
+FailForm:
+    MsgBox "The Update References form is not in this workbook." & vbCrLf & vbCrLf & _
+        "Import vba/frmReferences.frm to edit FFA, product line, and equipment lists.", _
+        vbExclamation, "Update References"
 End Sub
 
 Public Function LoadReferenceData() As Object

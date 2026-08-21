@@ -37,6 +37,47 @@ Public Sub EnsureDataSheet()
     On Error GoTo 0
 End Sub
 
+' Creates the References sheet if missing, stamps A1/headers, and keeps it
+' very hidden. Lives here (not in modReferences) so export/Home/DataStore
+' compile even when frmReferences was not imported.
+Public Sub EnsureReferencesSheet()
+    Dim ws As Worksheet
+    Dim created As Boolean
+
+    Set ws = GetWorksheet(REFERENCES_SHEET_NAME)
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        On Error Resume Next
+        ws.Name = REFERENCES_SHEET_NAME
+        On Error GoTo 0
+        created = True
+    End If
+
+    ws.Range(CATEGORY_CELL).Value = REFS_LABEL_VALUE
+    ws.Cells(1, REFS_FFA_COLUMN).Value = HDR_FFA
+    ws.Cells(1, REFS_FACTORY_COLUMN).Value = "Factory"
+    ws.Cells(1, REFS_PRODUCT_LINE_COLUMN).Value = "Product Line"
+    ws.Cells(1, REFS_EQUIPMENT_COLUMN).Value = "Equipment"
+    ws.Cells(1, REFS_EQUIPMENT_OWNERS_COLUMN).Value = "Owning FFAs"
+
+    If created Then
+        ws.Range("A1:F1").Font.Bold = True
+    End If
+
+    HideReferencesSheet ws
+End Sub
+
+Public Sub HideReferencesSheet(Optional ByVal ws As Worksheet)
+    If ws Is Nothing Then
+        Set ws = GetWorksheet(REFERENCES_SHEET_NAME)
+        If ws Is Nothing Then Exit Sub
+    End If
+
+    On Error Resume Next
+    ws.Visible = xlSheetVeryHidden
+    On Error GoTo 0
+End Sub
+
 Public Sub RefreshAllProcDatabase()
     On Error GoTo CleanUp
     OptimizeExcel True
