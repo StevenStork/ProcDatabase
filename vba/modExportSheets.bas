@@ -73,34 +73,6 @@ Public Const EXPORT_SCOPE_FFA As String = "FFA"
 Public Const EXPORT_SCOPE_PRODUCT_LINE As String = "Product Line"
 Public Const EXPORT_SCOPE_ALL As String = "All"
 
-' Opens the export update UserForm (frmExportSheets).
-' If the form is missing, offers to run InstallExportSheetsForm.
-Public Sub ShowUpdateExportSheets()
-    On Error GoTo NoForm
-    frmExportSheets.Show vbModal
-    Exit Sub
-
-NoForm:
-    Dim response As VbMsgBoxResult
-    response = MsgBox( _
-        "The export form (frmExportSheets) is not in this workbook yet." & vbCrLf & vbCrLf & _
-        "Run InstallExportSheetsForm now? (Requires Trust access to the VBA project object model.)" & vbCrLf & vbCrLf & _
-        "See vba/frmExportSheets_Setup.txt for manual setup.", _
-        vbExclamation + vbYesNo + vbDefaultButton1, _
-        "Update Export Sheets")
-
-    If response <> vbYes Then Exit Sub
-
-    On Error GoTo InstallFailed
-    InstallExportSheetsForm
-    frmExportSheets.Show vbModal
-    Exit Sub
-
-InstallFailed:
-    MsgBox "Could not open the export form." & vbCrLf & vbCrLf & Err.Description, _
-        vbCritical, "Update Export Sheets"
-End Sub
-
 ' Full rebuild of every FFA and product-line export sheet.
 Public Sub BuildExportSheets()
     BuildExportSheetsCore EXPORT_SCOPE_ALL, vbNullString, False

@@ -1,37 +1,86 @@
 Attribute VB_Name = "modExportSheetsFormSetup"
 Option Explicit
 
-' Creates frmExportSheets with the required controls and code when it is not
-' already in the workbook. Requires:
-'   File → Options → Trust Center → Trust Center Settings → Macro Settings →
-'   "Trust access to the VBA project object model"
-'
-' After install, run ShowUpdateExportSheets.
+' Builds and shows frmExportSheets entirely from code (no .frm / .txt import).
+' Requires Excel Trust Center → "Trust access to the VBA project object model".
 
 Private Const FORM_NAME As String = "frmExportSheets"
+Private Const FORM_SCHEMA As String = "2"
+Private Const FORM_SCHEMA_MARK As String = "EXPORT_FORM_SCHEMA"
 
+' Entry point: ensure the form exists, then show it.
+Public Sub ShowUpdateExportSheets()
+    On Error GoTo Fail
+
+    EnsureExportSheetsForm
+    VBA.UserForms.Add(FORM_NAME).Show vbModal
+    Exit Sub
+
+Fail:
+    MsgBox _
+        "Could not open the export form." & vbCrLf & vbCrLf & _
+        "Enable Trust Center → Macro Settings → " & _
+        """Trust access to the VBA project object model"", " & _
+        "then run ShowUpdateExportSheets again." & vbCrLf & vbCrLf & _
+        Err.Description, _
+        vbCritical, "Update Export Sheets"
+End Sub
+
+' Public helper if you want to pre-create the form without showing it.
 Public Sub InstallExportSheetsForm()
+    On Error GoTo Fail
+    EnsureExportSheetsForm
+    MsgBox """" & FORM_NAME & """ is ready. Run ShowUpdateExportSheets to open it.", _
+        vbInformation, "Install Export Form"
+    Exit Sub
+
+Fail:
+    MsgBox _
+        "Could not install the export form." & vbCrLf & vbCrLf & _
+        "Enable Trust Center → Macro Settings → " & _
+        """Trust access to the VBA project object model""." & vbCrLf & vbCrLf & _
+        Err.Description, _
+        vbCritical, "Install Export Form"
+End Sub
+
+Private Sub EnsureExportSheetsForm()
     Dim vbProj As Object
     Dim vbComp As Object
-    Dim designer As Object
-    Dim codeMod As Object
-    Dim existing As Object
-
-    On Error GoTo Fail
 
     Set vbProj = ThisWorkbook.VBProject
 
     On Error Resume Next
-    Set existing = vbProj.VBComponents(FORM_NAME)
-    On Error GoTo Fail
+    Set vbComp = vbProj.VBComponents(FORM_NAME)
+    On Error GoTo 0
 
-    If Not existing Is Nothing Then
-        MsgBox _
-            """" & FORM_NAME & """ already exists in this workbook." & vbCrLf & vbCrLf & _
-            "Run ShowUpdateExportSheets to open it.", _
-            vbInformation, "Install Export Form"
-        Exit Sub
+    If Not vbComp Is Nothing Then
+        If FormSchemaIsCurrent(vbComp) Then Exit Sub
+        vbProj.VBComponents.Remove vbComp
+        Set vbComp = Nothing
     End If
+
+    CreateExportSheetsForm vbProj
+End Sub
+
+Private Function FormSchemaIsCurrent(ByVal vbComp As Object) As Boolean
+    Dim codeMod As Object
+    Dim codeText As String
+
+    On Error Resume Next
+    Set codeMod = vbComp.CodeModule
+    If codeMod Is Nothing Then Exit Function
+    If codeMod.CountOfLines > 0 Then
+        codeText = codeMod.Lines(1, codeMod.CountOfLines)
+    End If
+    On Error GoTo 0
+
+    FormSchemaIsCurrent = (InStr(1, codeText, FORM_SCHEMA_MARK & " As String = """ & FORM_SCHEMA & """", vbBinaryCompare) > 0)
+End Function
+
+Private Sub CreateExportSheetsForm(ByVal vbProj As Object)
+    Dim vbComp As Object
+    Dim designer As Object
+    Dim codeMod As Object
 
     Set vbComp = vbProj.VBComponents.Add(3) ' vbext_ct_MSForm
     vbComp.Name = FORM_NAME
@@ -61,21 +110,6 @@ Public Sub InstallExportSheetsForm()
         codeMod.DeleteLines 1, codeMod.CountOfLines
     End If
     codeMod.AddFromString ExportSheetsFormCode()
-
-    MsgBox _
-        """" & FORM_NAME & """ was created." & vbCrLf & vbCrLf & _
-        "Run ShowUpdateExportSheets to open the form.", _
-        vbInformation, "Install Export Form"
-    Exit Sub
-
-Fail:
-    MsgBox _
-        "Could not install the export form." & vbCrLf & vbCrLf & _
-        "Enable ""Trust access to the VBA project object model"" in Excel Trust Center, " & _
-        "or import vba/frmExportSheets.frm and add the controls listed in " & _
-        "vba/frmExportSheets_Setup.txt." & vbCrLf & vbCrLf & _
-        Err.Description, _
-        vbCritical, "Install Export Form"
 End Sub
 
 Private Sub AddFormControl( _
@@ -105,6 +139,7 @@ Private Function ExportSheetsFormCode() As String
     Dim s As String
 
     s = s & "Option Explicit" & vbCrLf
+    s = s & "Private Const " & FORM_SCHEMA_MARK & " As String = """ & FORM_SCHEMA & """" & vbCrLf
     s = s & vbCrLf
     s = s & "Private Sub UserForm_Initialize()" & vbCrLf
     s = s & "    With cboScope" & vbCrLf
@@ -150,7 +185,7 @@ Private Function ExportSheetsFormCode() As String
     s = s & "            MsgBox ""Select an item from the second list."", vbExclamation, Me.Caption" & vbCrLf
     s = s & "            Exit Sub" & vbCrLf
     s = s & "        End If" & vbCrLf
-    s = s & "        scopeDescription = ""the "" & scopeName & "" export sheet for """""" & itemName & """"""" & vbCrLf
+    s = s & "        scopeDescription = ""the "" & scopeName & "" export sheet for "" & Chr$(34) & itemName & Chr$(34)" & vbCrLf
     s = s & "    End If" & vbCrLf
     s = s & "    If Not ConfirmExportOverwrite(scopeDescription) Then Exit Sub" & vbCrLf
     s = s & "    Me.Hide" & vbCrLf
