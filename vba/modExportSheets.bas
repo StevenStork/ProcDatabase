@@ -73,6 +73,11 @@ Public Const EXPORT_SCOPE_FFA As String = "FFA"
 Public Const EXPORT_SCOPE_PRODUCT_LINE As String = "Product Line"
 Public Const EXPORT_SCOPE_ALL As String = "All"
 
+' Opens frmExportSheets. The form builds its own layout in UserForm_Initialize.
+Public Sub ShowUpdateExportSheets()
+    frmExportSheets.Show vbModal
+End Sub
+
 ' Full rebuild of every FFA and product-line export sheet.
 Public Sub BuildExportSheets()
     BuildExportSheetsCore EXPORT_SCOPE_ALL, vbNullString, False
