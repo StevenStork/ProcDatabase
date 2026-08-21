@@ -35,7 +35,7 @@ Private Sub UserForm_Initialize()
     Set lblItem = AddLabel("lblItem", 12, 58, 294, 16, "Select item")
     Set cboItem = AddCombo("cboItem", 12, 74, 294, 22)
     Set lblAllConfirm = AddLabel("lblAllConfirm", 12, 58, 294, 48, _
-        "This will rebuild every FFA and product-line export sheet from the current Part data.")
+        "This will rebuild the FFA export sheet and every product-line export sheet from the current Part data.")
     lblAllConfirm.WordWrap = True
     Set chkAllConfirm = AddCheckBox("chkAllConfirm", 12, 110, 294, 24, _
         "I confirm I want to update all export sheets")
@@ -151,7 +151,10 @@ Private Sub cmdRun_Click()
             Exit Sub
         End If
         itemName = vbNullString
-        scopeDescription = "all FFA and product-line export sheets"
+        scopeDescription = "the FFA export sheet and every product-line export sheet"
+    ElseIf StrComp(scopeName, EXPORT_SCOPE_FFA, vbTextCompare) = 0 Then
+        itemName = vbNullString
+        scopeDescription = "the FFA export sheet (every part number)"
     Else
         itemName = Trim$(CStr(cboItem.Value))
         If Len(itemName) = 0 Then
@@ -188,8 +191,21 @@ Private Sub ApplyScopeUi()
         cboItem.Visible = False
         cboItem.Clear
 
+        lblAllConfirm.Caption = "This will rebuild the FFA export sheet and every product-line export sheet from the current Part data."
         lblAllConfirm.Visible = True
         chkAllConfirm.Visible = True
+        chkAllConfirm.Value = False
+        Exit Sub
+    End If
+
+    If StrComp(scopeName, EXPORT_SCOPE_FFA, vbTextCompare) = 0 Then
+        lblItem.Visible = False
+        cboItem.Visible = False
+        cboItem.Clear
+
+        lblAllConfirm.Caption = "Creates one FFA export sheet with every part number, including Home FFA and Made In FFA."
+        lblAllConfirm.Visible = True
+        chkAllConfirm.Visible = False
         chkAllConfirm.Value = False
         Exit Sub
     End If
@@ -202,10 +218,7 @@ Private Sub ApplyScopeUi()
     cboItem.Visible = True
     cboItem.Clear
 
-    If StrComp(scopeName, EXPORT_SCOPE_FFA, vbTextCompare) = 0 Then
-        lblItem.Caption = "Select FFA"
-        values = ListExportFfas()
-    ElseIf StrComp(scopeName, EXPORT_SCOPE_PRODUCT_LINE, vbTextCompare) = 0 Then
+    If StrComp(scopeName, EXPORT_SCOPE_PRODUCT_LINE, vbTextCompare) = 0 Then
         lblItem.Caption = "Select product line"
         values = ListExportProductLines()
     Else

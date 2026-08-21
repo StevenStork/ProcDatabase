@@ -120,6 +120,7 @@ Private Sub CreatePartNumberSheetFromTemplate(ByVal wsTemplate As Worksheet, ByV
 
     wsNew.Range(PART_LABEL_CELL).Value = PART_LABEL_VALUE
     wsNew.Range(TEMPLATE_BASE_PART_CELL).Value = basePart
+    EnsureHomeFfaField wsNew
     EnsurePartOpsTable wsNew
     MarkPartOpsDirty wsNew
 End Sub

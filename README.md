@@ -10,15 +10,19 @@ The workbook shell is [`ProcessDatabase/ProcessDatabase.xlsm`](ProcessDatabase/P
 | --- | --- | --- |
 | Home | `Home` | Navigator, part list `C:I`, Show/Hide buttons, form buttons |
 | Part Number Template | `Part` | Template copied for each active part (`C2` = base part) |
-| Part sheets | `Part` | Editor: FFA / dash / product-line checkboxes and the ops table |
+| Part sheets | `Part` | Editor: Home FFA dropdown, dash / product-line checkboxes, and the ops range |
 | References | `Refs` | Very hidden. FFA+factory, product lines, equipment. Edit via **Update References** |
-| Data | `Data` | Very hidden. `tblParts`, `tblOperations`, dirty flags and short hashes |
-| `FFA - …` / `PL - …` | `Export` | Generated copy-out sheets. Show/Hide as the Export category |
+| Data | `Data` | Very hidden. `tblParts` and `tblOperations` side by side, dirty flags and short hashes |
+| `FFA Export` / `PL - …` | `Export` | Generated copy-out sheets. Show/Hide as the Export category |
 | Assembly Standards | `Standards` | Source table `AssyStndTbl` for dash conditions |
 
-Factory codes are derived from checked FFAs via References `B:C`. They are not a separate checklist.
+Factory codes are derived from the part's Home FFA via References `B:C`. They are not a separate checklist.
 
-## Part operation table (`PartOpsTbl`, columns M:Z)
+## Part sheet layout
+
+- `C8` / `C9` — **Home FFA** label and blue dropdown (References column B). Not an FFA checklist.
+- `E:F` / `G:H` — Dash and product-line checkbox lists, starting at row 8/9.
+- Ops block `M:Z` is a formatted **range**, not an Excel table.
 
 | Header | Notes |
 | --- | --- |
@@ -29,28 +33,31 @@ Factory codes are derived from checked FFAs via References `B:C`. They are not a
 | Process Hours | `=IF(AND(exportHours<>"",U=TRUE),exportHours,importedHours)` |
 | Average Executions | Same pattern on executions |
 | Average HPUs | `=(ProcessHours*AvgEx)/BatchSize` |
-| FFA | Step the row is complete at |
+| FFA | Made-in FFA for that operation row |
 
 ## Canonical store (Data sheet)
 
-- `tblParts` — base part, active, FFAs, factories, product lines, dashes, `ListSig`, `OpsDirty`, row count, sheet name
-- `tblOperations` — every operation row across part sheets (full named fields)
+Tables sit on the same header row so they can grow without colliding:
+
+- `tblParts` — `A8`. Base part, active, Home FFA, factories, product lines, dashes, `ListSig`, `OpsDirty`, row count, sheet name
+- `tblOperations` — `M8`. Every operation row across part sheets (full named fields)
 - `B2` `HomeListHash`, `B3` `ExportOpsHash` — short checksums after a successful rebuild
 - `B4` `RefsDirty` — set when References are saved
 
-`Worksheet_Change` on a part ops table or checkbox list sets `OpsDirty`. **Refresh All**, **Update Exports**, and `Workbook_BeforeSave` sync dirty parts into the store, then rebuild Home `H:I` and export sheets. SheetActivate only does cheap UI (checkbox lists, buttons, gridlines). Do not put cache stamps in `A2`/`A3` on Home or Part sheets. Export sheets use `A2`/`A3` as type and key metadata only.
+`Worksheet_Change` on a part ops range, Home FFA cell, or checkbox list sets `OpsDirty`. **Refresh All**, **Update Exports**, and `Workbook_BeforeSave` sync dirty parts into the store, then rebuild Home `H:I` and export sheets. SheetActivate only does cheap UI (checkbox lists, Home FFA dropdown, buttons, gridlines). Do not put cache stamps in `A2`/`A3` on Home or Part sheets. Export sheets use `A2`/`A3` as type and key metadata only.
 
-## Export sheets (8 columns)
+## Export sheets (10 columns)
 
-`Part Number | Op Sequence | Op Code | Process Hours | Avg Ex | Batch Size | Avg HPU | Equipment Type`
+`Part Number | Op Sequence | Op Code | Process Hours | Avg Ex | Batch Size | Avg HPU | Equipment Type | Home FFA | Made In FFA`
 
-- FFA sheets: ops rows whose FFA matches the sheet (filter only; FFA is not an export column)
-- Product-line sheets: every ops row from parts that have that product line checked
+- **FFA** — one sheet (`FFA Export`) with every part number. Home FFA comes from the part sheet; Made In FFA comes from the ops FFA column
+- **Product line** — every ops row from parts that have that product line checked, plus the same Home / Made In columns
+- **All** — rebuilds the FFA export sheet and every product-line sheet
 
 ## Home buttons
 
 - Show/Hide by `A1` category, including **Export**. `Refs` and `Data` stay very hidden.
-- Show/Hide part sheets by FFA
+- Show/Hide part sheets by Home FFA
 - **Update References**, **Update Exports**, **Refresh All** (S:Y from row 5)
 
 ## Importing VBA into the workbook

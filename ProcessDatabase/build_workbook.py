@@ -6,6 +6,7 @@ from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 ROOT = Path(__file__).resolve().parent
@@ -56,7 +57,7 @@ def build_home(ws):
         (5, "Date"),
         (6, "Days"),
         (7, "Highlight"),
-        (8, "FFAs"),
+        (8, "Home FFA"),
         (9, "Factories"),
     ]
     for col, title in headers:
@@ -79,13 +80,28 @@ def build_part_template(ws):
     ws["C1"] = "Base Part Number"
     ws["C1"].font = BOLD
     ws["C2"] = ""
-    ws["C8"] = "FFA"
-    ws["D8"] = "Use"
+    ws["C8"] = "Home FFA"
+    ws["C8"].font = BOLD
+    ws["C8"].alignment = CENTER
+    ws["C9"].fill = HEADER_FILL
+    ws["C9"].alignment = CENTER
+    ws["C9"].border = THIN
     ws["E8"] = "Dash"
     ws["F8"] = "Active"
     ws["G8"] = "Product Line"
     ws["H8"] = "Use"
-    style_header_row(ws, 8, 3, 8)
+    style_header_row(ws, 8, 5, 8)
+
+    home_ffa_dv = DataValidation(
+        type="list",
+        formula1="OFFSET(References!$B$2,0,0,MAX(1,COUNTA(References!$B:$B)-1),1)",
+        allow_blank=True,
+        showDropDown=False,
+    )
+    home_ffa_dv.error = "Select an FFA from the References list."
+    home_ffa_dv.errorTitle = "Home FFA"
+    ws.add_data_validation(home_ffa_dv)
+    home_ffa_dv.add(ws["C9"])
 
     ops_headers = [
         "Operation Sequence",
@@ -110,7 +126,7 @@ def build_part_template(ws):
         cell.border = THIN
         cell.fill = HEADER_FILL
 
-    # One starter data row so the ListObject has a body.
+    # One starter data row for the ops range.
     for col in range(13, 27):
         cell = ws.cell(9, col, None)
         cell.border = THIN
@@ -122,8 +138,6 @@ def build_part_template(ws):
     ws["V9"] = False
     for col in ("O", "P", "Q", "R", "S", "W", "X", "Y"):
         ws[f"{col}9"].number_format = "0.00"
-
-    add_table(ws, "PartOpsTbl", "M8:Z9")
 
     for letter, width in (
         ("C", 16),
@@ -182,7 +196,7 @@ def build_data(ws):
     part_headers = [
         "Base Part",
         "Active",
-        "FFAs",
+        "Home FFA",
         "Factories",
         "Product Lines",
         "Dashes",
@@ -194,10 +208,10 @@ def build_data(ws):
     ]
     for col, title in enumerate(part_headers, start=1):
         ws.cell(8, col, title)
-    style_header_row(ws, 8, 1, 11)
-    for col in range(1, 12):
+    style_header_row(ws, 8, 1, len(part_headers))
+    for col in range(1, len(part_headers) + 1):
         ws.cell(9, col, None).border = THIN
-    add_table(ws, "tblParts", "A8:K9")
+    add_table(ws, "tblParts", f"A8:{get_column_letter(len(part_headers))}9")
 
     ops_headers = [
         "Part Number",
@@ -216,14 +230,19 @@ def build_data(ws):
         "Average HPUs",
         "FFA",
     ]
-    start_row = 12
-    for col, title in enumerate(ops_headers, start=1):
-        ws.cell(start_row, col, title)
-    style_header_row(ws, start_row, 1, 15)
-    for col in range(1, 16):
-        ws.cell(start_row + 1, col, None).border = THIN
-    add_table(ws, "tblOperations", f"A{start_row}:O{start_row + 1}")
-    for col in range(1, 16):
+    ops_start_col = 13
+    ops_end_col = ops_start_col + len(ops_headers) - 1
+    for col, title in enumerate(ops_headers):
+        ws.cell(8, ops_start_col + col, title)
+    style_header_row(ws, 8, ops_start_col, ops_end_col)
+    for col in range(ops_start_col, ops_end_col + 1):
+        ws.cell(9, col, None).border = THIN
+    add_table(
+        ws,
+        "tblOperations",
+        f"{get_column_letter(ops_start_col)}8:{get_column_letter(ops_end_col)}9",
+    )
+    for col in range(1, ops_end_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = 18
     ws.sheet_state = "veryHidden"
 

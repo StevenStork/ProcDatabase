@@ -15,8 +15,6 @@ Private Const ASSY_STANDARDS_TABLE_NAME As String = "AssyStndTbl"
 Private Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
 
 Private Const LIST_START_ROW As Long = 9
-Private Const FFA_VALUE_COLUMN As String = "C"
-Private Const FFA_CHECKBOX_COLUMN As String = "D"
 Private Const DASH_VALUE_COLUMN As String = "E"
 Private Const DASH_CHECKBOX_COLUMN As String = "F"
 Private Const PRODUCT_LINE_VALUE_COLUMN As String = "G"
@@ -52,11 +50,11 @@ Private g_dashCached As Boolean
 Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     Dim ws As Worksheet
     Dim basePart As String
-    Dim ffaValues() As String
     Dim dashConditions() As String
     Dim productLines() As String
     Dim currentSig As String
     Dim storedSig As String
+    Dim migratedHomeFfa As Boolean
 
     On Error GoTo CleanUp
 
@@ -71,26 +69,23 @@ Public Sub HandlePartSheetActivate(ByVal Sh As Object)
     EnsureDataSheet
     ClearLegacyPartCacheCells ws
 
-    ffaValues = ReferenceColumnValues("B")
+    migratedHomeFfa = EnsureHomeFfaField(ws)
     dashConditions = DashConditionsForBasePart(basePart)
     productLines = ReferenceColumnValues("D")
     currentSig = BuildListSignature(basePart)
     storedSig = PartListSig(ws)
 
-    If StrComp(storedSig, currentSig, vbBinaryCompare) = 0 Then
-        If SpotCheckListCheckBoxes(ws, FFA_CHECKBOX_COLUMN, ArrayCount(ffaValues)) Then
-            If SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then
-                If SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then
-                    EnsurePartOpsTable ws
-                    ActiveWindow.DisplayGridlines = False
-                    Exit Sub
-                End If
+    If (Not migratedHomeFfa) And StrComp(storedSig, currentSig, vbBinaryCompare) = 0 Then
+        If SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then
+            If SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then
+                EnsurePartOpsTable ws
+                ActiveWindow.DisplayGridlines = False
+                Exit Sub
             End If
         End If
     End If
 
     OptimizeExcel True
-    SyncValueCheckboxList ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN, ffaValues
     SyncValueCheckboxList ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN, dashConditions
     SyncValueCheckboxList ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN, productLines
     EnsurePartOpsTable ws
@@ -143,7 +138,6 @@ Private Function PartActivateCacheIsCurrent( _
         Exit Function
     End If
 
-    If Not SpotCheckListCheckBoxes(ws, FFA_CHECKBOX_COLUMN, ArrayCount(ffaValues)) Then Exit Function
     If Not SpotCheckListCheckBoxes(ws, DASH_CHECKBOX_COLUMN, ArrayCount(dashConditions)) Then Exit Function
     If Not SpotCheckListCheckBoxes(ws, PRODUCT_LINE_CHECKBOX_COLUMN, ArrayCount(productLines)) Then Exit Function
 
@@ -587,7 +581,6 @@ Private Sub ApplyPartDataTableStyles(ByVal ws As Worksheet)
     ' D/F/H lists can differ in length — clear shared leftover fills, then
     ' highlight only cells that actually have checkbox controls.
     ClearCheckboxColumnHighlights ws
-    HighlightCheckboxColumn ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN
     HighlightCheckboxColumn ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN
     HighlightCheckboxColumn ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN
 End Sub
@@ -598,19 +591,14 @@ Private Sub ClearCheckboxColumnHighlights(ByVal ws As Worksheet)
     Dim clearToRow As Long
 
     clearToRow = Application.WorksheetFunction.Max( _
-        FastLastUsedRowInColumn(ws, FFA_VALUE_COLUMN), _
         FastLastUsedRowInColumn(ws, DASH_VALUE_COLUMN), _
         FastLastUsedRowInColumn(ws, PRODUCT_LINE_VALUE_COLUMN), _
-        FastLastUsedRowInColumn(ws, FFA_CHECKBOX_COLUMN), _
         FastLastUsedRowInColumn(ws, DASH_CHECKBOX_COLUMN), _
         FastLastUsedRowInColumn(ws, PRODUCT_LINE_CHECKBOX_COLUMN), _
         LIST_START_ROW)
 
     If clearToRow < LIST_START_ROW Then Exit Sub
 
-    ws.Range( _
-        ws.Cells(LIST_START_ROW, FFA_CHECKBOX_COLUMN), _
-        ws.Cells(clearToRow, FFA_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone
     ws.Range( _
         ws.Cells(LIST_START_ROW, DASH_CHECKBOX_COLUMN), _
         ws.Cells(clearToRow, DASH_CHECKBOX_COLUMN)).Interior.ColorIndex = xlNone

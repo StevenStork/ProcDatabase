@@ -10,9 +10,6 @@ Private Const CATEGORY_BUTTON_NAME_PREFIX As String = "btnSheetCat_"
 
 Private Const FFA_BUTTON_ANCHOR_CELL As String = "O5"
 Private Const FFA_BUTTON_NAME_PREFIX As String = "btnPartFFA_"
-Private Const PART_FFA_VALUE_COLUMN As String = "C"
-Private Const PART_FFA_ACTIVE_COLUMN As String = "D"
-Private Const PART_LIST_START_ROW As Long = 9
 Private Const REFERENCES_SHEET_NAME As String = "References"
 Private Const REFERENCES_FFA_COLUMN As String = "B"
 Private Const REFERENCES_FACTORY_COLUMN As String = "C"
@@ -559,7 +556,7 @@ Private Sub FormatHomePartTable(ByVal ws As Worksheet, ByVal lastRow As Long)
     ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_DATE_COLUMN).Value = "Date"
     ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_DAYS_COLUMN).Value = "Days"
     ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_HIGHLIGHT_COLUMN_G).Value = "Highlight"
-    ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_FFA_COLUMN).Value = "FFAs"
+    ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_FFA_COLUMN).Value = HOME_FFA_LABEL
     ws.Cells(HOME_PART_TABLE_HEADER_ROW, HOME_PART_TABLE_FACTORY_COLUMN).Value = "Factories"
 
     Set tableRange = ws.Range( _
@@ -763,26 +760,20 @@ Private Sub EnsureFfaPresenceMaps()
         Set markedFfas = CreateObject("Scripting.Dictionary")
         markedFfas.CompareMode = vbTextCompare
 
-        lastRow = ws.Cells(ws.Rows.Count, PART_FFA_VALUE_COLUMN).End(xlUp).Row
-        If lastRow >= PART_LIST_START_ROW Then
-            For rowIndex = PART_LIST_START_ROW To lastRow
-                ffaValue = Trim$(CStr(ws.Cells(rowIndex, PART_FFA_VALUE_COLUMN).Value))
-                If Len(ffaValue) = 0 Then Exit For
-
-                If IsActiveFlag(ws.Cells(rowIndex, PART_FFA_ACTIVE_COLUMN).Value) Then
-                    If Not markedFfas.Exists(ffaValue) Then
-                        markedFfas.Add ffaValue, ffaValue
-                    End If
-                    If Not g_ffaCheckedMap.Exists(ffaValue) Then
-                        g_ffaCheckedMap.Add ffaValue, True
-                    End If
-                    If ws.Visible = xlSheetVisible Then
-                        If Not g_ffaVisibleCheckedMap.Exists(ffaValue) Then
-                            g_ffaVisibleCheckedMap.Add ffaValue, True
-                        End If
-                    End If
+        lastRow = 0
+        ffaValue = PartHomeFfaValue(ws)
+        If Len(ffaValue) > 0 Then
+            If Not markedFfas.Exists(ffaValue) Then
+                markedFfas.Add ffaValue, ffaValue
+            End If
+            If Not g_ffaCheckedMap.Exists(ffaValue) Then
+                g_ffaCheckedMap.Add ffaValue, True
+            End If
+            If ws.Visible = xlSheetVisible Then
+                If Not g_ffaVisibleCheckedMap.Exists(ffaValue) Then
+                    g_ffaVisibleCheckedMap.Add ffaValue, True
                 End If
-            Next rowIndex
+            End If
         End If
 
         If markedFfas.Count = 0 Then
@@ -1066,24 +1057,8 @@ Private Function FfaHasVisiblePartSheets(ByVal ffaValue As String) As Boolean
 End Function
 
 Private Function PartSheetHasActiveFfa(ByVal ws As Worksheet, ByVal ffaValue As String) As Boolean
-    Dim rowIndex As Long
-    Dim lastRow As Long
-    Dim cellFfa As String
-
-    lastRow = LastUsedRowInColumn(ws, PART_FFA_VALUE_COLUMN)
-    If lastRow < PART_LIST_START_ROW Then Exit Function
-
-    For rowIndex = PART_LIST_START_ROW To lastRow
-        cellFfa = Trim$(CStr(ws.Cells(rowIndex, PART_FFA_VALUE_COLUMN).Value))
-        If Len(cellFfa) = 0 Then Exit For
-
-        If StrComp(cellFfa, ffaValue, vbTextCompare) = 0 Then
-            If IsActiveFlag(ws.Cells(rowIndex, PART_FFA_ACTIVE_COLUMN).Value) Then
-                PartSheetHasActiveFfa = True
-                Exit Function
-            End If
-        End If
-    Next rowIndex
+    If Len(ffaValue) = 0 Then Exit Function
+    PartSheetHasActiveFfa = (StrComp(PartHomeFfaValue(ws), ffaValue, vbTextCompare) = 0)
 End Function
 
 Private Function IsToggleableSheetCategory(ByVal categoryName As String, ByVal homeCategory As String) As Boolean

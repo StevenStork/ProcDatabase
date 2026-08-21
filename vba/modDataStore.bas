@@ -10,13 +10,21 @@ Option Explicit
 Public Sub EnsureDataSheet()
     Dim ws As Worksheet
     Dim created As Boolean
+    Dim errNum As Long
+    Dim errDesc As String
+    Static inEnsure As Boolean
+
+    If inEnsure Then Exit Sub
+    inEnsure = True
+    On Error GoTo CleanUp
 
     Set ws = GetWorksheet(DATA_SHEET_NAME)
     If ws Is Nothing Then
         Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
         On Error Resume Next
         ws.Name = DATA_SHEET_NAME
-        On Error GoTo 0
+        Err.Clear
+        On Error GoTo CleanUp
         created = True
     End If
 
@@ -29,12 +37,29 @@ Public Sub EnsureDataSheet()
         ws.Range(DATA_UI_SCHEMA_CELL).Value = UI_SCHEMA_VERSION
     End If
 
-    EnsureNamedTable ws, TBL_PARTS_NAME, 8, 1, PartsHeaderNames()
-    EnsureNamedTable ws, TBL_OPS_NAME, 12, 1, OpsStoreHeaderNames()
+    RelocateCanonicalTables ws
+    EnsureNamedTable ws, TBL_PARTS_NAME, DATA_PARTS_HEADER_ROW, DATA_PARTS_FIRST_COL, PartsHeaderNames()
+    EnsureNamedTable ws, TBL_OPS_NAME, DATA_OPS_HEADER_ROW, DATA_OPS_FIRST_COL, OpsStoreHeaderNames()
+    ConvertLegacyHomeFfaColumn ListObjectByName(ws, TBL_PARTS_NAME)
+
+    If StrComp(Trim$(CStr(Nz(ws.Range(DATA_UI_SCHEMA_CELL).Value))), UI_SCHEMA_VERSION, vbTextCompare) <> 0 Then
+        ws.Range(DATA_UI_SCHEMA_CELL).Value = UI_SCHEMA_VERSION
+        MarkAllListSigsStale
+        ws.Range(DATA_HOME_HASH_CELL).Value = vbNullString
+        ws.Range(DATA_EXPORT_HASH_CELL).Value = vbNullString
+    End If
 
     On Error Resume Next
     ws.Visible = xlSheetVeryHidden
+    Err.Clear
+    On Error GoTo CleanUp
+
+CleanUp:
+    errNum = Err.Number
+    errDesc = Err.Description
+    inEnsure = False
     On Error GoTo 0
+    If errNum <> 0 Then Err.Raise errNum, "EnsureDataSheet", errDesc
 End Sub
 
 ' Creates the References sheet if missing, stamps A1/headers, and keeps it
@@ -180,7 +205,7 @@ Public Sub SyncPartToStore(ByVal ws As Worksheet)
     Dim tblParts As ListObject
     Dim basePart As String
     Dim rowIndex As Long
-    Dim ffas As String
+    Dim homeFfa As String
     Dim productLines As String
     Dim dashes As String
     Dim factories As String
@@ -189,15 +214,16 @@ Public Sub SyncPartToStore(ByVal ws As Worksheet)
 
     If Not IsPartSheet(ws) Then Exit Sub
     EnsureDataSheet
+    EnsureHomeFfaField ws
     EnsurePartOpsTable ws
 
     basePart = Trim$(CStr(Nz(ws.Range(PART_NUMBER_CELL).Value)))
     If Len(basePart) = 0 Then basePart = ws.Name
 
-    ffas = JoinCheckedList(CheckedValuesOnPart(ws, FFA_VALUE_COLUMN, FFA_CHECKBOX_COLUMN))
+    homeFfa = PartHomeFfaValue(ws)
     productLines = JoinCheckedList(CheckedValuesOnPart(ws, PRODUCT_LINE_VALUE_COLUMN, PRODUCT_LINE_CHECKBOX_COLUMN))
     dashes = JoinCheckedList(CheckedValuesOnPart(ws, DASH_VALUE_COLUMN, DASH_CHECKBOX_COLUMN))
-    factories = FactoriesForFfaList(ffas)
+    factories = FactoriesForFfaList(homeFfa)
     listSig = BuildListSignature(basePart)
 
     Set tblParts = PartsTable()
@@ -207,7 +233,7 @@ Public Sub SyncPartToStore(ByVal ws As Worksheet)
     With tblParts
         .ListColumns(COL_PARTS_BASE).DataBodyRange.Cells(rowIndex, 1).Value = basePart
         .ListColumns(COL_PARTS_ACTIVE).DataBodyRange.Cells(rowIndex, 1).Value = HomePartIsActive(basePart)
-        .ListColumns(COL_PARTS_FFAS).DataBodyRange.Cells(rowIndex, 1).Value = ffas
+        .ListColumns(COL_PARTS_HOME_FFA).DataBodyRange.Cells(rowIndex, 1).Value = homeFfa
         .ListColumns(COL_PARTS_FACTORIES).DataBodyRange.Cells(rowIndex, 1).Value = factories
         .ListColumns(COL_PARTS_PRODUCT_LINES).DataBodyRange.Cells(rowIndex, 1).Value = productLines
         .ListColumns(COL_PARTS_DASHES).DataBodyRange.Cells(rowIndex, 1).Value = dashes
@@ -315,7 +341,7 @@ Public Sub RebuildHomeFromStore()
                 wsHome.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = vbNullString
             Else
                 wsHome.Cells(rowIndex, HOME_PART_TABLE_FFA_COLUMN).Value = _
-                    tbl.ListColumns(COL_PARTS_FFAS).DataBodyRange.Cells(storeRow, 1).Value
+                    tbl.ListColumns(COL_PARTS_HOME_FFA).DataBodyRange.Cells(storeRow, 1).Value
                 wsHome.Cells(rowIndex, HOME_PART_TABLE_FACTORY_COLUMN).Value = _
                     tbl.ListColumns(COL_PARTS_FACTORIES).DataBodyRange.Cells(storeRow, 1).Value
             End If
@@ -506,64 +532,104 @@ Public Function CheckedValuesOnPart( _
     Set CheckedValuesOnPart = checked
 End Function
 
-Public Function PartOpsTable(ByVal ws As Worksheet) As ListObject
+Public Function PartHomeFfaValue(ByVal ws As Worksheet) As String
+    Dim homeFfa As String
+
+    homeFfa = Trim$(CStr(Nz(ws.Range(HOME_FFA_VALUE_CELL).Value)))
+    If StrComp(homeFfa, HOME_FFA_LABEL, vbTextCompare) = 0 Then Exit Function
+    If StrComp(homeFfa, HDR_FFA, vbTextCompare) = 0 Then Exit Function
+    PartHomeFfaValue = homeFfa
+End Function
+
+' Writes the Home FFA label and blue dropdown. Converts leftover FFA checkbox
+' lists by taking the first checked FFA. Returns True when the layout changed.
+Public Function EnsureHomeFfaField(ByVal ws As Worksheet) As Boolean
+    Dim savedValue As String
+    Dim alreadyHome As Boolean
+    Dim lastRow As Long
+    Dim rowIndex As Long
+    Dim itemName As String
+
+    alreadyHome = (StrComp(Trim$(CStr(Nz(ws.Range(HOME_FFA_LABEL_CELL).Value))), HOME_FFA_LABEL, vbTextCompare) = 0)
+    If alreadyHome Then
+        savedValue = PartHomeFfaValue(ws)
+    Else
+        EnsureHomeFfaField = True
+        lastRow = FastLastUsedRowInColumn(ws, "C")
+        If lastRow >= LIST_START_ROW Then
+            For rowIndex = LIST_START_ROW To lastRow
+                itemName = Trim$(CStr(Nz(ws.Cells(rowIndex, "C").Value)))
+                If Len(itemName) = 0 Then Exit For
+                If IsActiveFlag(ws.Cells(rowIndex, "D").Value) Then
+                    savedValue = itemName
+                    Exit For
+                End If
+            Next rowIndex
+        End If
+        If Len(savedValue) = 0 Then savedValue = PartHomeFfaValue(ws)
+        ClearLegacyFfaChecklist ws
+    End If
+
+    On Error Resume Next
+    ws.Range("C8:D8").UnMerge
+    On Error GoTo 0
+
+    With ws.Range(HOME_FFA_LABEL_CELL)
+        .Value = HOME_FFA_LABEL
+        .Font.Bold = True
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+    End With
+
+    With ws.Range(HOME_FFA_VALUE_CELL)
+        .Interior.Color = INPUT_FILL_RGB
+        .HorizontalAlignment = xlCenter
+        .VerticalAlignment = xlCenter
+        .Borders.LineStyle = xlContinuous
+        If Len(savedValue) > 0 Then .Value = savedValue
+    End With
+
+    ApplyHomeFfaValidation ws
+End Function
+
+' Keeps M:Z as a formatted range. Converts leftover PartOpsTbl ListObjects
+' back to a normal range so the part data entry block is not a table.
+Public Sub EnsurePartOpsTable(ByVal ws As Worksheet)
     Dim lo As ListObject
+    Dim doomed As Collection
+    Dim headers As Variant
+    Dim i As Long
     Dim firstCol As Long
 
     firstCol = ws.Columns(OPS_FIRST_COLUMN).Column
+    Set doomed = New Collection
     For Each lo In ws.ListObjects
-        If Not lo.HeaderRowRange Is Nothing Then
+        If StrComp(lo.Name, PART_OPS_TABLE_NAME, vbTextCompare) = 0 Then
+            doomed.Add lo
+        ElseIf Not lo.HeaderRowRange Is Nothing Then
             If lo.HeaderRowRange.Row = OPS_HEADER_ROW Then
                 If lo.HeaderRowRange.Column = firstCol Then
-                    Set PartOpsTable = lo
-                    Exit Function
+                    doomed.Add lo
                 End If
             End If
         End If
     Next lo
 
-    Set PartOpsTable = ListObjectByName(ws, PART_OPS_TABLE_NAME)
-End Function
-
-Public Sub EnsurePartOpsTable(ByVal ws As Worksheet)
-    Dim lo As ListObject
-    Dim lastRow As Long
-    Dim tableRange As Range
-    Dim headers As Variant
-    Dim i As Long
-
-    Set lo = PartOpsTable(ws)
-    headers = OpsHeaderNames()
-
-    If lo Is Nothing Then
-        lastRow = FastLastUsedRowInColumns(ws, OPS_FIRST_COLUMN, OPS_LAST_COLUMN)
-        If lastRow < LIST_START_ROW Then lastRow = LIST_START_ROW
-        Set tableRange = ws.Range( _
-            ws.Cells(OPS_HEADER_ROW, OPS_FIRST_COLUMN), _
-            ws.Cells(lastRow, OPS_LAST_COLUMN))
-        For i = LBound(headers) To UBound(headers)
-            ws.Cells(OPS_HEADER_ROW, OPS_FIRST_COLUMN).Offset(0, i).Value = headers(i)
-        Next i
-        Set lo = ws.ListObjects.Add(xlSrcRange, tableRange, , xlYes)
+    For i = 1 To doomed.Count
         On Error Resume Next
-        lo.Name = PART_OPS_TABLE_NAME
+        doomed(i).Unlist
         On Error GoTo 0
-    Else
-        For i = LBound(headers) To UBound(headers)
-            If i - LBound(headers) + 1 <= lo.ListColumns.Count Then
-                lo.ListColumns(i - LBound(headers) + 1).Name = CStr(headers(i))
-            End If
-        Next i
-        lastRow = FastLastUsedRowInColumns(ws, OPS_FIRST_COLUMN, OPS_LAST_COLUMN)
-        If lastRow < LIST_START_ROW Then lastRow = LIST_START_ROW
-        If lastRow > lo.HeaderRowRange.Row Then
-            On Error Resume Next
-            lo.Resize ws.Range( _
-                ws.Cells(OPS_HEADER_ROW, OPS_FIRST_COLUMN), _
-                ws.Cells(lastRow, OPS_LAST_COLUMN))
-            On Error GoTo 0
-        End If
-    End If
+    Next i
+
+    headers = OpsHeaderNames()
+    For i = LBound(headers) To UBound(headers)
+        With ws.Cells(OPS_HEADER_ROW, firstCol + i - LBound(headers))
+            .Value = headers(i)
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+    Next i
 End Sub
 
 Public Function ListColumnByHeader(ByVal tbl As ListObject, ByVal headerName As String) As ListColumn
@@ -579,7 +645,6 @@ Public Function ListColumnByHeader(ByVal tbl As ListObject, ByVal headerName As 
 End Function
 
 Private Function ReplaceOperationsForPart(ByVal basePart As String, ByVal ws As Worksheet) As Long
-    Dim src As ListObject
     Dim dest As ListObject
     Dim keepers As Collection
     Dim rowIndex As Long
@@ -588,18 +653,22 @@ Private Function ReplaceOperationsForPart(ByVal basePart As String, ByVal ws As 
     Dim srcRow As Long
     Dim colIndex As Long
     Dim destHeaders As Variant
-    Dim srcCol As ListColumn
-    Dim valueCell As Variant
     Dim keepCount As Long
     Dim i As Long
     Dim output() As Variant
     Dim totalRows As Long
-    Dim seqCol As ListColumn
-    Dim codeCol As ListColumn
+    Dim lastRow As Long
+    Dim headerCols As Object
+    Dim seqCol As Long
+    Dim codeCol As Long
+    Dim destColCount As Long
+    Dim headerName As String
+    Dim srcCol As Long
 
     Set dest = OpsTable()
-    Set src = PartOpsTable(ws)
     destHeaders = OpsStoreHeaderNames()
+    destColCount = UBound(destHeaders) - LBound(destHeaders) + 1
+    Set headerCols = PartOpsHeaderMap(ws)
 
     Set keepers = New Collection
     If Not dest.DataBodyRange Is Nothing Then
@@ -611,30 +680,28 @@ Private Function ReplaceOperationsForPart(ByVal basePart As String, ByVal ws As 
         Next rowIndex
     End If
 
-    If Not src Is Nothing Then
-        If Not src.DataBodyRange Is Nothing Then
-            ReDim newRows(1 To src.DataBodyRange.Rows.Count, 1 To UBound(destHeaders) - LBound(destHeaders) + 1)
-            Set seqCol = ListColumnByHeader(src, HDR_OP_SEQUENCE)
-            Set codeCol = ListColumnByHeader(src, HDR_OP_CODE)
-            For srcRow = 1 To src.DataBodyRange.Rows.Count
-            If seqCol Is Nothing Or codeCol Is Nothing Then GoTo NextSrc
-            If Len(Trim$(CStr(Nz(seqCol.DataBodyRange.Cells(srcRow, 1).Value)))) = 0 Then
-                If Len(Trim$(CStr(Nz(codeCol.DataBodyRange.Cells(srcRow, 1).Value)))) = 0 Then
-                    GoTo NextSrc
+    lastRow = FastLastUsedRowInColumns(ws, OPS_FIRST_COLUMN, OPS_LAST_COLUMN)
+    If lastRow >= LIST_START_ROW Then
+        If headerCols.Exists(HDR_OP_SEQUENCE) Then seqCol = CLng(headerCols(HDR_OP_SEQUENCE))
+        If headerCols.Exists(HDR_OP_CODE) Then codeCol = CLng(headerCols(HDR_OP_CODE))
+        If seqCol > 0 And codeCol > 0 Then
+            ReDim newRows(1 To lastRow - LIST_START_ROW + 1, 1 To destColCount)
+            For srcRow = LIST_START_ROW To lastRow
+                If Len(Trim$(CStr(Nz(ws.Cells(srcRow, seqCol).Value)))) = 0 Then
+                    If Len(Trim$(CStr(Nz(ws.Cells(srcRow, codeCol).Value)))) = 0 Then
+                        GoTo NextSrc
+                    End If
                 End If
-            End If
                 ReplaceOperationsForPart = ReplaceOperationsForPart + 1
                 For colIndex = LBound(destHeaders) To UBound(destHeaders)
-                    If StrComp(CStr(destHeaders(colIndex)), COL_OPS_PART_NUMBER, vbTextCompare) = 0 Then
+                    headerName = CStr(destHeaders(colIndex))
+                    If StrComp(headerName, COL_OPS_PART_NUMBER, vbTextCompare) = 0 Then
                         newRows(ReplaceOperationsForPart, colIndex - LBound(destHeaders) + 1) = basePart
+                    ElseIf headerCols.Exists(headerName) Then
+                        srcCol = CLng(headerCols(headerName))
+                        newRows(ReplaceOperationsForPart, colIndex - LBound(destHeaders) + 1) = ws.Cells(srcRow, srcCol).Value
                     Else
-                        Set srcCol = ListColumnByHeader(src, CStr(destHeaders(colIndex)))
-                        If srcCol Is Nothing Then
-                            valueCell = vbNullString
-                        Else
-                            valueCell = srcCol.DataBodyRange.Cells(srcRow, 1).Value
-                        End If
-                        newRows(ReplaceOperationsForPart, colIndex - LBound(destHeaders) + 1) = valueCell
+                        newRows(ReplaceOperationsForPart, colIndex - LBound(destHeaders) + 1) = vbNullString
                     End If
                 Next colIndex
 NextSrc:
@@ -648,7 +715,7 @@ NextSrc:
 
     If totalRows = 0 Then Exit Function
 
-    ReDim output(1 To totalRows, 1 To UBound(destHeaders) - LBound(destHeaders) + 1)
+    ReDim output(1 To totalRows, 1 To destColCount)
     For i = 1 To keepCount
         CopyRowInto output, i, keepers(i)
     Next i
@@ -660,6 +727,22 @@ NextSrc:
 
     dest.Resize dest.HeaderRowRange.Resize(totalRows + 1, UBound(output, 2))
     dest.DataBodyRange.Value2 = output
+End Function
+
+Private Function PartOpsHeaderMap(ByVal ws As Worksheet) As Object
+    Dim map As Object
+    Dim colIndex As Long
+    Dim headerName As String
+
+    Set map = CreateObject("Scripting.Dictionary")
+    map.CompareMode = vbTextCompare
+    For colIndex = ws.Columns(OPS_FIRST_COLUMN).Column To ws.Columns(OPS_LAST_COLUMN).Column
+        headerName = Trim$(CStr(Nz(ws.Cells(OPS_HEADER_ROW, colIndex).Value)))
+        If Len(headerName) > 0 Then
+            If Not map.Exists(headerName) Then map.Add headerName, colIndex
+        End If
+    Next colIndex
+    Set PartOpsHeaderMap = map
 End Function
 
 Private Sub CopyRowInto(ByRef output() As Variant, ByVal destRow As Long, ByVal sourceRow As Variant)
@@ -790,8 +873,13 @@ End Sub
 Private Function PartChangeTouchesOpsOrLists(ByVal ws As Worksheet, ByVal Target As Range) As Boolean
     Dim watchRange As Range
 
+    If Not Intersect(Target, ws.Range(HOME_FFA_VALUE_CELL)) Is Nothing Then
+        PartChangeTouchesOpsOrLists = True
+        Exit Function
+    End If
+
     Set watchRange = ws.Range( _
-        ws.Cells(LIST_START_ROW, FFA_VALUE_COLUMN), _
+        ws.Cells(LIST_HEADER_ROW, DASH_VALUE_COLUMN), _
         ws.Cells(ws.Rows.Count, PRODUCT_LINE_CHECKBOX_COLUMN))
     If Not Intersect(Target, watchRange) Is Nothing Then
         PartChangeTouchesOpsOrLists = True
@@ -812,7 +900,7 @@ Private Function PartsTableFingerprint() As String
         PartsTableFingerprint = "0"
     Else
         PartsTableFingerprint = HashVariantColumn(tbl.ListColumns(COL_PARTS_BASE).DataBodyRange.Value2) & Chr$(31) & _
-            HashVariantColumn(tbl.ListColumns(COL_PARTS_FFAS).DataBodyRange.Value2) & Chr$(31) & _
+            HashVariantColumn(tbl.ListColumns(COL_PARTS_HOME_FFA).DataBodyRange.Value2) & Chr$(31) & _
             HashVariantColumn(tbl.ListColumns(COL_PARTS_FACTORIES).DataBodyRange.Value2)
     End If
 End Function
@@ -830,6 +918,191 @@ Private Function OpsTableFingerprint() As String
             HashVariantColumn(ListColumnByHeader(tbl, HDR_FFA).DataBodyRange.Value2)
     End If
 End Function
+
+Private Sub RelocateCanonicalTables(ByVal ws As Worksheet)
+    Dim loParts As ListObject
+    Dim loOps As ListObject
+    Dim partsBody As Variant
+    Dim opsBody As Variant
+    Dim partsHdrs As Variant
+    Dim opsHdrs As Variant
+    Dim moveTables As Boolean
+
+    Set loParts = ListObjectByName(ws, TBL_PARTS_NAME)
+    Set loOps = ListObjectByName(ws, TBL_OPS_NAME)
+
+    If Not loParts Is Nothing Then
+        If loParts.HeaderRowRange.Row <> DATA_PARTS_HEADER_ROW Or loParts.HeaderRowRange.Column <> DATA_PARTS_FIRST_COL Then
+            moveTables = True
+        End If
+    End If
+    If Not loOps Is Nothing Then
+        If loOps.HeaderRowRange.Row <> DATA_OPS_HEADER_ROW Or loOps.HeaderRowRange.Column <> DATA_OPS_FIRST_COL Then
+            moveTables = True
+        End If
+    End If
+    If Not moveTables Then Exit Sub
+
+    If Not loParts Is Nothing Then
+        partsHdrs = TableHeaderNames(loParts)
+        If Not loParts.DataBodyRange Is Nothing Then partsBody = loParts.DataBodyRange.Value
+    End If
+    If Not loOps Is Nothing Then
+        opsHdrs = TableHeaderNames(loOps)
+        If Not loOps.DataBodyRange Is Nothing Then opsBody = loOps.DataBodyRange.Value
+    End If
+
+    If Not loParts Is Nothing Then loParts.Delete
+    If Not loOps Is Nothing Then loOps.Delete
+
+    ws.Range(ws.Cells(DATA_PARTS_HEADER_ROW, 1), ws.Cells(ws.Rows.Count, DATA_OPS_FIRST_COL + 20)).Clear
+
+    EnsureNamedTable ws, TBL_PARTS_NAME, DATA_PARTS_HEADER_ROW, DATA_PARTS_FIRST_COL, PartsHeaderNames()
+    EnsureNamedTable ws, TBL_OPS_NAME, DATA_OPS_HEADER_ROW, DATA_OPS_FIRST_COL, OpsStoreHeaderNames()
+    WriteMappedTableBody ListObjectByName(ws, TBL_PARTS_NAME), PartsHeaderNames(), partsHdrs, partsBody
+    WriteMappedTableBody ListObjectByName(ws, TBL_OPS_NAME), OpsStoreHeaderNames(), opsHdrs, opsBody
+End Sub
+
+Private Function TableHeaderNames(ByVal lo As ListObject) As Variant
+    Dim i As Long
+    Dim result() As String
+
+    ReDim result(1 To lo.ListColumns.Count)
+    For i = 1 To lo.ListColumns.Count
+        result(i) = Trim$(lo.ListColumns(i).Name)
+    Next i
+    TableHeaderNames = result
+End Function
+
+Private Sub WriteMappedTableBody( _
+    ByVal lo As ListObject, _
+    ByVal destHeaders As Variant, _
+    ByVal srcHeaders As Variant, _
+    ByVal srcBody As Variant)
+
+    Dim rowCount As Long
+    Dim destColCount As Long
+    Dim r As Long
+    Dim c As Long
+    Dim srcCol As Long
+    Dim output() As Variant
+    Dim destName As String
+
+    If IsEmpty(srcBody) Then Exit Sub
+    If Not IsArray(srcHeaders) Then Exit Sub
+    If Not IsArray(srcBody) Then Exit Sub
+
+    rowCount = UBound(srcBody, 1)
+    destColCount = UBound(destHeaders) - LBound(destHeaders) + 1
+    If rowCount < 1 Then Exit Sub
+
+    ReDim output(1 To rowCount, 1 To destColCount)
+    For r = 1 To rowCount
+        For c = LBound(destHeaders) To UBound(destHeaders)
+            destName = CStr(destHeaders(c))
+            srcCol = IndexOfHeaderName(srcHeaders, destName)
+            If srcCol = 0 And StrComp(destName, COL_PARTS_HOME_FFA, vbTextCompare) = 0 Then
+                srcCol = IndexOfHeaderName(srcHeaders, COL_PARTS_FFAS_LEGACY)
+                If srcCol > 0 Then
+                    output(r, c - LBound(destHeaders) + 1) = FirstCommaToken(CStr(Nz(srcBody(r, srcCol))))
+                    GoTo NextDestCol
+                End If
+            End If
+            If srcCol > 0 Then output(r, c - LBound(destHeaders) + 1) = srcBody(r, srcCol)
+NextDestCol:
+        Next c
+    Next r
+
+    lo.Resize lo.HeaderRowRange.Resize(rowCount + 1, destColCount)
+    lo.DataBodyRange.Value2 = output
+End Sub
+
+Private Function IndexOfHeaderName(ByVal headers As Variant, ByVal headerName As String) As Long
+    Dim i As Long
+
+    For i = LBound(headers) To UBound(headers)
+        If StrComp(Trim$(CStr(headers(i))), headerName, vbTextCompare) = 0 Then
+            IndexOfHeaderName = i
+            Exit Function
+        End If
+    Next i
+End Function
+
+Private Function FirstCommaToken(ByVal textValue As String) As String
+    Dim parts As Variant
+
+    If Len(textValue) = 0 Then Exit Function
+    parts = Split(textValue, ",")
+    FirstCommaToken = Trim$(CStr(parts(LBound(parts))))
+End Function
+
+Private Sub ConvertLegacyHomeFfaColumn(ByVal tbl As ListObject)
+    Dim col As ListColumn
+    Dim rowIndex As Long
+    Dim rawValue As String
+
+    If tbl Is Nothing Then Exit Sub
+    Set col = ListColumnByHeader(tbl, COL_PARTS_HOME_FFA)
+    If col Is Nothing Then Set col = ListColumnByHeader(tbl, COL_PARTS_FFAS_LEGACY)
+    If col Is Nothing Then Exit Sub
+    If col.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = 1 To col.DataBodyRange.Rows.Count
+        rawValue = Trim$(CStr(Nz(col.DataBodyRange.Cells(rowIndex, 1).Value)))
+        If InStr(1, rawValue, ",") > 0 Then
+            col.DataBodyRange.Cells(rowIndex, 1).Value = FirstCommaToken(rawValue)
+        End If
+    Next rowIndex
+End Sub
+
+Private Sub ClearLegacyFfaChecklist(ByVal ws As Worksheet)
+    Dim lastRow As Long
+    Dim leftover As Range
+
+    lastRow = Application.WorksheetFunction.Max( _
+        FastLastUsedRowInColumn(ws, "C"), _
+        FastLastUsedRowInColumn(ws, "D"), _
+        LIST_START_ROW)
+
+    On Error Resume Next
+    ws.Range(ws.Cells(LIST_HEADER_ROW, "D"), ws.Cells(lastRow, "D")).CellControl.Clear
+    On Error GoTo 0
+
+    If lastRow > LIST_START_ROW Then
+        Set leftover = ws.Range(ws.Cells(LIST_START_ROW + 1, "C"), ws.Cells(lastRow, "D"))
+        leftover.ClearContents
+        leftover.Interior.ColorIndex = xlNone
+        leftover.Borders.LineStyle = xlNone
+    End If
+
+    ws.Range("D8").ClearContents
+    ws.Range("D8").Font.Bold = False
+    ws.Range("D9").ClearContents
+    ws.Range("D9").Interior.ColorIndex = xlNone
+    ws.Range("D9").Borders.LineStyle = xlNone
+End Sub
+
+Private Sub ApplyHomeFfaValidation(ByVal ws As Worksheet)
+    Dim formulaText As String
+
+    EnsureReferencesSheet
+    formulaText = "=OFFSET(" & REFERENCES_SHEET_NAME & "!$" & REFS_FFA_COLUMN & "$" & CStr(REFS_FIRST_DATA_ROW) & _
+        ",0,0,MAX(1,COUNTA(" & REFERENCES_SHEET_NAME & "!$" & REFS_FFA_COLUMN & ":$" & REFS_FFA_COLUMN & ")-1),1)"
+
+    On Error Resume Next
+    ws.Range(HOME_FFA_VALUE_CELL).Validation.Delete
+    On Error GoTo 0
+
+    On Error Resume Next
+    ws.Range(HOME_FFA_VALUE_CELL).Validation.Add _
+        Type:=xlValidateList, _
+        AlertStyle:=xlValidAlertStop, _
+        Operator:=xlBetween, _
+        Formula1:=formulaText
+    ws.Range(HOME_FFA_VALUE_CELL).Validation.IgnoreBlank = True
+    ws.Range(HOME_FFA_VALUE_CELL).Validation.InCellDropdown = True
+    On Error GoTo 0
+End Sub
 
 Private Sub EnsureNamedTable( _
     ByVal ws As Worksheet, _
