@@ -21,8 +21,13 @@ Private Const REFERENCES_FFA_START_ROW As Long = 2
 Private Const BUTTON_WIDTH As Double = 140
 Private Const BUTTON_HEIGHT As Double = 24
 Private Const BUTTON_VERTICAL_GAP As Double = 8
+Private Const BUTTON_HORIZONTAL_GAP As Double = 8
 Private Const BUTTON_CAPTION_SHOW_PREFIX As String = "Show "
 Private Const BUTTON_CAPTION_HIDE_PREFIX As String = "Hide "
+
+Private Const FORM_BUTTON_NAME_PREFIX As String = "btnHomeForm_"
+Private Const FORM_BUTTON_ANCHOR_CELL As String = "S5"
+Private Const FORM_BUTTON_LAST_COLUMN As String = "Y"
 
 Private Const HOME_PART_TABLE_HEADER_ROW As Long = 5
 Private Const HOME_PART_TABLE_FIRST_DATA_ROW As Long = 6
@@ -39,7 +44,9 @@ Private Const PART_SHEET_BASE_PART_CELL As String = "C2"
 
 ' Opaque Home activate cache (hidden via ;;;). Bump schema when formatting logic changes.
 Private Const HOME_CACHE_CELL As String = "A2"
-Private Const HOME_CACHE_SCHEMA As String = "2"
+Private Const HOME_CACHE_SCHEMA As String = "3"
+Private Const REFS_LABEL_VALUE As String = "Refs"
+Private Const EXPORT_LABEL_VALUE As String = "Export"
 
 ' Per-activate session caches (reset at the start of each Home activate).
 Private g_partSheetsByBase As Object
@@ -62,6 +69,7 @@ Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     If StrComp(Sh.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then Exit Sub
 
     Set wsHome = Sh
+    EnsureReferencesSheet
     ResetHomeSessionCaches
 
     lastRow = HomePartTableLastRow(wsHome)
@@ -75,6 +83,7 @@ Public Sub HandleHomeSheetActivate(ByVal Sh As Object)
     ' manually deleted buttons still come back on the next Home activate.
     SyncCategoryToggleButtons wsHome
     SyncFfaToggleButtons wsHome
+    SyncFormActionButtons wsHome
 
     If Not HomeActivateCacheIsCurrent(wsHome, cacheKey, lastRow) Then
         FormatHomePartTable wsHome, lastRow, markedFfasByBasePart
@@ -315,8 +324,10 @@ Public Sub ToggleSheetCategoryVisibility()
 
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
-            If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), category, vbTextCompare) = 0 Then
-                ws.Visible = targetState
+            If IsToggleableSheetCategory(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), HomeCategory()) Then
+                If StrComp(Trim$(CStr(ws.Range(CATEGORY_CELL).Value)), category, vbTextCompare) = 0 Then
+                    ws.Visible = targetState
+                End If
             End If
         End If
     Next ws
@@ -411,6 +422,112 @@ Private Sub SyncFfaToggleButtons(ByVal wsHome As Worksheet)
         FFA_BUTTON_ANCHOR_CELL, _
         "TogglePartFfaVisibility", _
         False
+End Sub
+
+Private Sub SyncFormActionButtons(ByVal wsHome As Worksheet)
+    Dim captions() As String
+    Dim actions() As String
+    Dim wantedNames As Object
+    Dim btn As Button
+    Dim buttonsToDelete As Collection
+    Dim buttonKey As Variant
+    Dim i As Long
+    Dim buttonName As String
+
+    FormActionButtonDefs captions, actions
+    Set wantedNames = CreateObject("Scripting.Dictionary")
+    wantedNames.CompareMode = vbTextCompare
+
+    For i = LBound(captions) To UBound(captions)
+        buttonName = FORM_BUTTON_NAME_PREFIX & MakeNameSafe(captions(i))
+        wantedNames.Add buttonName, i
+
+        If Not ButtonExists(wsHome, buttonName) Then
+            AddFormActionButton wsHome, buttonName, captions(i), actions(i)
+        Else
+            wsHome.Buttons(buttonName).OnAction = actions(i)
+            wsHome.Buttons(buttonName).Caption = captions(i)
+        End If
+    Next i
+
+    Set buttonsToDelete = New Collection
+    For Each btn In wsHome.Buttons
+        If Left$(btn.Name, Len(FORM_BUTTON_NAME_PREFIX)) = FORM_BUTTON_NAME_PREFIX Then
+            If Not wantedNames.Exists(btn.Name) Then buttonsToDelete.Add btn.Name
+        End If
+    Next btn
+
+    For Each buttonKey In buttonsToDelete
+        wsHome.Buttons(CStr(buttonKey)).Delete
+    Next buttonKey
+
+    LayoutFormActionButtons wsHome, captions
+End Sub
+
+' Captions/OnAction pairs for Home form launchers. Append new entries here;
+' layout fills S:Y left-to-right from row 5, then wraps to the next row.
+Private Sub FormActionButtonDefs(ByRef captions() As String, ByRef actions() As String)
+    ReDim captions(0 To 1)
+    ReDim actions(0 To 1)
+    captions(0) = "Update References"
+    actions(0) = "ShowUpdateReferences"
+    captions(1) = "Update Exports"
+    actions(1) = "ShowUpdateExportSheets"
+End Sub
+
+Private Sub AddFormActionButton( _
+    ByVal wsHome As Worksheet, _
+    ByVal buttonName As String, _
+    ByVal captionText As String, _
+    ByVal onActionName As String)
+
+    Dim btn As Button
+    Dim anchor As Range
+
+    Set anchor = wsHome.Range(FORM_BUTTON_ANCHOR_CELL)
+    Set btn = wsHome.Buttons.Add(anchor.Left, anchor.Top, BUTTON_WIDTH, BUTTON_HEIGHT)
+    btn.Name = buttonName
+    btn.OnAction = onActionName
+    btn.Caption = captionText
+End Sub
+
+Private Sub LayoutFormActionButtons(ByVal wsHome As Worksheet, ByRef captions() As String)
+    Dim i As Long
+    Dim buttonName As String
+    Dim btn As Button
+    Dim anchor As Range
+    Dim lastCol As Range
+    Dim leftPos As Double
+    Dim topPos As Double
+    Dim rightLimit As Double
+    Dim colIndex As Long
+    Dim rowIndex As Long
+
+    Set anchor = wsHome.Range(FORM_BUTTON_ANCHOR_CELL)
+    Set lastCol = wsHome.Cells(anchor.Row, FORM_BUTTON_LAST_COLUMN)
+    rightLimit = lastCol.Left + lastCol.Width
+
+    colIndex = 0
+    rowIndex = 0
+    For i = LBound(captions) To UBound(captions)
+        buttonName = FORM_BUTTON_NAME_PREFIX & MakeNameSafe(captions(i))
+        If ButtonExists(wsHome, buttonName) Then
+            leftPos = anchor.Left + colIndex * (BUTTON_WIDTH + BUTTON_HORIZONTAL_GAP)
+            If colIndex > 0 And (leftPos + BUTTON_WIDTH) > rightLimit Then
+                colIndex = 0
+                rowIndex = rowIndex + 1
+                leftPos = anchor.Left
+            End If
+
+            topPos = anchor.Top + rowIndex * (BUTTON_HEIGHT + BUTTON_VERTICAL_GAP)
+            Set btn = wsHome.Buttons(buttonName)
+            btn.Left = leftPos
+            btn.Top = topPos
+            btn.Width = BUTTON_WIDTH
+            btn.Height = BUTTON_HEIGHT
+            colIndex = colIndex + 1
+        End If
+    Next i
 End Sub
 
 ' Formats the Home part table (C:I from header row 5 through the last used row):
@@ -714,14 +831,12 @@ Private Sub EnsureCategoryVisibilityMap()
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
             categoryName = Trim$(CStr(ws.Range(CATEGORY_CELL).Value))
-            If Len(categoryName) > 0 Then
-                If StrComp(categoryName, homeCategoryName, vbTextCompare) <> 0 Then
-                    If Not g_categoryVisibleMap.Exists(categoryName) Then
-                        g_categoryVisibleMap.Add categoryName, False
-                    End If
-                    If ws.Visible = xlSheetVisible Then
-                        g_categoryVisibleMap(categoryName) = True
-                    End If
+            If IsToggleableSheetCategory(categoryName, homeCategoryName) Then
+                If Not g_categoryVisibleMap.Exists(categoryName) Then
+                    g_categoryVisibleMap.Add categoryName, False
+                End If
+                If ws.Visible = xlSheetVisible Then
+                    g_categoryVisibleMap(categoryName) = True
                 End If
             End If
         End If
@@ -870,12 +985,9 @@ Private Function CollectSheetCategories(ByVal homeCategory As String) As Object
     For Each ws In ThisWorkbook.Worksheets
         If StrComp(ws.Name, HOME_SHEET_NAME, vbTextCompare) <> 0 Then
             categoryName = Trim$(CStr(ws.Range(CATEGORY_CELL).Value))
-
-            If Len(categoryName) > 0 Then
-                If StrComp(categoryName, homeCategory, vbTextCompare) <> 0 Then
-                    If Not categories.Exists(categoryName) Then
-                        categories.Add categoryName, categoryName
-                    End If
+            If IsToggleableSheetCategory(categoryName, homeCategory) Then
+                If Not categories.Exists(categoryName) Then
+                    categories.Add categoryName, categoryName
                 End If
             End If
         End If
@@ -985,6 +1097,14 @@ Private Function PartSheetHasActiveFfa(ByVal ws As Worksheet, ByVal ffaValue As 
             End If
         End If
     Next rowIndex
+End Function
+
+Private Function IsToggleableSheetCategory(ByVal categoryName As String, ByVal homeCategory As String) As Boolean
+    If Len(categoryName) = 0 Then Exit Function
+    If StrComp(categoryName, homeCategory, vbTextCompare) = 0 Then Exit Function
+    If StrComp(categoryName, REFS_LABEL_VALUE, vbTextCompare) = 0 Then Exit Function
+    If StrComp(categoryName, EXPORT_LABEL_VALUE, vbTextCompare) = 0 Then Exit Function
+    IsToggleableSheetCategory = True
 End Function
 
 Private Function IsPartSheet(ByVal ws As Worksheet) As Boolean
