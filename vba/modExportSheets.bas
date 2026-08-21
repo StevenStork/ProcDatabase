@@ -5,18 +5,20 @@ Option Explicit
 ' (References!D). Export sheets are plain data for copying to another file —
 ' no formatting is applied.
 '
-' Columns (A:H):
+' Column A holds export metadata (marker / type / key).
+' Data table starts at column C:
 '   Part Number | Op Sequence | Op Code | Process Hours | Avg Ex |
 '   Batch Size  | Avg HPU     | Equipment Type
 '
-' Part Number comes from each Part sheet's C1. Remaining fields come from that
-' sheet's data table (M, N, W, X, Q, Y, T). FFA sheets only include rows whose
-' column Z matches the FFA. Product-line sheets include every data row from
-' Part sheets that have that product line checked (G/H).
+' Part Number is each Part sheet's base part (C2), with any dash condition
+' stripped. Remaining fields come from that sheet's data table
+' (M, N, W, X, Q, Y, T). FFA sheets only include rows whose column Z matches
+' the FFA. Product-line sheets include every data row from Part sheets that
+' have that product line checked (G/H).
 
 Private Const PART_LABEL_CELL As String = "A1"
 Private Const PART_LABEL_VALUE As String = "Part"
-Private Const PART_NUMBER_CELL As String = "C1"
+Private Const PART_NUMBER_CELL As String = "C2"
 
 Private Const REFERENCES_SHEET_NAME As String = "References"
 Private Const REFERENCES_FFA_COLUMN As String = "B"
@@ -38,17 +40,23 @@ Private Const COL_AVG_HPU As String = "Y"
 Private Const COL_EQUIPMENT_TYPE As String = "T"
 Private Const COL_FFA_MARK As String = "Z"
 
-Private Const EXPORT_MARKER_CELL As String = "AA1"
+Private Const EXPORT_MARKER_CELL As String = "A1"
 Private Const EXPORT_MARKER_VALUE As String = "Export"
-Private Const EXPORT_TYPE_CELL As String = "AA2"
-Private Const EXPORT_KEY_CELL As String = "AA3"
+Private Const EXPORT_TYPE_CELL As String = "A2"
+Private Const EXPORT_KEY_CELL As String = "A3"
 Private Const EXPORT_TYPE_FFA As String = "FFA"
 Private Const EXPORT_TYPE_PRODUCT_LINE As String = "ProductLine"
+' Legacy marker cells from the first export layout; cleared on rebuild.
+Private Const LEGACY_EXPORT_MARKER_CELL As String = "AA1"
+Private Const LEGACY_EXPORT_TYPE_CELL As String = "AA2"
+Private Const LEGACY_EXPORT_KEY_CELL As String = "AA3"
 
 Private Const FFA_SHEET_PREFIX As String = "FFA - "
 Private Const PRODUCT_LINE_SHEET_PREFIX As String = "PL - "
 Private Const EXPORT_HEADER_ROW As Long = 1
 Private Const EXPORT_FIRST_DATA_ROW As Long = 2
+Private Const EXPORT_FIRST_COLUMN As Long = 3   ' Column C
+Private Const EXPORT_LAST_COLUMN As Long = 10  ' Column J
 Private Const EXPORT_COLUMN_COUNT As Long = 8
 
 Public Sub BuildExportSheets()
@@ -135,7 +143,8 @@ Private Sub CollectExportRowsFromPartSheets(ByVal ffaRows As Object, ByVal produ
     For Each ws In ThisWorkbook.Worksheets
         If Not IsPartSheet(ws) Then GoTo NextSheet
 
-        partNumber = Trim$(CStr(Nz(ws.Range(PART_NUMBER_CELL).Value)))
+        partNumber = BasePartWithoutDash(CStr(Nz(ws.Range(PART_NUMBER_CELL).Value)))
+        If Len(partNumber) = 0 Then partNumber = BasePartWithoutDash(ws.Name)
         lastRow = LastUsedRowInColumns(ws, DATA_FIRST_COLUMN, DATA_LAST_COLUMN)
         If lastRow < LIST_START_ROW Then GoTo NextSheet
 
@@ -265,14 +274,14 @@ Private Sub WriteExportSheet( _
 
     ClearExportDataArea ws
 
-    ws.Cells(EXPORT_HEADER_ROW, 1).Value = "Part Number"
-    ws.Cells(EXPORT_HEADER_ROW, 2).Value = "Op Sequence"
-    ws.Cells(EXPORT_HEADER_ROW, 3).Value = "Op Code"
-    ws.Cells(EXPORT_HEADER_ROW, 4).Value = "Process Hours"
-    ws.Cells(EXPORT_HEADER_ROW, 5).Value = "Avg Ex"
-    ws.Cells(EXPORT_HEADER_ROW, 6).Value = "Batch Size"
-    ws.Cells(EXPORT_HEADER_ROW, 7).Value = "Avg HPU"
-    ws.Cells(EXPORT_HEADER_ROW, 8).Value = "Equipment Type"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN).Value = "Part Number"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 1).Value = "Op Sequence"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 2).Value = "Op Code"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 3).Value = "Process Hours"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 4).Value = "Avg Ex"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 5).Value = "Batch Size"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 6).Value = "Avg HPU"
+    ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN + 7).Value = "Equipment Type"
 
     If rows Is Nothing Then Exit Sub
     If rows.Count = 0 Then Exit Sub
@@ -286,20 +295,28 @@ Private Sub WriteExportSheet( _
     Next rowIndex
 
     Set targetRange = ws.Range( _
-        ws.Cells(EXPORT_FIRST_DATA_ROW, 1), _
-        ws.Cells(EXPORT_FIRST_DATA_ROW + rows.Count - 1, EXPORT_COLUMN_COUNT))
+        ws.Cells(EXPORT_FIRST_DATA_ROW, EXPORT_FIRST_COLUMN), _
+        ws.Cells(EXPORT_FIRST_DATA_ROW + rows.Count - 1, EXPORT_LAST_COLUMN))
     targetRange.Value2 = output
 End Sub
 
 Private Sub ClearExportDataArea(ByVal ws As Worksheet)
     Dim lastRow As Long
 
-    lastRow = LastUsedRowInColumns(ws, "A", "H")
+    ' Clear only the data table (C:J). Column A holds export metadata.
+    lastRow = LastUsedRowInColumns(ws, "C", "J")
     If lastRow < EXPORT_HEADER_ROW Then lastRow = EXPORT_HEADER_ROW
 
     ws.Range( _
-        ws.Cells(EXPORT_HEADER_ROW, 1), _
-        ws.Cells(lastRow, EXPORT_COLUMN_COUNT)).ClearContents
+        ws.Cells(EXPORT_HEADER_ROW, EXPORT_FIRST_COLUMN), _
+        ws.Cells(lastRow, EXPORT_LAST_COLUMN)).ClearContents
+
+    ' Also clear any leftover table that was previously written in A:H.
+    If Len(Trim$(CStr(Nz(ws.Cells(EXPORT_HEADER_ROW, 1).Value)))) > 0 Then
+        If StrComp(Trim$(CStr(Nz(ws.Cells(EXPORT_HEADER_ROW, 1).Value))), EXPORT_MARKER_VALUE, vbTextCompare) <> 0 Then
+            ws.Range(ws.Cells(EXPORT_HEADER_ROW, 1), ws.Cells(lastRow, 8)).ClearContents
+        End If
+    End If
 End Sub
 
 Private Function GetOrCreateExportSheet( _
@@ -335,17 +352,24 @@ Private Function GetOrCreateExportSheet( _
     ws.Range(EXPORT_MARKER_CELL).Value = EXPORT_MARKER_VALUE
     ws.Range(EXPORT_TYPE_CELL).Value = exportType
     ws.Range(EXPORT_KEY_CELL).Value = keyName
+    ws.Range(LEGACY_EXPORT_MARKER_CELL).ClearContents
+    ws.Range(LEGACY_EXPORT_TYPE_CELL).ClearContents
+    ws.Range(LEGACY_EXPORT_KEY_CELL).ClearContents
 
     Set GetOrCreateExportSheet = ws
 End Function
 
 Private Function FindExportSheet(ByVal exportType As String, ByVal keyName As String) As Worksheet
     Dim ws As Worksheet
+    Dim sheetType As String
+    Dim sheetKey As String
 
     For Each ws In ThisWorkbook.Worksheets
         If IsExportSheet(ws) Then
-            If StrComp(Trim$(CStr(Nz(ws.Range(EXPORT_TYPE_CELL).Value))), exportType, vbTextCompare) = 0 Then
-                If StrComp(Trim$(CStr(Nz(ws.Range(EXPORT_KEY_CELL).Value))), keyName, vbTextCompare) = 0 Then
+            sheetType = ExportSheetType(ws)
+            sheetKey = ExportSheetKey(ws)
+            If StrComp(sheetType, exportType, vbTextCompare) = 0 Then
+                If StrComp(sheetKey, keyName, vbTextCompare) = 0 Then
                     Set FindExportSheet = ws
                     Exit Function
                 End If
@@ -366,8 +390,8 @@ Private Sub RemoveObsoleteExportSheets(ByVal ffaRows As Object, ByVal productLin
 
     For Each ws In ThisWorkbook.Worksheets
         If IsExportSheet(ws) Then
-            exportType = Trim$(CStr(Nz(ws.Range(EXPORT_TYPE_CELL).Value)))
-            keyName = Trim$(CStr(Nz(ws.Range(EXPORT_KEY_CELL).Value)))
+            exportType = ExportSheetType(ws)
+            keyName = ExportSheetKey(ws)
             keepSheet = False
 
             If StrComp(exportType, EXPORT_TYPE_FFA, vbTextCompare) = 0 Then
@@ -388,11 +412,47 @@ Private Sub RemoveObsoleteExportSheets(ByVal ffaRows As Object, ByVal productLin
 End Sub
 
 Private Function IsExportSheet(ByVal ws As Worksheet) As Boolean
-    IsExportSheet = (StrComp(Trim$(CStr(Nz(ws.Range(EXPORT_MARKER_CELL).Value))), EXPORT_MARKER_VALUE, vbTextCompare) = 0)
+    If StrComp(Trim$(CStr(Nz(ws.Range(EXPORT_MARKER_CELL).Value))), EXPORT_MARKER_VALUE, vbTextCompare) = 0 Then
+        IsExportSheet = True
+        Exit Function
+    End If
+
+    ' Recognize sheets still marked in the legacy AA location.
+    IsExportSheet = (StrComp(Trim$(CStr(Nz(ws.Range(LEGACY_EXPORT_MARKER_CELL).Value))), EXPORT_MARKER_VALUE, vbTextCompare) = 0)
+End Function
+
+Private Function ExportSheetType(ByVal ws As Worksheet) As String
+    ExportSheetType = Trim$(CStr(Nz(ws.Range(EXPORT_TYPE_CELL).Value)))
+    If Len(ExportSheetType) = 0 Then
+        ExportSheetType = Trim$(CStr(Nz(ws.Range(LEGACY_EXPORT_TYPE_CELL).Value)))
+    End If
+End Function
+
+Private Function ExportSheetKey(ByVal ws As Worksheet) As String
+    ExportSheetKey = Trim$(CStr(Nz(ws.Range(EXPORT_KEY_CELL).Value)))
+    If Len(ExportSheetKey) = 0 Then
+        ExportSheetKey = Trim$(CStr(Nz(ws.Range(LEGACY_EXPORT_KEY_CELL).Value)))
+    End If
 End Function
 
 Private Function IsPartSheet(ByVal ws As Worksheet) As Boolean
     IsPartSheet = (StrComp(Trim$(CStr(Nz(ws.Range(PART_LABEL_CELL).Value))), PART_LABEL_VALUE, vbTextCompare) = 0)
+End Function
+
+' Base part only — strip a trailing dash condition (e.g. "12345-AB" -> "12345").
+Private Function BasePartWithoutDash(ByVal rawValue As String) As String
+    Dim trimmed As String
+    Dim dashPos As Long
+
+    trimmed = Trim$(rawValue)
+    If Len(trimmed) = 0 Then Exit Function
+
+    dashPos = InStr(1, trimmed, "-", vbBinaryCompare)
+    If dashPos > 1 Then
+        BasePartWithoutDash = Trim$(Left$(trimmed, dashPos - 1))
+    Else
+        BasePartWithoutDash = trimmed
+    End If
 End Function
 
 Private Function BuildExportSheetName(ByVal namePrefix As String, ByVal keyName As String) As String
