@@ -126,6 +126,7 @@ End Sub
 Public Function NormalizeOwnerList(ByVal rawList As String, ByVal knownFfas As Object) As String
     Dim parts As Variant
     Dim i As Long
+    Dim token As String
     Dim ffaName As String
     Dim uniqueNames As Object
     Dim keys() As String
@@ -137,12 +138,11 @@ Public Function NormalizeOwnerList(ByVal rawList As String, ByVal knownFfas As O
 
     parts = Split(rawList, ",")
     For i = LBound(parts) To UBound(parts)
-        ffaName = Trim$(CStr(parts(i)))
+        token = Trim$(CStr(parts(i)))
+        If Len(token) = 0 Then GoTo NextPart
+
+        ffaName = ResolveOwnerToFfa(token, knownFfas)
         If Len(ffaName) = 0 Then GoTo NextPart
-        If Not knownFfas Is Nothing Then
-            If Not knownFfas.Exists(ffaName) Then GoTo NextPart
-            ffaName = CStr(knownFfas(ffaName))
-        End If
         If Not uniqueNames.Exists(ffaName) Then uniqueNames.Add ffaName, ffaName
 NextPart:
     Next i
@@ -160,6 +160,31 @@ NextPart:
     Next key
     QuickSortStrings keys, LBound(keys), UBound(keys)
     NormalizeOwnerList = Join(keys, ", ")
+End Function
+
+' Keep FFA values (column B). Tokens that already match an FFA are kept;
+' factory names (column C) are mapped back to their FFA.
+Private Function ResolveOwnerToFfa(ByVal token As String, ByVal knownFfas As Object) As String
+    Dim key As Variant
+
+    If knownFfas Is Nothing Then
+        ResolveOwnerToFfa = token
+        Exit Function
+    End If
+
+    For Each key In knownFfas.Keys
+        If StrComp(CStr(key), token, vbTextCompare) = 0 Then
+            ResolveOwnerToFfa = CStr(key)
+            Exit Function
+        End If
+    Next key
+
+    For Each key In knownFfas.Keys
+        If StrComp(CStr(knownFfas(key)), token, vbTextCompare) = 0 Then
+            ResolveOwnerToFfa = CStr(key)
+            Exit Function
+        End If
+    Next key
 End Function
 
 Public Function RenameFfaInEquipment(ByVal equipment As Object, ByVal oldName As String, ByVal newName As String) As Object
