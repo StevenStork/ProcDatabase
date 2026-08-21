@@ -69,7 +69,52 @@ Private Const EXPORT_COLUMN_COUNT As Long = 8
 Private Const EXPORT_BUILD_CACHE_NAME As String = "ProcDb_ExportBuildCache"
 Private Const EXPORT_BUILD_CACHE_SCHEMA As String = "1"
 
+Public Const EXPORT_SCOPE_FFA As String = "FFA"
+Public Const EXPORT_SCOPE_PRODUCT_LINE As String = "Product Line"
+Public Const EXPORT_SCOPE_ALL As String = "All"
+
+' Opens the export update UserForm (frmExportSheets).
+' If the form is missing, offers to run InstallExportSheetsForm.
+Public Sub ShowUpdateExportSheets()
+    On Error GoTo NoForm
+    frmExportSheets.Show vbModal
+    Exit Sub
+
+NoForm:
+    Dim response As VbMsgBoxResult
+    response = MsgBox( _
+        "The export form (frmExportSheets) is not in this workbook yet." & vbCrLf & vbCrLf & _
+        "Run InstallExportSheetsForm now? (Requires Trust access to the VBA project object model.)" & vbCrLf & vbCrLf & _
+        "See vba/frmExportSheets_Setup.txt for manual setup.", _
+        vbExclamation + vbYesNo + vbDefaultButton1, _
+        "Update Export Sheets")
+
+    If response <> vbYes Then Exit Sub
+
+    On Error GoTo InstallFailed
+    InstallExportSheetsForm
+    frmExportSheets.Show vbModal
+    Exit Sub
+
+InstallFailed:
+    MsgBox "Could not open the export form." & vbCrLf & vbCrLf & Err.Description, _
+        vbCritical, "Update Export Sheets"
+End Sub
+
+' Full rebuild of every FFA and product-line export sheet.
 Public Sub BuildExportSheets()
+    BuildExportSheetsCore EXPORT_SCOPE_ALL, vbNullString, False
+End Sub
+
+' Rebuild one FFA sheet, one product-line sheet, or all sheets.
+' scopeName: "FFA", "Product Line", or "All"
+' itemName: FFA/product-line value when scope is not All (ignored for All)
+' forceRebuild: True skips the unchanged-cache early exit (used by the form)
+Public Sub BuildExportSheetsCore( _
+    ByVal scopeName As String, _
+    ByVal itemName As String, _
+    ByVal forceRebuild As Boolean)
+
     Dim ffaValues() As String
     Dim productLines() As String
     Dim ffaRows As Object
@@ -77,6 +122,23 @@ Public Sub BuildExportSheets()
     Dim buildKey As String
     Dim i As Long
     Dim keyName As String
+    Dim scopeIsAll As Boolean
+    Dim scopeIsFfa As Boolean
+    Dim scopeIsProductLine As Boolean
+
+    scopeIsAll = (StrComp(scopeName, EXPORT_SCOPE_ALL, vbTextCompare) = 0)
+    scopeIsFfa = (StrComp(scopeName, EXPORT_SCOPE_FFA, vbTextCompare) = 0)
+    scopeIsProductLine = (StrComp(scopeName, EXPORT_SCOPE_PRODUCT_LINE, vbTextCompare) = 0)
+
+    If Not scopeIsAll And Not scopeIsFfa And Not scopeIsProductLine Then
+        Err.Raise vbObjectError + 720, "BuildExportSheetsCore", "Unknown export scope: " & scopeName
+    End If
+
+    If Not scopeIsAll Then
+        If Len(Trim$(itemName)) = 0 Then
+            Err.Raise vbObjectError + 721, "BuildExportSheetsCore", "Select an item to export."
+        End If
+    End If
 
     On Error GoTo CleanUp
     OptimizeExcel True
@@ -84,13 +146,25 @@ Public Sub BuildExportSheets()
     ffaValues = GetReferenceColumnValues(REFERENCES_FFA_COLUMN)
     productLines = GetReferenceColumnValues(REFERENCES_PRODUCT_LINE_COLUMN)
 
-    ' Cheap pass: verify Part A3 stamps + References. If nothing changed,
-    ' skip Calculate / row collection / sheet writes entirely.
-    If ExportBuildIsCurrent(ffaValues, productLines, buildKey) Then
-        GoTo CleanUp
+    If scopeIsFfa Then
+        If Not ArrayContainsValue(ffaValues, itemName) Then
+            Err.Raise vbObjectError + 722, "BuildExportSheetsCore", _
+                "FFA """ & itemName & """ was not found on the References sheet."
+        End If
+    ElseIf scopeIsProductLine Then
+        If Not ArrayContainsValue(productLines, itemName) Then
+            Err.Raise vbObjectError + 723, "BuildExportSheetsCore", _
+                "Product line """ & itemName & """ was not found on the References sheet."
+        End If
     End If
 
-    ' Formula columns W/X/Y need current values only when rebuilding.
+    ' Cheap pass only applies to a full rebuild that was not forced by the form.
+    If scopeIsAll And Not forceRebuild Then
+        If ExportBuildIsCurrent(ffaValues, productLines, buildKey) Then
+            GoTo CleanUp
+        End If
+    End If
+
     Application.Calculate
 
     Set ffaRows = CreateObject("Scripting.Dictionary")
@@ -98,43 +172,89 @@ Public Sub BuildExportSheets()
     Set productLineRows = CreateObject("Scripting.Dictionary")
     productLineRows.CompareMode = vbTextCompare
 
-    For i = 0 To ArrayCount(ffaValues) - 1
-        keyName = ffaValues(LBound(ffaValues) + i)
-        If Len(keyName) > 0 Then
-            If Not ffaRows.Exists(keyName) Then ffaRows.Add keyName, New Collection
+    If scopeIsAll Or scopeIsFfa Then
+        If scopeIsFfa Then
+            ffaRows.Add Trim$(itemName), New Collection
+        Else
+            For i = 0 To ArrayCount(ffaValues) - 1
+                keyName = ffaValues(LBound(ffaValues) + i)
+                If Len(keyName) > 0 Then
+                    If Not ffaRows.Exists(keyName) Then ffaRows.Add keyName, New Collection
+                End If
+            Next i
         End If
-    Next i
+    End If
 
-    For i = 0 To ArrayCount(productLines) - 1
-        keyName = productLines(LBound(productLines) + i)
-        If Len(keyName) > 0 Then
-            If Not productLineRows.Exists(keyName) Then productLineRows.Add keyName, New Collection
+    If scopeIsAll Or scopeIsProductLine Then
+        If scopeIsProductLine Then
+            productLineRows.Add Trim$(itemName), New Collection
+        Else
+            For i = 0 To ArrayCount(productLines) - 1
+                keyName = productLines(LBound(productLines) + i)
+                If Len(keyName) > 0 Then
+                    If Not productLineRows.Exists(keyName) Then productLineRows.Add keyName, New Collection
+                End If
+            Next i
         End If
-    Next i
+    End If
 
     CollectExportRowsFromPartSheets ffaRows, productLineRows
-    RemoveObsoleteExportSheets ffaRows, productLineRows
 
-    For i = 0 To ArrayCount(ffaValues) - 1
-        keyName = ffaValues(LBound(ffaValues) + i)
-        If Len(keyName) > 0 Then
+    If scopeIsAll Then
+        RemoveObsoleteExportSheets ffaRows, productLineRows
+    End If
+
+    If scopeIsAll Or scopeIsFfa Then
+        For i = 0 To ArrayCount(ffaValues) - 1
+            keyName = ffaValues(LBound(ffaValues) + i)
+            If Len(keyName) = 0 Then GoTo NextFfa
+            If scopeIsFfa And StrComp(keyName, itemName, vbTextCompare) <> 0 Then GoTo NextFfa
             WriteExportSheet FFA_SHEET_PREFIX, keyName, EXPORT_TYPE_FFA, ffaRows(keyName)
-        End If
-    Next i
+NextFfa:
+        Next i
+    End If
 
-    For i = 0 To ArrayCount(productLines) - 1
-        keyName = productLines(LBound(productLines) + i)
-        If Len(keyName) > 0 Then
+    If scopeIsAll Or scopeIsProductLine Then
+        For i = 0 To ArrayCount(productLines) - 1
+            keyName = productLines(LBound(productLines) + i)
+            If Len(keyName) = 0 Then GoTo NextPl
+            If scopeIsProductLine And StrComp(keyName, itemName, vbTextCompare) <> 0 Then GoTo NextPl
             WriteExportSheet PRODUCT_LINE_SHEET_PREFIX, keyName, EXPORT_TYPE_PRODUCT_LINE, productLineRows(keyName)
-        End If
-    Next i
+NextPl:
+        Next i
+    End If
 
-    ' Rebuild key from the A3 stamps just written during collection.
-    WriteExportBuildCache BuildExportBuildCacheKey(ffaValues, productLines)
+    If scopeIsAll Then
+        WriteExportBuildCache ShortCacheKey(BuildExportBuildCacheKey(ffaValues, productLines))
+    Else
+        ' Partial rebuild — force the next full run to re-evaluate.
+        ClearExportBuildCache
+    End If
 
 CleanUp:
     OptimizeExcel False
 End Sub
+
+Public Function ListExportFfas() As String()
+    ListExportFfas = GetReferenceColumnValues(REFERENCES_FFA_COLUMN)
+End Function
+
+Public Function ListExportProductLines() As String()
+    ListExportProductLines = GetReferenceColumnValues(REFERENCES_PRODUCT_LINE_COLUMN)
+End Function
+
+Public Function ConfirmExportOverwrite(ByVal scopeDescription As String) As Boolean
+    Dim response As VbMsgBoxResult
+
+    response = MsgBox( _
+        "This will overwrite " & scopeDescription & "." & vbCrLf & vbCrLf & _
+        "You cannot get the old export back." & vbCrLf & vbCrLf & _
+        "Do you want to continue?", _
+        vbExclamation + vbYesNo + vbDefaultButton2, _
+        "Confirm Export Update")
+
+    ConfirmExportOverwrite = (response = vbYes)
+End Function
 
 ' Returns True when Part A3 cheap-checks and the workbook build cache all match.
 Private Function ExportBuildIsCurrent( _
@@ -193,7 +313,7 @@ NextSheet:
         JoinStringArray(productLines) & Chr$(31) & _
         JoinStringArray(stampParts)
 
-    If StrComp(GetExportBuildCache(), buildKey, vbBinaryCompare) <> 0 Then Exit Function
+    If StrComp(GetExportBuildCache(), ShortCacheKey(buildKey), vbBinaryCompare) <> 0 Then Exit Function
 
     ExportBuildIsCurrent = True
 End Function
@@ -420,8 +540,28 @@ Private Sub WritePartExportCache(ByVal ws As Worksheet, ByVal stamp As String)
     End With
 End Sub
 
+Private Function ShortCacheKey(ByVal buildKey As String) As String
+    Dim i As Long
+    Dim checkSum As Long
+    Dim prefix As String
+    Dim suffix As String
+
+    For i = 1 To Len(buildKey)
+        checkSum = (checkSum + AscW(Mid$(buildKey, i, 1)) * ((i Mod 97) + 1)) Mod 2147483647
+    Next i
+
+    If Len(buildKey) <= 48 Then
+        prefix = buildKey
+        suffix = vbNullString
+    Else
+        prefix = Left$(buildKey, 24)
+        suffix = Right$(buildKey, 24)
+    End If
+
+    ShortCacheKey = EXPORT_BUILD_CACHE_SCHEMA & ":" & CStr(Len(buildKey)) & ":" & CStr(checkSum) & ":" & prefix & Chr$(30) & suffix
+End Function
+
 Private Sub WriteExportBuildCache(ByVal buildKey As String)
-    Dim nm As Name
     Dim escaped As String
 
     escaped = Replace$(buildKey, """", """""")
@@ -434,6 +574,23 @@ Private Sub WriteExportBuildCache(ByVal buildKey As String)
         Name:=EXPORT_BUILD_CACHE_NAME, _
         RefersTo:="=""" & escaped & """"
 End Sub
+
+Private Sub ClearExportBuildCache()
+    On Error Resume Next
+    ThisWorkbook.Names(EXPORT_BUILD_CACHE_NAME).Delete
+    On Error GoTo 0
+End Sub
+
+Private Function ArrayContainsValue(ByRef values() As String, ByVal lookupValue As String) As Boolean
+    Dim i As Long
+
+    For i = 0 To ArrayCount(values) - 1
+        If StrComp(values(LBound(values) + i), lookupValue, vbTextCompare) = 0 Then
+            ArrayContainsValue = True
+            Exit Function
+        End If
+    Next i
+End Function
 
 Private Function GetExportBuildCache() As String
     Dim nm As Name

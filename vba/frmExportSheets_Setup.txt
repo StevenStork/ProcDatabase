@@ -1,0 +1,37 @@
+Update Export Sheets — UserForm setup
+=====================================
+
+Option A (recommended): auto-install
+------------------------------------
+1. Import vba/modExportSheets.bas and vba/modExportSheetsFormSetup.bas
+2. Enable Trust Center → Macro Settings →
+   "Trust access to the VBA project object model"
+3. Run InstallExportSheetsForm once
+4. Run ShowUpdateExportSheets
+
+Option B: import the form file
+------------------------------
+1. Alt+F11 → File → Import File… → vba/frmExportSheets.frm
+2. If controls are missing (no .frx), add them:
+
+   Name            Type             Caption / notes
+   --------------  ---------------  ------------------------------------------
+   lblScope        Label            Export type
+   cboScope        ComboBox         Style = 2 - fmStyleDropDownList
+   lblItem         Label            Select item
+   cboItem         ComboBox         Style = 2 - fmStyleDropDownList
+   lblAllConfirm   Label            (caption set in code); WordWrap = True
+   chkAllConfirm   CheckBox         I confirm I want to update all export sheets
+   cmdRun          CommandButton    Run
+   cmdCancel       CommandButton    Cancel
+
+3. Paste the code from frmExportSheets.frm into the form's code module
+4. Import / refresh vba/modExportSheets.bas
+5. Run ShowUpdateExportSheets
+
+Form behavior
+-------------
+- First dropdown: FFA | Product Line | All
+- Second dropdown: FFA list or product-line list from References
+- All: second dropdown is replaced by a confirmation checkbox
+- Run always shows a Yes/No warning that the old export cannot be recovered
