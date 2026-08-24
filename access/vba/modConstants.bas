@@ -64,3 +64,6 @@ Public Const COL_AVG_90 As String = "Avg 90 Day Ex"
 ' RAG thresholds (same as Excel Home sheet).
 Public Const RAG_YELLOW_DAYS As Long = 30
 Public Const RAG_RED_DAYS As Long = 90
+
+' Access RunCommand: View -> Form Header/Footer (acCmdFormHdrFtr).
+Public Const CMD_FORM_HDR_FTR As Long = 36
