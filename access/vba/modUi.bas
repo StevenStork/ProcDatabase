@@ -93,6 +93,7 @@ Private Sub EnsureFormHeader(ByVal frm As Form)
     frm.Section(acHeader).Height = 1
     If Err.Number = 2148 Then
         Err.Clear
+        DoCmd.SelectObject acForm, frm.Name, True
         DoCmd.RunCommand acCmdFormHeaderAndFooter
     End If
     Err.Clear
