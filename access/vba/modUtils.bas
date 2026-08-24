@@ -216,9 +216,8 @@ End Sub
 Public Sub ApplyDaysRagFormat(ByVal daysControl As Control)
     Dim fc As FormatCondition
 
-    On Error Resume Next
+    On Error GoTo CleanUp
     daysControl.FormatConditions.Delete
-    On Error GoTo 0
 
     Set fc = daysControl.FormatConditions.Add(acExpression, , "Nz([txtDays],0)>" & RAG_RED_DAYS)
     fc.BackColor = RGB(255, 199, 206)
@@ -228,6 +227,7 @@ Public Sub ApplyDaysRagFormat(ByVal daysControl As Control)
         "Nz([txtDays],0)>" & RAG_YELLOW_DAYS & " And Nz([txtDays],0)<=" & RAG_RED_DAYS)
     fc.BackColor = RGB(255, 235, 156)
     fc.ForeColor = RGB(156, 101, 0)
+CleanUp:
 End Sub
 
 Public Function DaysSinceDate(ByVal statusDate As Variant) As Variant

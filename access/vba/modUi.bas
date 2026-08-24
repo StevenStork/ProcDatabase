@@ -7,11 +7,11 @@ Option Explicit
 
 Public Sub EnsureUi()
     CreateReferenceForms
-    CreateHomeForm
     CreatePartDashSubform
     CreatePartProductLineSubform
     CreateOperationSubform
     CreatePartForm
+    CreateHomeForm
     CreateReferencesForm
     CreateExportForm
 End Sub
@@ -32,8 +32,7 @@ Private Sub CreateSimpleTableForm(ByVal formName As String, ByVal tableName As S
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm formName
+    SaveAndRenameForm frm, formName
 End Sub
 
 Private Sub CreateHomeForm()
@@ -44,84 +43,107 @@ Private Sub CreateHomeForm()
     Set frm = CreateForm()
     frm.RecordSource = TBL_PART
     frm.Caption = "ProcDatabase Home"
-    frm.DefaultView = 2 ' Datasheet
+    frm.DefaultView = 1
     frm.AllowAdditions = False
     frm.AllowDeletions = False
     frm.AllowEdits = True
+    frm.ScrollBars = 2
+    frm.RecordSelectors = True
+    frm.NavigationButtons = True
+    On Error Resume Next
+    frm.Section(acHeader).Visible = True
+    On Error GoTo 0
 
-    AddBoundTextBox frm, "BasePart", "Base Part", 0, 0, 2000
-    AddBoundCheckBox frm, "Active", "Active", 2100, 0
-    AddBoundTextBox frm, "StatusDate", "Date", 2600, 0, 1400
+    AddHomeField frm, "BasePart", 120, 600, 1800
+    AddHomeField frm, "Active", 2040, 600, 900, True
+    AddHomeField frm, "StatusDate", 3000, 600, 1200
 
-    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 4100, 0, 900, 300)
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 4320, 600, 720, 300)
     ctl.Name = "txtDays"
     ctl.ControlSource = "=IIf(IsNull([StatusDate]),Null,DateDiff(""d"",[StatusDate],Date()))"
-    ApplyDaysRagFormat ctl
+    ctl.Enabled = False
 
-    AddBoundTextBox frm, "Highlight", "Highlight", 5100, 0, 1600
-    AddBoundComboBox frm, "HomeFFA", "Home FFA", 6800, 0, 1600, _
-        "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
+    AddHomeField frm, "Highlight", 5100, 600, 1200
+    AddHomeCombo frm, "HomeFFA", 6360, 600, 1440
 
-    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 8500, 0, 2000, 300)
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 7860, 600, 1800, 300)
     ctl.Name = "txtFactories"
     ctl.ControlSource = "=DLookup(""Factory"",""" & TBL_FFA & """,""FFA='"" & Replace(Nz([HomeFFA],""),""'"",""''"") & ""'"")"
     ctl.Enabled = False
 
-    AddBoundTextBox frm, COL_SHEET_NAME, "Sheet", 10600, 0, 1600
+    AddHomeField frm, COL_SHEET_NAME, 9720, 600, 1200
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 0, 400, 1800, 360)
-    ctl.Name = "btnRefresh"
-    ctl.Caption = "Refresh Linked Data"
-    ctl.OnClick = "=UiRefreshLinkedData()"
+    AddHeaderButton frm, "btnRefresh", "Refresh Linked Data", 120, 120, "=UiRefreshLinkedData()", 2160
+    AddHeaderButton frm, "btnOpenPart", "Open Part", 2400, 120, "=OpenSelectedPart()", 1440
+    AddHeaderButton frm, "btnSeedOps", "Seed Active Ops", 3960, 120, "=UiSeedActiveOps()", 1800
+    AddHeaderButton frm, "btnReferences", "References", 5880, 120, "=UiOpenReferences()", 1440
+    AddHeaderButton frm, "btnExport", "Export", 7440, 120, "=UiOpenExport()", 1200
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 1900, 400, 1800, 360)
-    ctl.Name = "btnOpenPart"
-    ctl.Caption = "Open Part"
-    ctl.OnClick = "=OpenSelectedPart()"
+    savedName = frm.Name
+    SaveAndRenameForm frm, FRM_HOME
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 3800, 400, 1800, 360)
-    ctl.Name = "btnSeedOps"
-    ctl.Caption = "Seed Active Ops"
-    ctl.OnClick = "=UiSeedActiveOps()"
+Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, Optional ByVal isCheckBox As Boolean = False)
+    Dim ctl As Control
+    If isCheckBox Then
+        Set ctl = CreateControl(frm.Name, acCheckBox, acDetail, , fieldName, leftPos, topPos, 300, 300)
+        ctl.Name = "chk" & fieldName
+    Else
+        Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
+        ctl.Name = "txt" & fieldName
+    End If
+    ctl.ControlSource = fieldName
+End Sub
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 5700, 400, 1600, 360)
-    ctl.Name = "btnReferences"
-    ctl.Caption = "References"
-    ctl.OnClick = "=UiOpenReferences()"
+Private Sub AddHomeCombo(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
+    Dim ctl As Control
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
+    ctl.Name = "cbo" & fieldName
+    ctl.ControlSource = fieldName
+    ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = False
+End Sub
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 7400, 400, 1400, 360)
-    ctl.Name = "btnExport"
-    ctl.Caption = "Export"
-    ctl.OnClick = "=UiOpenExport()"
+Private Sub AddHeaderButton(ByVal frm As Form, ByVal ctlName As String, ByVal caption As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal onClick As String, ByVal widthPos As Long)
+    Dim ctl As Control
+    Set ctl = CreateControl(frm.Name, acCommandButton, acHeader, , , leftPos, topPos, widthPos, 360)
+    ctl.Name = ctlName
+    ctl.Caption = caption
+    ctl.OnClick = onClick
+End Sub
 
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm FRM_HOME
+Private Sub ApplyHomeDaysRagDesign(ByVal formName As String)
+    On Error GoTo CleanUp
+    DoCmd.OpenForm formName, acDesign
+    ApplyDaysRagFormat Forms(formName).Controls("txtDays")
+CleanUp:
+    On Error Resume Next
+    DoCmd.Close acForm, formName, acSaveYes
+    On Error GoTo 0
 End Sub
 
 Private Sub CreatePartDashSubform()
     Dim frm As Form
     DeleteObjectIfExists acForm, SFRM_DASH
     Set frm = CreateForm()
-    frm.RecordSource = "SELECT * FROM [" & TBL_PART_DASH & "]"
+    frm.RecordSource = TBL_PART_DASH
     frm.DefaultView = 2
     frm.AllowAdditions = False
-    AddBoundTextBox frm, "Dash", "Dash", 0, 0, 1400
-    AddBoundCheckBox frm, "Active", "Active", 1500, 0
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm SFRM_DASH
+    AddDetailField frm, "Dash", 0, 0, 1400
+    AddDetailCheck frm, "Active", 1500, 0
+    SaveAndRenameForm frm, SFRM_DASH
 End Sub
 
 Private Sub CreatePartProductLineSubform()
     Dim frm As Form
     DeleteObjectIfExists acForm, SFRM_PL
     Set frm = CreateForm()
-    frm.RecordSource = "SELECT * FROM [" & TBL_PART_PL & "]"
+    frm.RecordSource = TBL_PART_PL
     frm.DefaultView = 2
     frm.AllowAdditions = False
-    AddBoundTextBox frm, "ProductLine", "Product Line", 0, 0, 2000
-    AddBoundCheckBox frm, "UseFlag", "Use", 2100, 0
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm SFRM_PL
+    AddDetailField frm, "ProductLine", 0, 0, 2000
+    AddDetailCheck frm, "UseFlag", 2100, 0
+    SaveAndRenameForm frm, SFRM_PL
 End Sub
 
 Private Sub CreateOperationSubform()
@@ -132,22 +154,21 @@ Private Sub CreateOperationSubform()
     frm.DefaultView = 2
     frm.AllowAdditions = True
     frm.AllowDeletions = True
-    AddBoundTextBox frm, "OpSequence", "Op Seq", 0, 0, 900
-    AddBoundTextBox frm, "OpCode", "Op Code", 1000, 0, 1100
-    AddBoundTextBox frm, "ImportedHours", "Imported Hours", 2200, 0, 1200
-    AddBoundTextBox frm, "ImportedEx", "Imported Ex", 3500, 0, 1100
-    AddBoundTextBox frm, "BatchSize", "Batch", 4700, 0, 900
-    AddBoundTextBox frm, "ExportHours", "Export Hours", 5700, 0, 1200
-    AddBoundTextBox frm, "ExportEx", "Export Ex", 7000, 0, 1100
-    AddBoundTextBox frm, "EquipmentType", "Equipment", 8200, 0, 1400
-    AddBoundCheckBox frm, "UseExportHours", "Use Hrs", 9700, 0
-    AddBoundCheckBox frm, "UseExportEx", "Use Ex", 10400, 0
-    AddBoundTextBox frm, "ProcessHours", "Process Hours", 11100, 0, 1200
-    AddBoundTextBox frm, "AvgEx", "Avg Ex", 12400, 0, 1000
-    AddBoundTextBox frm, "AvgHPU", "Avg HPU", 13500, 0, 1000
-    AddBoundTextBox frm, "MadeInFFA", "Made In FFA", 14600, 0, 1400
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm SFRM_OPS
+    AddDetailField frm, "OpSequence", 0, 0, 900
+    AddDetailField frm, "OpCode", 1000, 0, 1100
+    AddDetailField frm, "ImportedHours", 2200, 0, 1200
+    AddDetailField frm, "ImportedEx", 3500, 0, 1100
+    AddDetailField frm, "BatchSize", 4700, 0, 900
+    AddDetailField frm, "ExportHours", 5700, 0, 1200
+    AddDetailField frm, "ExportEx", 7000, 0, 1100
+    AddDetailField frm, "EquipmentType", 8200, 0, 1400
+    AddDetailCheck frm, "UseExportHours", 9700, 0
+    AddDetailCheck frm, "UseExportEx", 10400, 0
+    AddDetailField frm, "ProcessHours", 11100, 0, 1200
+    AddDetailField frm, "AvgEx", 12400, 0, 1000
+    AddDetailField frm, "AvgHPU", 13500, 0, 1000
+    AddDetailField frm, "MadeInFFA", 14600, 0, 1400
+    SaveAndRenameForm frm, SFRM_OPS
 End Sub
 
 Private Sub CreatePartForm()
@@ -156,16 +177,15 @@ Private Sub CreatePartForm()
 
     DeleteObjectIfExists acForm, FRM_PART
     Set frm = CreateForm()
-    frm.RecordSource = "SELECT * FROM [" & TBL_PART & "]"
+    frm.RecordSource = TBL_PART
     frm.Caption = "Part"
-    frm.DefaultView = 0 ' Single Form
+    frm.DefaultView = 0
     frm.AllowAdditions = False
 
-    AddBoundTextBox frm, "BasePart", "Base Part", 1200, 200, 2000
-    AddBoundCheckBox frm, "Active", "Active", 3400, 200
-    AddBoundComboBox frm, "HomeFFA", "Home FFA", 1200, 600, 2000, _
-        "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
-    AddBoundTextBox frm, "StatusDate", "Status Date", 1200, 1000, 1600
+    AddDetailField frm, "BasePart", 1200, 200, 2000
+    AddDetailCheck frm, "Active", 3400, 200
+    AddDetailCombo frm, "HomeFFA", 1200, 600, 2000
+    AddDetailField frm, "StatusDate", 1200, 1000, 1600
 
     Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 1600, 3200, 2400)
     ctl.Name = "subDashes"
@@ -195,8 +215,7 @@ Private Sub CreatePartForm()
     ctl.Caption = "Close"
     ctl.OnClick = "=UiCloseCurrentForm()"
 
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm FRM_PART
+    SaveAndRenameForm frm, FRM_PART
 End Sub
 
 Private Sub CreateReferencesForm()
@@ -224,8 +243,7 @@ Private Sub CreateReferencesForm()
     ctl.Caption = "Edit Equipment"
     ctl.OnClick = "=UiOpenEquipmentForm()"
 
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm FRM_REFERENCES
+    SaveAndRenameForm frm, FRM_REFERENCES
 End Sub
 
 Private Sub CreateExportForm()
@@ -258,51 +276,41 @@ Private Sub CreateExportForm()
     ctl.Caption = "Export Product Line"
     ctl.OnClick = "=ExportSelectedProductLine()"
 
-    DoCmd.Close acForm, frm.Name, acSaveYes
-    RenameLastForm FRM_EXPORT
+    SaveAndRenameForm frm, FRM_EXPORT
 End Sub
 
-Private Sub AddBoundTextBox(ByVal frm As Form, ByVal fieldName As String, ByVal caption As String, _
-    ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
+Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
     ctl.Name = "txt" & fieldName
     ctl.ControlSource = fieldName
 End Sub
 
-Private Sub AddBoundCheckBox(ByVal frm As Form, ByVal fieldName As String, ByVal caption As String, _
-    ByVal leftPos As Long, ByVal topPos As Long)
+Private Sub AddDetailCheck(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long)
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acCheckBox, acDetail, , fieldName, leftPos, topPos, 300, 300)
     ctl.Name = "chk" & fieldName
     ctl.ControlSource = fieldName
 End Sub
 
-Private Sub AddBoundComboBox(ByVal frm As Form, ByVal fieldName As String, ByVal caption As String, _
-    ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, ByVal rowSource As String)
+Private Sub AddDetailCombo(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
     ctl.Name = "cbo" & fieldName
     ctl.ControlSource = fieldName
-    ctl.RowSource = rowSource
+    ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = False
 End Sub
 
-Private Sub RenameLastForm(ByVal desiredName As String)
-    Dim i As Long
-    Dim createdName As String
-    Dim frm As Object
-
-    ' CreateForm leaves a FormN object; rename the most recently created unmatched Form*.
-    For i = CurrentProject.AllForms.Count - 1 To 0 Step -1
-        createdName = CurrentProject.AllForms(i).Name
-        If StrComp(createdName, desiredName, vbTextCompare) = 0 Then Exit Sub
-        If Left$(createdName, 4) = "Form" And IsNumeric(Mid$(createdName, 5)) Then
-            DoCmd.Rename desiredName, acForm, createdName
-            Exit Sub
-        End If
-    Next i
+Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
+    Dim savedName As String
+    savedName = frm.Name
+    DoCmd.Close acForm, savedName, acSaveYes
+    Set frm = Nothing
+    If StrComp(savedName, desiredName, vbTextCompare) <> 0 Then
+        DoCmd.Rename desiredName, acForm, savedName
+    End If
 End Sub
 
 Public Function OpenSelectedPart() As Boolean
@@ -312,7 +320,10 @@ Public Function OpenSelectedPart() As Boolean
         OpenSelectedPart = False
         Exit Function
     End If
-    basePart = CoerceText(Forms(FRM_HOME)!BasePart)
+    basePart = CoerceText(Forms(FRM_HOME)!txtBasePart)
+    If Len(basePart) = 0 Then
+        basePart = CoerceText(Forms(FRM_HOME)!BasePart)
+    End If
     If Len(basePart) = 0 Then
         MsgBox "Select a part row first.", vbExclamation, "Open Part"
         OpenSelectedPart = False
@@ -328,7 +339,8 @@ End Function
 Public Function SeedOperationsForCurrentPart() As Boolean
     Dim basePart As String
     On Error GoTo Fail
-    basePart = CoerceText(Forms(FRM_PART)!BasePart)
+    basePart = CoerceText(Forms(FRM_PART)!txtBasePart)
+    If Len(basePart) = 0 Then basePart = CoerceText(Forms(FRM_PART)!BasePart)
     SeedOperationsForPart basePart
     Forms(FRM_PART)!subOperations.Requery
     SeedOperationsForCurrentPart = True

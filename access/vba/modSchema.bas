@@ -215,7 +215,13 @@ Private Sub EnsureFilteredSourceQueries()
 End Sub
 
 Public Sub EnsureStartup()
-    SetDbProperty "StartupForm", dbText, FRM_HOME
+    On Error Resume Next
+    If ObjectExists(acForm, FRM_HOME) Then
+        SetDbProperty "StartupForm", dbText, FRM_HOME
+    Else
+        SetDbProperty "StartupForm", dbText, vbNullString
+    End If
     SetDbProperty "AppTitle", dbText, "ProcDatabase"
     Application.RefreshTitleBar
+    On Error GoTo 0
 End Sub

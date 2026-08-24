@@ -2,15 +2,22 @@ Attribute VB_Name = "modApp"
 Option Compare Database
 Option Explicit
 
+Private BootstrapStep As String
+
 ' Entry points callable from startup, ribbon, or Immediate window.
 
 Public Sub BootstrapProcDatabase()
     On Error GoTo Fail
     DoCmd.Hourglass True
+    BootstrapStep = "EnsureSchema"
     EnsureSchema
+    BootstrapStep = "EnsureQueries"
     EnsureQueries
+    BootstrapStep = "EnsureUi"
     EnsureUi
+    BootstrapStep = "EnsureStartup"
     EnsureStartup
+    BootstrapStep = "SetMeta"
     SetMeta "SchemaVersion", SCHEMA_VERSION
     DoCmd.Hourglass False
     MsgBox "ProcDatabase is ready." & vbCrLf & vbCrLf & _
@@ -19,7 +26,23 @@ Public Sub BootstrapProcDatabase()
     Exit Sub
 Fail:
     DoCmd.Hourglass False
-    MsgBox "Bootstrap failed: " & Err.Description, vbCritical, "ProcDatabase"
+    MsgBox "Bootstrap failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & _
+        Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
+End Sub
+
+' Schema + queries only (skip form build). Use if EnsureUi fails.
+Public Sub BootstrapSchemaOnly()
+    On Error GoTo Fail
+    BootstrapStep = "EnsureSchema"
+    EnsureSchema
+    BootstrapStep = "EnsureQueries"
+    EnsureQueries
+    SetMeta "SchemaVersion", SCHEMA_VERSION
+    MsgBox "Schema and queries are ready. Run BuildUi to create forms.", vbInformation, "ProcDatabase"
+    Exit Sub
+Fail:
+    MsgBox "BootstrapSchemaOnly failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & _
+        Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
 End Sub
 
 Public Sub StartProcDatabase()
@@ -55,7 +78,7 @@ Public Sub BuildUi()
     MsgBox "Schema, queries, and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
     Exit Sub
 Fail:
-    MsgBox "UI build failed: " & Err.Description, vbCritical, "ProcDatabase"
+    MsgBox "UI build failed: " & Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
 End Sub
 
 Public Sub RebuildFilterOnly()
