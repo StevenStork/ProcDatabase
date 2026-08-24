@@ -2,21 +2,6 @@ Attribute VB_Name = "modSchema"
 Option Compare Database
 Option Explicit
 
-Public Sub BootstrapProcDatabase()
-    DoCmd.Echo False
-    On Error GoTo CleanUp
-    EnsureSchema
-    EnsureQueries
-    EnsureUi
-    EnsureStartup
-    SetMeta "SchemaVersion", SCHEMA_VERSION
-CleanUp:
-    DoCmd.Echo True
-    If Err.Number <> 0 Then
-        MsgBox "Bootstrap failed: " & Err.Description, vbCritical, "ProcDatabase"
-    End If
-End Sub
-
 Public Sub EnsureSchema()
     EnsureMetaTable
     EnsureLookupTables
