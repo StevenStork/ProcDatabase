@@ -26,8 +26,12 @@ Public Sub BootstrapProcDatabase()
     Exit Sub
 Fail:
     DoCmd.Hourglass False
-    MsgBox "Bootstrap failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & _
-        Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
+    Dim detail As String
+    detail = Err.Description & " (" & Err.Number & ")"
+    If BootstrapStep = "EnsureSchema" And Len(SchemaSubStep) > 0 Then
+        detail = detail & vbCrLf & vbCrLf & "Schema sub-step: " & SchemaSubStep
+    End If
+    MsgBox "Bootstrap failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & detail, vbCritical, "ProcDatabase"
 End Sub
 
 ' Schema + queries only (skip form build). Use if EnsureUi fails.

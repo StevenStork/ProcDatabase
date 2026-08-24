@@ -38,10 +38,11 @@ BuildUi
 
 ### If Bootstrap fails
 
-1. Re-import the latest `modUi.bas` and `modApp.bas`, then **Debug → Compile**.
-2. Run `BootstrapProcDatabase` again — the error now shows which step failed (for example `EnsureUi`).
-3. If form creation fails, run `BootstrapSchemaOnly`, then `BuildUi` separately.
-4. Delete any broken `Form*` objects in the Forms list before retrying.
+1. Run `DiagnoseSchema` in the Immediate window — it lists which linked/local tables Access sees.
+2. Re-import the latest `modSchema.bas`, `modUtils.bas`, and `modApp.bas`, then **Debug → Compile**.
+3. Run `BootstrapProcDatabase` again — errors now include the schema sub-step (for example `EnsurePartTables`).
+4. If a previous attempt created broken local tables (`tblMeta`, `tblPart`, …), delete those **local** tables in the navigation pane and run bootstrap again. Do **not** delete your linked `tblRouteCard`, `tblAssyStnd`, or `tblOperComps`.
+5. If form creation fails after schema succeeds, run `BootstrapSchemaOnly`, then `BuildUi`.
 
 ## Workflow
 

@@ -34,6 +34,12 @@ Fail:
     Err.Raise Err.Number, "RefreshSourceData", Err.Description
 End Sub
 
+Public Function LinkedSourceTablesReady() As Boolean
+    LinkedSourceTablesReady = TableExists(TBL_ROUTE_CARD) _
+        And TableExists(TBL_ASSY_STANDARD) _
+        And TableExists(TBL_OPER_COMPLETIONS)
+End Function
+
 Public Sub EnsureLinkedSourceTables()
     Dim missing As String
 
@@ -45,7 +51,8 @@ Public Sub EnsureLinkedSourceTables()
         Err.Raise vbObjectError + 620, "EnsureLinkedSourceTables", _
             "Required linked tables are missing:" & missing & vbCrLf & vbCrLf & _
             "Link Route_Card as tblRouteCard, Assembly_Standard as tblAssyStnd, " & _
-            "and Oper_Completions as tblOperComps."
+            "and Oper_Completions as tblOperComps." & vbCrLf & vbCrLf & _
+            "Run DiagnoseSchema for a full table report."
     End If
 End Sub
 

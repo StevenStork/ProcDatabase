@@ -32,15 +32,10 @@ Public Sub RebuildActiveAssemblyFilter()
 End Sub
 
 Public Sub EnsureActiveAssemblyFilterTable()
-    Dim td As DAO.TableDef
     If TableExists(TBL_ACTIVE_FILTER) Then Exit Sub
-    Set td = CurrentDb.CreateTableDef(TBL_ACTIVE_FILTER)
-    Dim fld As DAO.Field
-    Set fld = td.CreateField(COL_ASSEMBLY_NO_FILTER, dbText, 50)
-    fld.AllowZeroLength = True
-    td.Fields.Append fld
-    CurrentDb.TableDefs.Append td
-    CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_ACTIVE_FILTER & "] ([" & COL_ASSEMBLY_NO_FILTER & "])", dbFailOnError
+    CurrentDb.Execute "CREATE TABLE [" & TBL_ACTIVE_FILTER & "] (" & _
+        "[" & COL_ASSEMBLY_NO_FILTER & "] TEXT(50) CONSTRAINT PK_tblActiveAssemblyFilter PRIMARY KEY" & _
+        ")", dbFailOnError
 End Sub
 
 Public Function ActiveFilterHasRows() As Boolean
@@ -52,7 +47,7 @@ Public Function ActiveFilterHasRows() As Boolean
 End Function
 
 Public Function RouteCardSourceName() As String
-    If ActiveFilterHasRows() Then
+    If ActiveFilterHasRows() And QueryExists(QRY_ROUTE_CARD_ACTIVE) Then
         RouteCardSourceName = QRY_ROUTE_CARD_ACTIVE
     Else
         RouteCardSourceName = TBL_ROUTE_CARD
@@ -60,7 +55,7 @@ Public Function RouteCardSourceName() As String
 End Function
 
 Public Function AssyStndSourceName() As String
-    If ActiveFilterHasRows() Then
+    If ActiveFilterHasRows() And QueryExists(QRY_ASSY_STND_ACTIVE) Then
         AssyStndSourceName = QRY_ASSY_STND_ACTIVE
     Else
         AssyStndSourceName = TBL_ASSY_STANDARD
@@ -68,7 +63,7 @@ Public Function AssyStndSourceName() As String
 End Function
 
 Public Function OperCompsSourceName() As String
-    If ActiveFilterHasRows() Then
+    If ActiveFilterHasRows() And QueryExists(QRY_OPER_COMPS_ACTIVE) Then
         OperCompsSourceName = QRY_OPER_COMPS_ACTIVE
     Else
         OperCompsSourceName = TBL_OPER_COMPLETIONS

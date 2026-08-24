@@ -2,173 +2,207 @@ Attribute VB_Name = "modSchema"
 Option Compare Database
 Option Explicit
 
+Public SchemaSubStep As String
+
 Public Sub EnsureSchema()
+    On Error GoTo Fail
+    SchemaSubStep = "EnsureMetaTable"
     EnsureMetaTable
+    SchemaSubStep = "EnsureLookupTables"
     EnsureLookupTables
+    SchemaSubStep = "EnsurePartTables"
     EnsurePartTables
+    SchemaSubStep = "EnsureActiveAssemblyFilterTable"
     EnsureActiveAssemblyFilterTable
+    SchemaSubStep = "EnsureOptionalProcTmYldTable"
     EnsureOptionalProcTmYldTable
-    EnsureLinkedSourceTables
+    SchemaSubStep = "UpgradeExistingSchema"
     UpgradeExistingSchema
+    SchemaSubStep = vbNullString
+    Exit Sub
+Fail:
+    Err.Raise Err.Number, "EnsureSchema." & SchemaSubStep, Err.Description
 End Sub
 
+Public Sub DiagnoseSchema()
+    Dim report As String
+    report = "ProcDatabase schema diagnosis:" & vbCrLf & vbCrLf
+    report = report & DescribeLinkedTables()
+    report = report & vbCrLf & "Local tables:" & vbCrLf
+    report = report & DescribeLocalTables()
+    MsgBox report, vbInformation, "DiagnoseSchema"
+End Sub
+
+Private Function DescribeLinkedTables() As String
+    Dim lines As String
+    lines = "Linked source tables:" & vbCrLf
+    lines = lines & DescribeTable(TBL_ROUTE_CARD)
+    lines = lines & DescribeTable(TBL_ASSY_STANDARD)
+    lines = lines & DescribeTable(TBL_OPER_COMPLETIONS)
+    lines = lines & DescribeTable(TBL_PROC_TM_YLD)
+    DescribeLinkedTables = lines
+End Function
+
+Private Function DescribeLocalTables() As String
+    Dim names As Variant
+    Dim i As Long
+    Dim lines As String
+    names = Array(TBL_META, TBL_FFA, TBL_PRODUCT_LINE, TBL_EQUIPMENT, TBL_PART, _
+        TBL_PART_DASH, TBL_PART_PL, TBL_OPERATION, TBL_ACTIVE_FILTER)
+    For i = LBound(names) To UBound(names)
+        lines = lines & DescribeTable(CStr(names(i)))
+    Next i
+    DescribeLocalTables = lines
+End Function
+
+Private Function DescribeTable(ByVal tableName As String) As String
+    If Not TableExists(tableName) Then
+        DescribeTable = "  - " & tableName & ": missing" & vbCrLf
+        Exit Function
+    End If
+    If IsLinkedTable(tableName) Then
+        DescribeTable = "  - " & tableName & ": linked" & vbCrLf
+    Else
+        DescribeTable = "  - " & tableName & ": local" & vbCrLf
+    End If
+End Function
+
 Private Sub EnsureMetaTable()
-    Dim td As DAO.TableDef
     If TableExists(TBL_META) Then Exit Sub
-    Set td = CurrentDb.CreateTableDef(TBL_META)
-    AddTextField td, "Key", 50
-    AddMemoField td, "Value"
-    CurrentDb.TableDefs.Append td
-    CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_META & "] ([Key])", dbFailOnError
+    ExecuteDDL "CREATE TABLE [" & TBL_META & "] (" & _
+        "[MetaKey] TEXT(50) CONSTRAINT PK_tblMeta PRIMARY KEY, " & _
+        "[MetaValue] MEMO" & _
+        ")"
 End Sub
 
 Private Sub EnsureLookupTables()
-    Dim td As DAO.TableDef
-
     If Not TableExists(TBL_FFA) Then
-        Set td = CurrentDb.CreateTableDef(TBL_FFA)
-        AddTextField td, "FFA", 50
-        AddTextField td, "Factory", 100
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_FFA & "] ([FFA])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_FFA & "] (" & _
+            "[FFA] TEXT(50) CONSTRAINT PK_tblFFA PRIMARY KEY, " & _
+            "[Factory] TEXT(100)" & _
+            ")"
     End If
 
     If Not TableExists(TBL_PRODUCT_LINE) Then
-        Set td = CurrentDb.CreateTableDef(TBL_PRODUCT_LINE)
-        AddTextField td, "ProductLine", 100
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_PRODUCT_LINE & "] ([ProductLine])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_PRODUCT_LINE & "] (" & _
+            "[ProductLine] TEXT(100) CONSTRAINT PK_tblProductLine PRIMARY KEY" & _
+            ")"
         SeedDefaultProductLines
     End If
 
     If Not TableExists(TBL_EQUIPMENT) Then
-        Set td = CurrentDb.CreateTableDef(TBL_EQUIPMENT)
-        AddTextField td, "Equipment", 100
-        AddMemoField td, "OwningFFAs"
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_EQUIPMENT & "] ([Equipment])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_EQUIPMENT & "] (" & _
+            "[Equipment] TEXT(100) CONSTRAINT PK_tblEquipment PRIMARY KEY, " & _
+            "[OwningFFAs] MEMO" & _
+            ")"
     End If
 End Sub
 
 Private Sub EnsurePartTables()
-    Dim td As DAO.TableDef
-
     If Not TableExists(TBL_PART) Then
-        Set td = CurrentDb.CreateTableDef(TBL_PART)
-        AddTextField td, "BasePart", 50
-        AddBooleanField td, "Active"
-        AddTextField td, "HomeFFA", 50
-        AddDateField td, "StatusDate"
-        AddTextField td, "Highlight", 255
-        AddTextField td, COL_SHEET_NAME, 50
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_PART & "] ([BasePart])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_PART & "] (" & _
+            "[BasePart] TEXT(50) CONSTRAINT PK_tblPart PRIMARY KEY, " & _
+            "[Active] YESNO, " & _
+            "[HomeFFA] TEXT(50), " & _
+            "[StatusDate] DATETIME, " & _
+            "[Highlight] TEXT(255), " & _
+            "[" & COL_SHEET_NAME & "] TEXT(50)" & _
+            ")"
     End If
 
     If Not TableExists(TBL_PART_DASH) Then
-        Set td = CurrentDb.CreateTableDef(TBL_PART_DASH)
-        AddTextField td, "BasePart", 50
-        AddTextField td, "Dash", 50
-        AddBooleanField td, "Active"
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_PART_DASH & "] ([BasePart], [Dash])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_PART_DASH & "] (" & _
+            "[BasePart] TEXT(50), " & _
+            "[Dash] TEXT(50), " & _
+            "[Active] YESNO, " & _
+            "CONSTRAINT PK_tblPartDash PRIMARY KEY ([BasePart], [Dash])" & _
+            ")"
     End If
 
     If Not TableExists(TBL_PART_PL) Then
-        Set td = CurrentDb.CreateTableDef(TBL_PART_PL)
-        AddTextField td, "BasePart", 50
-        AddTextField td, "ProductLine", 100
-        AddBooleanField td, "UseFlag"
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_PART_PL & "] ([BasePart], [ProductLine])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_PART_PL & "] (" & _
+            "[BasePart] TEXT(50), " & _
+            "[ProductLine] TEXT(100), " & _
+            "[UseFlag] YESNO, " & _
+            "CONSTRAINT PK_tblPartPL PRIMARY KEY ([BasePart], [ProductLine])" & _
+            ")"
     End If
 
     If Not TableExists(TBL_OPERATION) Then
-        Set td = CurrentDb.CreateTableDef(TBL_OPERATION)
-        AddAutoField td, "OperationID"
-        AddTextField td, "BasePart", 50
-        AddLongField td, "OpSequence"
-        AddTextField td, "OpCode", 50
-        AddDoubleField td, "ImportedHours"
-        AddDoubleField td, "ImportedEx"
-        AddDoubleField td, "BatchSize"
-        AddDoubleField td, "ExportHours"
-        AddDoubleField td, "ExportEx"
-        AddTextField td, "EquipmentType", 100
-        AddBooleanField td, "UseExportHours"
-        AddBooleanField td, "UseExportEx"
-        AddTextField td, "MadeInFFA", 50
-        CurrentDb.TableDefs.Append td
-        CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_OPERATION & "] ([OperationID])", dbFailOnError
-        CurrentDb.Execute "CREATE UNIQUE INDEX ux_ops_part_seq ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence])", dbFailOnError
+        ExecuteDDL "CREATE TABLE [" & TBL_OPERATION & "] (" & _
+            "[OperationID] COUNTER CONSTRAINT PK_tblOperation PRIMARY KEY, " & _
+            "[BasePart] TEXT(50), " & _
+            "[OpSequence] LONG, " & _
+            "[OpCode] TEXT(50), " & _
+            "[ImportedHours] DOUBLE, " & _
+            "[ImportedEx] DOUBLE, " & _
+            "[BatchSize] DOUBLE, " & _
+            "[ExportHours] DOUBLE, " & _
+            "[ExportEx] DOUBLE, " & _
+            "[EquipmentType] TEXT(100), " & _
+            "[UseExportHours] YESNO, " & _
+            "[UseExportEx] YESNO, " & _
+            "[MadeInFFA] TEXT(50)" & _
+            ")"
+        ExecuteDDL "CREATE UNIQUE INDEX ux_ops_part_seq ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence])"
     End If
 End Sub
 
 Private Sub UpgradeExistingSchema()
-    If TableExists(TBL_PART) Then
-        AddTextFieldIfMissing TBL_PART, COL_SHEET_NAME, 50
-        CurrentDb.Execute "UPDATE [" & TBL_PART & "] SET [" & COL_SHEET_NAME & "] = [BasePart] " & _
-            "WHERE [" & COL_SHEET_NAME & "] IS NULL OR [" & COL_SHEET_NAME & "] = ''", dbFailOnError
-    End If
+    If Not TableExists(TBL_PART) Then Exit Sub
+    AddTextColumnIfMissing TBL_PART, COL_SHEET_NAME, 50
+    On Error Resume Next
+    CurrentDb.Execute "UPDATE [" & TBL_PART & "] SET [" & COL_SHEET_NAME & "] = [BasePart] " & _
+        "WHERE [" & COL_SHEET_NAME & "] IS NULL OR [" & COL_SHEET_NAME & "] = ''", dbFailOnError
+    On Error GoTo 0
+    MigrateLegacyMetaColumns
+End Sub
+
+Private Sub MigrateLegacyMetaColumns()
+    If Not TableExists(TBL_META) Then Exit Sub
+    If FieldExists(TBL_META, "MetaKey") Then Exit Sub
+    If Not FieldExists(TBL_META, "Key") Then Exit Sub
+    AddTextColumnIfMissing TBL_META, "MetaKey", 50
+    AddMemoColumnIfMissing TBL_META, "MetaValue"
+    On Error Resume Next
+    CurrentDb.Execute "UPDATE [" & TBL_META & "] SET [MetaKey]=[Key], [MetaValue]=[Value]", dbFailOnError
+    On Error GoTo 0
 End Sub
 
 Private Sub EnsureOptionalProcTmYldTable()
-    Dim td As DAO.TableDef
     If TableExists(TBL_PROC_TM_YLD) Then Exit Sub
-    Set td = CurrentDb.CreateTableDef(TBL_PROC_TM_YLD)
-    AddTextField td, COL_ASSEMBLY_NO_ALT, 50
-    AddLongField td, COL_OPER_SEQ
-    AddDoubleField td, COL_AVG_180
-    AddDoubleField td, COL_AVG_90
-    CurrentDb.TableDefs.Append td
-    CurrentDb.Execute "CREATE INDEX ix_pty_assy ON [" & TBL_PROC_TM_YLD & "] ([" & COL_ASSEMBLY_NO_ALT & "], [" & COL_OPER_SEQ & "])", dbFailOnError
+    ExecuteDDL "CREATE TABLE [" & TBL_PROC_TM_YLD & "] (" & _
+        "[" & COL_ASSEMBLY_NO_ALT & "] TEXT(50), " & _
+        "[" & COL_OPER_SEQ & "] LONG, " & _
+        "[" & COL_AVG_180 & "] DOUBLE, " & _
+        "[" & COL_AVG_90 & "] DOUBLE" & _
+        ")"
+    ExecuteDDL "CREATE INDEX ix_pty_assy ON [" & TBL_PROC_TM_YLD & "] ([" & COL_ASSEMBLY_NO_ALT & "], [" & COL_OPER_SEQ & "])"
 End Sub
 
 Private Sub SeedDefaultProductLines()
-    CurrentDb.Execute "INSERT INTO [" & TBL_PRODUCT_LINE & "] (ProductLine) VALUES ('Commercial')", dbFailOnError
-    CurrentDb.Execute "INSERT INTO [" & TBL_PRODUCT_LINE & "] (ProductLine) VALUES ('Military')", dbFailOnError
-    CurrentDb.Execute "INSERT INTO [" & TBL_PRODUCT_LINE & "] (ProductLine) VALUES ('Spare')", dbFailOnError
+    InsertProductLineIfMissing "Commercial"
+    InsertProductLineIfMissing "Military"
+    InsertProductLineIfMissing "Spare"
 End Sub
 
-Private Sub AddTextField(ByVal td As DAO.TableDef, ByVal fieldName As String, ByVal size As Long)
-    Dim fld As DAO.Field
-    Set fld = td.CreateField(fieldName, dbText, size)
-    fld.AllowZeroLength = True
-    fld.Required = False
-    td.Fields.Append fld
+Private Sub InsertProductLineIfMissing(ByVal productLine As String)
+    If IsNull(DLookup("ProductLine", TBL_PRODUCT_LINE, "ProductLine = " & SqlText(productLine))) Then
+        CurrentDb.Execute "INSERT INTO [" & TBL_PRODUCT_LINE & "] (ProductLine) VALUES (" & SqlText(productLine) & ")", dbFailOnError
+    End If
 End Sub
 
-Private Sub AddMemoField(ByVal td As DAO.TableDef, ByVal fieldName As String)
-    Dim fld As DAO.Field
-    Set fld = td.CreateField(fieldName, dbMemo)
-    fld.AllowZeroLength = True
-    td.Fields.Append fld
-End Sub
-
-Private Sub AddLongField(ByVal td As DAO.TableDef, ByVal fieldName As String)
-    td.Fields.Append td.CreateField(fieldName, dbLong)
-End Sub
-
-Private Sub AddDoubleField(ByVal td As DAO.TableDef, ByVal fieldName As String)
-    td.Fields.Append td.CreateField(fieldName, dbDouble)
-End Sub
-
-Private Sub AddBooleanField(ByVal td As DAO.TableDef, ByVal fieldName As String)
-    Dim fld As DAO.Field
-    Set fld = td.CreateField(fieldName, dbBoolean)
-    fld.DefaultValue = "False"
-    td.Fields.Append fld
-End Sub
-
-Private Sub AddDateField(ByVal td As DAO.TableDef, ByVal fieldName As String)
-    td.Fields.Append td.CreateField(fieldName, dbDate)
-End Sub
-
-Private Sub AddAutoField(ByVal td As DAO.TableDef, ByVal fieldName As String)
-    Dim fld As DAO.Field
-    Set fld = td.CreateField(fieldName, dbLong)
-    fld.Attributes = fld.Attributes Or dbAutoIncrField
-    td.Fields.Append fld
+Private Sub ExecuteDDL(ByVal sql As String)
+    On Error GoTo Fail
+    CurrentDb.Execute sql, dbFailOnError
+    Exit Sub
+Fail:
+    Select Case Err.Number
+        Case 3010, 3012, 3029, 3191, 3288
+            Err.Clear
+        Case Else
+            Err.Raise Err.Number, "ExecuteDDL", Err.Description & vbCrLf & vbCrLf & sql
+    End Select
 End Sub
 
 Public Sub EnsureQueries()
@@ -201,6 +235,8 @@ Public Sub EnsureQueries()
 End Sub
 
 Private Sub EnsureFilteredSourceQueries()
+    If Not LinkedSourceTablesReady() Then Exit Sub
+
     ReplaceQuery QRY_ROUTE_CARD_ACTIVE, _
         "SELECT rc.* FROM [" & TBL_ROUTE_CARD & "] AS rc " & _
         "INNER JOIN [" & TBL_ACTIVE_FILTER & "] AS f ON rc.[" & COL_ASSEMBLY_NO & "] = f.[" & COL_ASSEMBLY_NO_FILTER & "]"

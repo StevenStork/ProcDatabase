@@ -108,14 +108,35 @@ End Sub
 
 Public Sub SetMeta(ByVal metaKey As String, ByVal metaValue As String)
     Dim db As DAO.Database
+    Dim keyColumn As String
+    Dim valueColumn As String
     Set db = CurrentDb
-    db.Execute "DELETE FROM [" & TBL_META & "] WHERE [Key] = " & SqlText(metaKey), dbFailOnError
-    db.Execute "INSERT INTO [" & TBL_META & "] ([Key], [Value]) VALUES (" & _
+    keyColumn = MetaKeyColumnName()
+    valueColumn = MetaValueColumnName()
+    db.Execute "DELETE FROM [" & TBL_META & "] WHERE [" & keyColumn & "] = " & SqlText(metaKey), dbFailOnError
+    db.Execute "INSERT INTO [" & TBL_META & "] ([" & keyColumn & "], [" & valueColumn & "]) VALUES (" & _
         SqlText(metaKey) & ", " & SqlText(metaValue) & ")", dbFailOnError
 End Sub
 
 Public Function GetMeta(ByVal metaKey As String) As String
-    GetMeta = Nz(DLookup("[Value]", TBL_META, "[Key] = " & SqlText(metaKey)), vbNullString)
+    GetMeta = Nz(DLookup("[" & MetaValueColumnName() & "]", TBL_META, _
+        "[" & MetaKeyColumnName() & "] = " & SqlText(metaKey)), vbNullString)
+End Function
+
+Private Function MetaKeyColumnName() As String
+    If TableExists(TBL_META) And FieldExists(TBL_META, "MetaKey") Then
+        MetaKeyColumnName = "MetaKey"
+    Else
+        MetaKeyColumnName = "Key"
+    End If
+End Function
+
+Private Function MetaValueColumnName() As String
+    If TableExists(TBL_META) And FieldExists(TBL_META, "MetaValue") Then
+        MetaValueColumnName = "MetaValue"
+    Else
+        MetaValueColumnName = "Value"
+    End If
 End Function
 
 Public Function ValuesMatch(ByVal leftValue As String, ByVal rightValue As String) As Boolean
@@ -204,13 +225,33 @@ Public Function FieldExists(ByVal tableName As String, ByVal fieldName As String
 End Function
 
 Public Sub AddTextFieldIfMissing(ByVal tableName As String, ByVal fieldName As String, ByVal size As Long)
-    Dim td As DAO.TableDef
-    Dim fld As DAO.Field
+    AddTextColumnIfMissing tableName, fieldName, size
+End Sub
+
+Public Sub AddTextColumnIfMissing(ByVal tableName As String, ByVal fieldName As String, ByVal size As Long)
     If FieldExists(tableName, fieldName) Then Exit Sub
-    Set td = CurrentDb.TableDefs(tableName)
-    Set fld = td.CreateField(fieldName, dbText, size)
-    fld.AllowZeroLength = True
-    td.Fields.Append fld
+    On Error GoTo Fail
+    CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] TEXT(" & size & ")", dbFailOnError
+    Exit Sub
+Fail:
+    If Err.Number = 3029 Or Err.Number = 3191 Then
+        Err.Clear
+    Else
+        Err.Raise Err.Number, "AddTextColumnIfMissing", Err.Description
+    End If
+End Sub
+
+Public Sub AddMemoColumnIfMissing(ByVal tableName As String, ByVal fieldName As String)
+    If FieldExists(tableName, fieldName) Then Exit Sub
+    On Error GoTo Fail
+    CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] MEMO", dbFailOnError
+    Exit Sub
+Fail:
+    If Err.Number = 3029 Or Err.Number = 3191 Then
+        Err.Clear
+    Else
+        Err.Raise Err.Number, "AddMemoColumnIfMissing", Err.Description
+    End If
 End Sub
 
 Public Sub ApplyDaysRagFormat(ByVal daysControl As Control)
