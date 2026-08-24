@@ -64,9 +64,7 @@ Private Sub CreateHomeForm()
     frm.ScrollBars = 2
     frm.RecordSelectors = True
     frm.NavigationButtons = True
-    On Error Resume Next
-    frm.Section(acHeader).Visible = True
-    On Error GoTo 0
+    EnsureFormHeader frm
 
     AddHomeField frm, "BasePart", 120, 600, 1800
     AddHomeField frm, "Active", 2040, 600, 900, True
@@ -87,6 +85,26 @@ Private Sub CreateHomeForm()
 
     SaveAndRenameForm frm, FRM_HOME
     ApplyHomeDaysRagDesign FRM_HOME
+End Sub
+
+Private Sub EnsureFormHeader(ByVal frm As Form)
+    ' New forms from CreateForm() have Detail only; header buttons need Form Header.
+    On Error Resume Next
+    frm.Section(acHeader).Height = 1
+    If Err.Number = 2148 Then
+        Err.Clear
+        DoCmd.RunCommand acCmdFormHeaderAndFooter
+    End If
+    Err.Clear
+    On Error GoTo 0
+
+    frm.Section(acHeader).Height = 540
+    frm.Section(acHeader).Visible = True
+
+    On Error Resume Next
+    frm.Section(acFooter).Height = 0
+    frm.Section(acFooter).Visible = False
+    On Error GoTo 0
 End Sub
 
 Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, Optional ByVal isCheckBox As Boolean = False)
@@ -127,6 +145,7 @@ CleanUp:
     On Error Resume Next
     DoCmd.Close acForm, formName, acSaveYes
     On Error GoTo 0
+    ' RAG colors are optional; ignore design-time failures.
 End Sub
 
 Private Sub CreatePartDashSubform()
