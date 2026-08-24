@@ -43,6 +43,7 @@ Public Const FRM_REFERENCES As String = "frmReferences"
 Public Const SFRM_DASH As String = "sfrmPartDash"
 Public Const SFRM_PL As String = "sfrmPartProductLine"
 Public Const SFRM_OPS As String = "sfrmOperation"
+Public Const SFRM_HOME_LIST As String = "sfrmHomeList"
 
 Public Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
 Public Const COL_OPER_SEQ As String = "OPER SEQ"
@@ -64,6 +65,3 @@ Public Const COL_AVG_90 As String = "Avg 90 Day Ex"
 ' RAG thresholds (same as Excel Home sheet).
 Public Const RAG_YELLOW_DAYS As Long = 30
 Public Const RAG_RED_DAYS As Long = 90
-
-' Access RunCommand: View -> Form Header/Footer (acCmdFormHdrFtr).
-Public Const CMD_FORM_HDR_FTR As Long = 36

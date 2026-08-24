@@ -19,6 +19,8 @@ Public Sub EnsureUi()
     CreateOperationSubform
     UiSubStep = "CreatePartForm"
     CreatePartForm
+    UiSubStep = "CreateHomeListSubform"
+    CreateHomeListSubform
     UiSubStep = "CreateHomeForm"
     CreateHomeForm
     UiSubStep = "CreateReferencesForm"
@@ -50,13 +52,12 @@ Private Sub CreateSimpleTableForm(ByVal formName As String, ByVal tableName As S
     SaveAndRenameForm frm, formName
 End Sub
 
-Private Sub CreateHomeForm()
+Private Sub CreateHomeListSubform()
     Dim frm As Form
 
-    DeleteObjectIfExists acForm, FRM_HOME
+    DeleteObjectIfExists acForm, SFRM_HOME_LIST
     Set frm = CreateForm()
     frm.RecordSource = QRY_HOME
-    frm.Caption = "ProcDatabase Home"
     frm.DefaultView = 1
     frm.AllowAdditions = False
     frm.AllowDeletions = False
@@ -64,48 +65,47 @@ Private Sub CreateHomeForm()
     frm.ScrollBars = 2
     frm.RecordSelectors = True
     frm.NavigationButtons = True
-    EnsureFormHeader frm
 
-    AddHomeField frm, "BasePart", 120, 600, 1800
-    AddHomeField frm, "Active", 2040, 600, 900, True
-    AddHomeField frm, "StatusDate", 3000, 600, 1200
-    AddHomeField frm, "Days", 4320, 600, 720
+    AddHomeField frm, "BasePart", 120, 0, 1800
+    AddHomeField frm, "Active", 2040, 0, 900, True
+    AddHomeField frm, "StatusDate", 3000, 0, 1200
+    AddHomeField frm, "Days", 4320, 0, 720
     frm.Controls("txtDays").Enabled = False
-    AddHomeField frm, "Highlight", 5100, 600, 1200
-    AddHomeCombo frm, "HomeFFA", 6360, 600, 1440
-    AddHomeField frm, "Factories", 7860, 600, 1800
+    AddHomeField frm, "Highlight", 5100, 0, 1200
+    AddHomeCombo frm, "HomeFFA", 6360, 0, 1440
+    AddHomeField frm, "Factories", 7860, 0, 1800
     frm.Controls("txtFactories").Enabled = False
-    AddHomeField frm, COL_SHEET_NAME, 9720, 600, 1200
+    AddHomeField frm, COL_SHEET_NAME, 9720, 0, 1200
 
-    AddHeaderButton frm, "btnRefresh", "Refresh Linked Data", 120, 120, "=UiRefreshLinkedData()", 2160
-    AddHeaderButton frm, "btnOpenPart", "Open Part", 2400, 120, "=OpenSelectedPart()", 1440
-    AddHeaderButton frm, "btnSeedOps", "Seed Active Ops", 3960, 120, "=UiSeedActiveOps()", 1800
-    AddHeaderButton frm, "btnReferences", "References", 5880, 120, "=UiOpenReferences()", 1440
-    AddHeaderButton frm, "btnExport", "Export", 7440, 120, "=UiOpenExport()", 1200
-
-    SaveAndRenameForm frm, FRM_HOME
-    ApplyHomeDaysRagDesign FRM_HOME
+    SaveAndRenameForm frm, SFRM_HOME_LIST
+    ApplyHomeDaysRagDesign SFRM_HOME_LIST
 End Sub
 
-Private Sub EnsureFormHeader(ByVal frm As Form)
-    ' New forms from CreateForm() have Detail only; header buttons need Form Header.
-    On Error Resume Next
-    frm.Section(acHeader).Height = 1
-    If Err.Number = 2148 Then
-        Err.Clear
-        DoCmd.SelectObject acForm, frm.Name, True
-        DoCmd.RunCommand acCmdFormHeaderAndFooter
-    End If
-    Err.Clear
-    On Error GoTo 0
+Private Sub CreateHomeForm()
+    Dim frm As Form
+    Dim ctl As Control
 
-    frm.Section(acHeader).Height = 540
-    frm.Section(acHeader).Visible = True
+    DeleteObjectIfExists acForm, FRM_HOME
+    Set frm = CreateForm()
+    frm.RecordSource = vbNullString
+    frm.Caption = "ProcDatabase Home"
+    frm.DefaultView = 0
+    frm.AllowAdditions = False
+    frm.AllowDeletions = False
+    frm.AllowEdits = False
+    frm.ScrollBars = 0
 
-    On Error Resume Next
-    frm.Section(acFooter).Height = 0
-    frm.Section(acFooter).Visible = False
-    On Error GoTo 0
+    AddToolbarButton frm, "btnRefresh", "Refresh Linked Data", 120, 120, "=UiRefreshLinkedData()", 2160
+    AddToolbarButton frm, "btnOpenPart", "Open Part", 2400, 120, "=OpenSelectedPart()", 1440
+    AddToolbarButton frm, "btnSeedOps", "Seed Active Ops", 3960, 120, "=UiSeedActiveOps()", 1800
+    AddToolbarButton frm, "btnReferences", "References", 5880, 120, "=UiOpenReferences()", 1440
+    AddToolbarButton frm, "btnExport", "Export", 7440, 120, "=UiOpenExport()", 1200
+
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 120, 540, 11040, 4800)
+    ctl.Name = "subParts"
+    ctl.SourceObject = SFRM_HOME_LIST
+
+    SaveAndRenameForm frm, FRM_HOME
 End Sub
 
 Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, Optional ByVal isCheckBox As Boolean = False)
@@ -130,9 +130,9 @@ Private Sub AddHomeCombo(ByVal frm As Form, ByVal fieldName As String, ByVal lef
     ctl.LimitToList = False
 End Sub
 
-Private Sub AddHeaderButton(ByVal frm As Form, ByVal ctlName As String, ByVal caption As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal onClick As String, ByVal widthPos As Long)
+Private Sub AddToolbarButton(ByVal frm As Form, ByVal ctlName As String, ByVal caption As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal onClick As String, ByVal widthPos As Long)
     Dim ctl As Control
-    Set ctl = CreateControl(frm.Name, acCommandButton, acHeader, , , leftPos, topPos, widthPos, 360)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , leftPos, topPos, widthPos, 360)
     ctl.Name = ctlName
     ctl.Caption = caption
     ctl.OnClick = onClick
@@ -342,14 +342,16 @@ End Sub
 
 Public Function OpenSelectedPart() As Boolean
     Dim basePart As String
+    Dim listForm As Form
     On Error GoTo Fail
     If Not CurrentProject.AllForms(FRM_HOME).IsLoaded Then
         OpenSelectedPart = False
         Exit Function
     End If
-    basePart = CoerceText(Forms(FRM_HOME)!txtBasePart)
+    Set listForm = Forms(FRM_HOME)!subParts.Form
+    basePart = CoerceText(listForm!txtBasePart)
     If Len(basePart) = 0 Then
-        basePart = CoerceText(Forms(FRM_HOME)!BasePart)
+        basePart = CoerceText(listForm!BasePart)
     End If
     If Len(basePart) = 0 Then
         MsgBox "Select a part row first.", vbExclamation, "Open Part"
@@ -395,6 +397,11 @@ End Function
 Public Function UiRefreshLinkedData() As Boolean
     On Error GoTo Fail
     RefreshAll
+    On Error Resume Next
+    If CurrentProject.AllForms(FRM_HOME).IsLoaded Then
+        Forms(FRM_HOME)!subParts.Requery
+    End If
+    On Error GoTo Fail
     UiRefreshLinkedData = True
     Exit Function
 Fail:
