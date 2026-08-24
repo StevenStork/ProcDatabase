@@ -192,3 +192,50 @@ Public Sub SetDbProperty(ByVal propName As String, ByVal propType As Integer, By
     End If
     On Error GoTo 0
 End Sub
+
+Public Function FieldExists(ByVal tableName As String, ByVal fieldName As String) As Boolean
+    Dim td As DAO.TableDef
+    Dim fld As DAO.Field
+    On Error Resume Next
+    Set td = CurrentDb.TableDefs(tableName)
+    Set fld = td.Fields(fieldName)
+    FieldExists = (Err.Number = 0)
+    On Error GoTo 0
+End Function
+
+Public Sub AddTextFieldIfMissing(ByVal tableName As String, ByVal fieldName As String, ByVal size As Long)
+    Dim td As DAO.TableDef
+    Dim fld As DAO.Field
+    If FieldExists(tableName, fieldName) Then Exit Sub
+    Set td = CurrentDb.TableDefs(tableName)
+    Set fld = td.CreateField(fieldName, dbText, size)
+    fld.AllowZeroLength = True
+    td.Fields.Append fld
+End Sub
+
+Public Sub ApplyDaysRagFormat(ByVal daysControl As Control)
+    Dim fc As FormatCondition
+
+    On Error Resume Next
+    daysControl.FormatConditions.Delete
+    On Error GoTo 0
+
+    Set fc = daysControl.FormatConditions.Add(acExpression, , "Nz([txtDays],0)>" & RAG_RED_DAYS)
+    fc.BackColor = RGB(255, 199, 206)
+    fc.ForeColor = RGB(156, 0, 6)
+
+    Set fc = daysControl.FormatConditions.Add(acExpression, , _
+        "Nz([txtDays],0)>" & RAG_YELLOW_DAYS & " And Nz([txtDays],0)<=" & RAG_RED_DAYS)
+    fc.BackColor = RGB(255, 235, 156)
+    fc.ForeColor = RGB(156, 101, 0)
+End Sub
+
+Public Function DaysSinceDate(ByVal statusDate As Variant) As Variant
+    If IsError(statusDate) Or IsNull(statusDate) Or IsEmpty(statusDate) Then
+        DaysSinceDate = Null
+    ElseIf Not IsDate(statusDate) Then
+        DaysSinceDate = Null
+    Else
+        DaysSinceDate = DateDiff("d", CDate(statusDate), Date())
+    End If
+End Function

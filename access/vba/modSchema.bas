@@ -21,10 +21,10 @@ Public Sub EnsureSchema()
     EnsureMetaTable
     EnsureLookupTables
     EnsurePartTables
-    ' Source tables tblRouteCard / tblAssyStnd / tblOperComps are linked
-    ' by the user and must already exist. Only ensure optional local yield.
+    EnsureActiveAssemblyFilterTable
     EnsureOptionalProcTmYldTable
     EnsureLinkedSourceTables
+    UpgradeExistingSchema
 End Sub
 
 Private Sub EnsureMetaTable()
@@ -75,6 +75,7 @@ Private Sub EnsurePartTables()
         AddTextField td, "HomeFFA", 50
         AddDateField td, "StatusDate"
         AddTextField td, "Highlight", 255
+        AddTextField td, COL_SHEET_NAME, 50
         CurrentDb.TableDefs.Append td
         CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_PART & "] ([BasePart])", dbFailOnError
     End If
@@ -115,6 +116,14 @@ Private Sub EnsurePartTables()
         CurrentDb.TableDefs.Append td
         CurrentDb.Execute "CREATE UNIQUE INDEX PrimaryKey ON [" & TBL_OPERATION & "] ([OperationID])", dbFailOnError
         CurrentDb.Execute "CREATE UNIQUE INDEX ux_ops_part_seq ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence])", dbFailOnError
+    End If
+End Sub
+
+Private Sub UpgradeExistingSchema()
+    If TableExists(TBL_PART) Then
+        AddTextFieldIfMissing TBL_PART, COL_SHEET_NAME, 50
+        CurrentDb.Execute "UPDATE [" & TBL_PART & "] SET [" & COL_SHEET_NAME & "] = [BasePart] " & _
+            "WHERE [" & COL_SHEET_NAME & "] IS NULL OR [" & COL_SHEET_NAME & "] = ''", dbFailOnError
     End If
 End Sub
 
@@ -191,7 +200,7 @@ Public Sub EnsureQueries()
     ReplaceQuery QRY_HOME, _
         "SELECT p.BasePart, p.Active, p.StatusDate, " & _
         "IIf(p.StatusDate IS NULL, Null, DateDiff('d', p.StatusDate, Date())) AS Days, " & _
-        "p.Highlight, p.HomeFFA, f.Factory AS Factories " & _
+        "p.Highlight, p.HomeFFA, p.[" & COL_SHEET_NAME & "], f.Factory AS Factories " & _
         "FROM [" & TBL_PART & "] AS p LEFT JOIN [" & TBL_FFA & "] AS f ON p.HomeFFA = f.FFA"
 
     ReplaceQuery QRY_EXPORT, _
@@ -200,7 +209,24 @@ Public Sub EnsureQueries()
         "q.AvgHPU AS [Avg HPU], q.EquipmentType AS [Equipment Type], " & _
         "p.HomeFFA AS [Home FFA], q.MadeInFFA AS [Made In FFA] " & _
         "FROM [" & QRY_OPERATIONS & "] AS q INNER JOIN [" & TBL_PART & "] AS p ON q.BasePart = p.BasePart " & _
-        "WHERE p.Active <> 0"
+        "WHERE p.Active <> 0 AND EXISTS (" & _
+        "SELECT 1 FROM [" & TBL_PART_DASH & "] AS d WHERE d.BasePart = p.BasePart AND d.Active <> 0)"
+
+    EnsureFilteredSourceQueries
+End Sub
+
+Private Sub EnsureFilteredSourceQueries()
+    ReplaceQuery QRY_ROUTE_CARD_ACTIVE, _
+        "SELECT rc.* FROM [" & TBL_ROUTE_CARD & "] AS rc " & _
+        "INNER JOIN [" & TBL_ACTIVE_FILTER & "] AS f ON rc.[" & COL_ASSEMBLY_NO & "] = f.[" & COL_ASSEMBLY_NO_FILTER & "]"
+
+    ReplaceQuery QRY_ASSY_STND_ACTIVE, _
+        "SELECT st.* FROM [" & TBL_ASSY_STANDARD & "] AS st " & _
+        "INNER JOIN [" & TBL_ACTIVE_FILTER & "] AS f ON st.[" & COL_ASSEMBLY_NO & "] = f.[" & COL_ASSEMBLY_NO_FILTER & "]"
+
+    ReplaceQuery QRY_OPER_COMPS_ACTIVE, _
+        "SELECT oc.* FROM [" & TBL_OPER_COMPLETIONS & "] AS oc " & _
+        "INNER JOIN [" & TBL_ACTIVE_FILTER & "] AS f ON oc.[" & COL_ASSEMBLY_NO & "] = f.[" & COL_ASSEMBLY_NO_FILTER & "]"
 End Sub
 
 Public Sub EnsureStartup()

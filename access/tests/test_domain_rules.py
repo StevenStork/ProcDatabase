@@ -144,6 +144,40 @@ def test_catalog_from_assy_stnd():
     assert catalog["XYZ"] == {"010"}
 
 
+def active_assembly_numbers(parts: list[dict]) -> list[str]:
+    out: list[str] = []
+    for row in parts:
+        if row.get("Active") and row.get("DashActive"):
+            out.append(f"{row['BasePart']}-{row['Dash']}")
+    return sorted(out)
+
+
+def rag_band(days: int | None) -> str | None:
+    if days is None:
+        return None
+    if days > 90:
+        return "red"
+    if days > 30:
+        return "yellow"
+    return "green"
+
+
+def test_active_assembly_filter():
+    parts = [
+        {"BasePart": "ABC123", "Active": True, "Dash": "001", "DashActive": True},
+        {"BasePart": "ABC123", "Active": True, "Dash": "002", "DashActive": False},
+        {"BasePart": "XYZ", "Active": False, "Dash": "010", "DashActive": True},
+    ]
+    assert active_assembly_numbers(parts) == ["ABC123-001"]
+
+
+def test_rag_thresholds():
+    assert rag_band(None) is None
+    assert rag_band(10) == "green"
+    assert rag_band(31) == "yellow"
+    assert rag_band(91) == "red"
+
+
 def test_linked_table_names():
     # Contract with the user's Access file.
     assert {

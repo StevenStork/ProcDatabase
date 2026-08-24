@@ -23,6 +23,7 @@ Public Sub RefreshSourceData()
     End If
 
     RebuildCatalogFromStandards
+    SeedReferencesFromSources
     RequeryOpenForms
     SetMeta "LastRefresh", Format$(Now, "yyyy-mm-dd hh:nn:ss")
     DoCmd.Hourglass False

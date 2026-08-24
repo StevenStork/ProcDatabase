@@ -7,6 +7,7 @@ Option Explicit
 ' Existing override columns are preserved when an op row already exists.
 
 Public Sub SeedOperationsForPart(ByVal basePart As String)
+    RebuildActiveAssemblyFilter
     Dim db As DAO.Database
     Dim rsDash As DAO.Recordset
     Dim rsRoute As DAO.Recordset
@@ -27,7 +28,7 @@ Public Sub SeedOperationsForPart(ByVal basePart As String)
     Do Until rsDash.EOF
         assemblyNo = basePart & "-" & CoerceText(rsDash!Dash)
         sql = "SELECT [" & COL_OPER_SEQ & "], [" & COL_OPER_CODE & "], [" & COL_FFA & "] " & _
-            "FROM [" & TBL_ROUTE_CARD & "] WHERE [" & COL_ASSEMBLY_NO & "] = " & SqlText(assemblyNo) & _
+            "FROM [" & RouteCardSourceName() & "] WHERE [" & COL_ASSEMBLY_NO & "] = " & SqlText(assemblyNo) & _
             " ORDER BY [" & COL_OPER_SEQ & "]"
         Set rsRoute = db.OpenRecordset(sql, dbOpenSnapshot)
         Do Until rsRoute.EOF
@@ -48,6 +49,7 @@ Public Sub SeedOperationsForPart(ByVal basePart As String)
 End Sub
 
 Public Sub SeedOperationsForActiveParts()
+    RebuildActiveAssemblyFilter
     Dim rs As DAO.Recordset
     Set rs = CurrentDb.OpenRecordset("SELECT BasePart FROM [" & TBL_PART & "] WHERE Active <> 0", dbOpenSnapshot)
     Do Until rs.EOF

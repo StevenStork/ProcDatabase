@@ -1,68 +1,12 @@
--- ProcDatabase Access schema (reference).
--- Local tables are created at runtime by modSchema.EnsureSchema.
--- Source tables are linked by the user and are NOT created by VBA.
+-- Local tables (created by EnsureSchema)
+-- Linked: tblRouteCard, tblAssyStnd, tblOperComps (user-provided)
 
--- Linked source tables (already in the .accdb) ------------------------------
--- tblRouteCard   <- Route_Card
---   [ASSEMBLY NO] Text
---   [OPER SEQ] Integer
---   [OPER CODE] Text
---   [ASSEMBLY DESCRIPTION] Text
---   [OPER DESCRIPTION] Text
---   FFA Text
---   [ORG CODE] Text
---
--- tblAssyStnd    <- Assembly_Standard
---   [ASSEMBLY NO], [OPER SEQ], [OPER CODE], [ASSEMBLY DESCRIPTION],
---   [OPER DESCRIPTION], [RUN TIME (HOURS)] Decimal, FFA, [ORG CODE]
---
--- tblOperComps   <- Oper_Completions
---   [ASSEMBLY NO], [S/N], [OPER SEQ], [OPER CODE], [OPER DESCRIPTION],
---   [LABOR HPS (HOURS)] Decimal, QTY Integer, PROJECT, [PROGRAM FAMILY],
---   FFA, [ORG CODE]
+-- tblActiveAssemblyFilter (AssemblyNo TEXT PK)
+-- tblPart (+ SheetName TEXT legacy sheet label)
+-- tblPartDash, tblPartProductLine, tblOperation
+-- tblFFA, tblProductLine, tblEquipment, tblMeta
+-- tblProcTmYld (optional)
 
--- Local user / app tables ----------------------------------------------------
--- tblMeta (Key TEXT PK, Value MEMO)
--- tblFFA (FFA TEXT(50) PK, Factory TEXT(100))
--- tblProductLine (ProductLine TEXT(100) PK)
--- tblEquipment (Equipment TEXT(100) PK, OwningFFAs MEMO)
--- tblPart (
---   BasePart TEXT(50) PK,
---   Active YESNO,
---   HomeFFA TEXT(50),
---   StatusDate DATETIME,
---   Highlight TEXT(255)
--- )
--- tblPartDash (
---   BasePart TEXT(50),
---   Dash TEXT(50),
---   Active YESNO,
---   PK (BasePart, Dash)
--- )
--- tblPartProductLine (
---   BasePart TEXT(50),
---   ProductLine TEXT(100),
---   UseFlag YESNO,
---   PK (BasePart, ProductLine)
--- )
--- tblOperation (
---   OperationID AUTOINCREMENT PK,
---   BasePart TEXT(50),
---   OpSequence LONG,
---   OpCode TEXT(50),
---   ImportedHours DOUBLE,
---   ImportedEx DOUBLE,
---   BatchSize DOUBLE,
---   ExportHours DOUBLE,
---   ExportEx DOUBLE,
---   EquipmentType TEXT(100),
---   UseExportHours YESNO,
---   UseExportEx YESNO,
---   MadeInFFA TEXT(50),
---   unique (BasePart, OpSequence)
--- )
--- tblProcTmYld (optional local; or link your own)
---   [Assembly No] TEXT(50),
---   [OPER SEQ] LONG,
---   [Avg 180 Day Ex] DOUBLE,
---   [Avg 90 Day Ex] DOUBLE
+-- Filtered views (saved queries):
+-- qryRouteCardActive, qryAssyStndActive, qryOperCompsActive
+-- qryOperations, qryHomeParts, qryExportOps

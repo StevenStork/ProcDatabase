@@ -2,16 +2,17 @@ Attribute VB_Name = "modConstants"
 Option Compare Database
 Option Explicit
 
-Public Const SCHEMA_VERSION As String = "2"
+Public Const SCHEMA_VERSION As String = "3"
 
-' Linked tables already present in the Access file (from dataQueries / SQL).
+' Linked tables (user-created; SQL lives in same-folder dataQueries.xlsm).
 Public Const TBL_ROUTE_CARD As String = "tblRouteCard"
 Public Const TBL_ASSY_STANDARD As String = "tblAssyStnd"
 Public Const TBL_OPER_COMPLETIONS As String = "tblOperComps"
-
-' Optional linked or local yield table (created locally only if missing).
 Public Const TBL_PROC_TM_YLD As String = "tblProcTmYld"
 
+Public Const SOURCE_WORKBOOK_XLSM As String = "dataQueries.xlsm"
+
+' Local app tables.
 Public Const TBL_META As String = "tblMeta"
 Public Const TBL_FFA As String = "tblFFA"
 Public Const TBL_PRODUCT_LINE As String = "tblProductLine"
@@ -20,10 +21,17 @@ Public Const TBL_PART As String = "tblPart"
 Public Const TBL_PART_DASH As String = "tblPartDash"
 Public Const TBL_PART_PL As String = "tblPartProductLine"
 Public Const TBL_OPERATION As String = "tblOperation"
+Public Const TBL_ACTIVE_FILTER As String = "tblActiveAssemblyFilter"
+
+Public Const COL_SHEET_NAME As String = "SheetName"
+Public Const COL_ASSEMBLY_NO_FILTER As String = "AssemblyNo"
 
 Public Const QRY_HOME As String = "qryHomeParts"
 Public Const QRY_OPERATIONS As String = "qryOperations"
 Public Const QRY_EXPORT As String = "qryExportOps"
+Public Const QRY_ROUTE_CARD_ACTIVE As String = "qryRouteCardActive"
+Public Const QRY_ASSY_STND_ACTIVE As String = "qryAssyStndActive"
+Public Const QRY_OPER_COMPS_ACTIVE As String = "qryOperCompsActive"
 
 Public Const FRM_HOME As String = "frmHome"
 Public Const FRM_PART As String = "frmPart"
@@ -52,3 +60,7 @@ Public Const COL_PROGRAM_FAMILY As String = "PROGRAM FAMILY"
 Public Const COL_ASSEMBLY_NO_ALT As String = "Assembly No"
 Public Const COL_AVG_180 As String = "Avg 180 Day Ex"
 Public Const COL_AVG_90 As String = "Avg 90 Day Ex"
+
+' RAG thresholds (same as Excel Home sheet).
+Public Const RAG_YELLOW_DAYS As Long = 30
+Public Const RAG_RED_DAYS As Long = 90

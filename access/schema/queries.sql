@@ -1,45 +1,6 @@
--- Saved queries created by EnsureQueries. Access nested-query syntax.
-
--- qryOperations --------------------------------------------------------------
--- SELECT
---     q.*,
---     IIf(Nz(q.BatchSize,0)=0 OR q.ProcessHours IS NULL OR q.AvgEx IS NULL,
---         Null,
---         (q.ProcessHours * q.AvgEx) / q.BatchSize) AS AvgHPU
--- FROM (
---     SELECT
---         o.*,
---         IIf(o.UseExportHours <> 0 AND o.ExportHours IS NOT NULL,
---             o.ExportHours, o.ImportedHours) AS ProcessHours,
---         IIf(o.UseExportEx <> 0 AND o.ExportEx IS NOT NULL,
---             o.ExportEx, o.ImportedEx) AS AvgEx
---     FROM tblOperation AS o
--- ) AS q;
-
--- qryHomeParts ---------------------------------------------------------------
--- SELECT
---     p.BasePart,
---     p.Active,
---     p.StatusDate,
---     IIf(p.StatusDate IS NULL, Null, DateDiff("d", p.StatusDate, Date())) AS Days,
---     p.Highlight,
---     p.HomeFFA,
---     f.Factory AS Factories
--- FROM tblPart AS p
--- LEFT JOIN tblFFA AS f ON p.HomeFFA = f.FFA;
-
--- qryExportOps ---------------------------------------------------------------
--- SELECT
---     q.BasePart AS [Part Number],
---     q.OpSequence AS [Op Sequence],
---     q.OpCode AS [Op Code],
---     q.ProcessHours AS [Process Hours],
---     q.AvgEx AS [Avg Ex],
---     q.BatchSize AS [Batch Size],
---     q.AvgHPU AS [Avg HPU],
---     q.EquipmentType AS [Equipment Type],
---     p.HomeFFA AS [Home FFA],
---     q.MadeInFFA AS [Made In FFA]
--- FROM qryOperations AS q
--- INNER JOIN tblPart AS p ON q.BasePart = p.BasePart
--- WHERE p.Active <> 0;
+-- qryOperations: ProcessHours / AvgEx / AvgHPU (Excel W/X/Y)
+-- qryHomeParts: Days since StatusDate, factory lookup
+-- qryExportOps: 10 export columns; active part + active dash required
+-- qryRouteCardActive: tblRouteCard INNER JOIN tblActiveAssemblyFilter
+-- qryAssyStndActive: tblAssyStnd INNER JOIN tblActiveAssemblyFilter
+-- qryOperCompsActive: tblOperComps INNER JOIN tblActiveAssemblyFilter

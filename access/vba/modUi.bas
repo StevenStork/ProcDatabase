@@ -6,6 +6,7 @@ Option Explicit
 ' Safe to re-run: existing forms are deleted first.
 
 Public Sub EnsureUi()
+    CreateReferenceForms
     CreateHomeForm
     CreatePartDashSubform
     CreatePartProductLineSubform
@@ -15,26 +16,58 @@ Public Sub EnsureUi()
     CreateExportForm
 End Sub
 
+Private Sub CreateReferenceForms()
+    CreateSimpleTableForm FRM_FFA, TBL_FFA, "FFAs"
+    CreateSimpleTableForm FRM_PRODUCT_LINE, TBL_PRODUCT_LINE, "Product Lines"
+    CreateSimpleTableForm FRM_EQUIPMENT, TBL_EQUIPMENT, "Equipment"
+End Sub
+
+Private Sub CreateSimpleTableForm(ByVal formName As String, ByVal tableName As String, ByVal caption As String)
+    Dim frm As Form
+    DeleteObjectIfExists acForm, formName
+    Set frm = CreateForm()
+    frm.RecordSource = tableName
+    frm.Caption = caption
+    frm.DefaultView = 2
+    frm.AllowAdditions = True
+    frm.AllowDeletions = True
+    frm.AllowEdits = True
+    DoCmd.Close acForm, frm.Name, acSaveYes
+    RenameLastForm formName
+End Sub
+
 Private Sub CreateHomeForm()
     Dim frm As Form
     Dim ctl As Control
 
     DeleteObjectIfExists acForm, FRM_HOME
     Set frm = CreateForm()
-    frm.RecordSource = QRY_HOME
+    frm.RecordSource = TBL_PART
     frm.Caption = "ProcDatabase Home"
     frm.DefaultView = 2 ' Datasheet
     frm.AllowAdditions = False
     frm.AllowDeletions = False
+    frm.AllowEdits = True
 
     AddBoundTextBox frm, "BasePart", "Base Part", 0, 0, 2000
     AddBoundCheckBox frm, "Active", "Active", 2100, 0
     AddBoundTextBox frm, "StatusDate", "Date", 2600, 0, 1400
-    AddBoundTextBox frm, "Days", "Days", 4100, 0, 900
+
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 4100, 0, 900, 300)
+    ctl.Name = "txtDays"
+    ctl.ControlSource = "=IIf(IsNull([StatusDate]),Null,DateDiff(""d"",[StatusDate],Date()))"
+    ApplyDaysRagFormat ctl
+
     AddBoundTextBox frm, "Highlight", "Highlight", 5100, 0, 1600
     AddBoundComboBox frm, "HomeFFA", "Home FFA", 6800, 0, 1600, _
         "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
-    AddBoundTextBox frm, "Factories", "Factories", 8500, 0, 2000
+
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 8500, 0, 2000, 300)
+    ctl.Name = "txtFactories"
+    ctl.ControlSource = "=DLookup(""Factory"",""" & TBL_FFA & """,""FFA='"" & Replace(Nz([HomeFFA],""),""'"",""''"") & ""'"")"
+    ctl.Enabled = False
+
+    AddBoundTextBox frm, COL_SHEET_NAME, "Sheet", 10600, 0, 1600
 
     Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 0, 400, 1800, 360)
     ctl.Name = "btnRefresh"
@@ -179,17 +212,17 @@ Private Sub CreateReferencesForm()
     Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 200, 2000, 400)
     ctl.Name = "btnFFA"
     ctl.Caption = "Edit FFAs"
-    ctl.OnClick = "=UiOpenFfaTable()"
+    ctl.OnClick = "=UiOpenFfaForm()"
 
     Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 700, 2000, 400)
     ctl.Name = "btnPL"
     ctl.Caption = "Edit Product Lines"
-    ctl.OnClick = "=UiOpenProductLineTable()"
+    ctl.OnClick = "=UiOpenProductLineForm()"
 
     Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1200, 2000, 400)
     ctl.Name = "btnEquip"
     ctl.Caption = "Edit Equipment"
-    ctl.OnClick = "=UiOpenEquipmentTable()"
+    ctl.OnClick = "=UiOpenEquipmentForm()"
 
     DoCmd.Close acForm, frm.Name, acSaveYes
     RenameLastForm FRM_REFERENCES
@@ -362,31 +395,43 @@ Public Function UiCloseCurrentForm() As Boolean
     UiCloseCurrentForm = True
 End Function
 
-Public Function UiOpenFfaTable() As Boolean
+Public Function UiOpenFfaForm() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenTable TBL_FFA
-    UiOpenFfaTable = True
+    DoCmd.OpenForm FRM_FFA
+    UiOpenFfaForm = True
     Exit Function
 Fail:
-    UiOpenFfaTable = False
+    UiOpenFfaForm = False
+End Function
+
+Public Function UiOpenProductLineForm() As Boolean
+    On Error GoTo Fail
+    DoCmd.OpenForm FRM_PRODUCT_LINE
+    UiOpenProductLineForm = True
+    Exit Function
+Fail:
+    UiOpenProductLineForm = False
+End Function
+
+Public Function UiOpenEquipmentForm() As Boolean
+    On Error GoTo Fail
+    DoCmd.OpenForm FRM_EQUIPMENT
+    UiOpenEquipmentForm = True
+    Exit Function
+Fail:
+    UiOpenEquipmentForm = False
+End Function
+
+Public Function UiOpenFfaTable() As Boolean
+    UiOpenFfaTable = UiOpenFfaForm()
 End Function
 
 Public Function UiOpenProductLineTable() As Boolean
-    On Error GoTo Fail
-    DoCmd.OpenTable TBL_PRODUCT_LINE
-    UiOpenProductLineTable = True
-    Exit Function
-Fail:
-    UiOpenProductLineTable = False
+    UiOpenProductLineTable = UiOpenProductLineForm()
 End Function
 
 Public Function UiOpenEquipmentTable() As Boolean
-    On Error GoTo Fail
-    DoCmd.OpenTable TBL_EQUIPMENT
-    UiOpenEquipmentTable = True
-    Exit Function
-Fail:
-    UiOpenEquipmentTable = False
+    UiOpenEquipmentTable = UiOpenEquipmentForm()
 End Function
 
 Public Function UiExportFfa() As Boolean

@@ -1,21 +1,19 @@
 # ProcDatabase
 
-Excel VBA process database, plus an **Access** port that uses linked source tables.
+Excel VBA process database, plus an **Access** port using linked source tables.
 
-## Excel (existing)
+## Excel
 
-VBA modules live under [`vba/`](vba/). Import into the workbook as before.
+VBA modules: [`vba/`](vba/). Import into the workbook as before.
 
-## Access (new)
+## Access
 
-See [`access/README.md`](access/README.md).
+Full port: [`access/README.md`](access/README.md).
 
-Your `.accdb` already links:
+Your `.accdb` links:
 
-| Access table   | Source            |
-|----------------|-------------------|
-| `tblRouteCard` | Route_Card        |
-| `tblAssyStnd`  | Assembly_Standard |
-| `tblOperComps` | Oper_Completions  |
+- `tblRouteCard` ← Route_Card  
+- `tblAssyStnd` ← Assembly_Standard  
+- `tblOperComps` ← Oper_Completions  
 
-Import [`access/vba/*.bas`](access/vba/) into that database and run `BuildUi` from the Immediate window.
+SQL lives in same-folder `dataQueries.xlsm`. Import [`access/vba/*.bas`](access/vba/) and run `BootstrapProcDatabase`.
