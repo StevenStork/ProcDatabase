@@ -79,8 +79,9 @@ Private Sub CreateHomeForm()
     AddHeaderButton frm, "btnReferences", "References", 5880, 120, "=UiOpenReferences()", 1440
     AddHeaderButton frm, "btnExport", "Export", 7440, 120, "=UiOpenExport()", 1200
 
-    savedName = frm.Name
     SaveAndRenameForm frm, FRM_HOME
+    ApplyHomeDaysRagDesign FRM_HOME
+End Sub
 
 Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, Optional ByVal isCheckBox As Boolean = False)
     Dim ctl As Control

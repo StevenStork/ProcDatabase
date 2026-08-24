@@ -36,6 +36,13 @@ BuildUi
 4. Close/reopen (startup form `frmHome`) or run `StartProcDatabase`.
 5. **Refresh Linked Data** on Home (or `RefreshAll`).
 
+### If Bootstrap fails
+
+1. Re-import the latest `modUi.bas` and `modApp.bas`, then **Debug → Compile**.
+2. Run `BootstrapProcDatabase` again — the error now shows which step failed (for example `EnsureUi`).
+3. If form creation fails, run `BootstrapSchemaOnly`, then `BuildUi` separately.
+4. Delete any broken `Form*` objects in the Forms list before retrying.
+
 ## Workflow
 
 1. **Refresh Linked Data** — `RefreshLink` on linked tables → rebuild part/dash catalog from `tblAssyStnd` → seed FFAs/equipment → rebuild `tblActiveAssemblyFilter`.
