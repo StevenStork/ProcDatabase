@@ -5,15 +5,30 @@ Option Explicit
 ' Creates (or recreates) the Home / Part / reference / export forms.
 ' Safe to re-run: existing forms are deleted first.
 
+Public UiSubStep As String
+
 Public Sub EnsureUi()
+    On Error GoTo Fail
+    UiSubStep = "CreateReferenceForms"
     CreateReferenceForms
+    UiSubStep = "CreatePartDashSubform"
     CreatePartDashSubform
+    UiSubStep = "CreatePartProductLineSubform"
     CreatePartProductLineSubform
+    UiSubStep = "CreateOperationSubform"
     CreateOperationSubform
+    UiSubStep = "CreatePartForm"
     CreatePartForm
+    UiSubStep = "CreateHomeForm"
     CreateHomeForm
+    UiSubStep = "CreateReferencesForm"
     CreateReferencesForm
+    UiSubStep = "CreateExportForm"
     CreateExportForm
+    UiSubStep = vbNullString
+    Exit Sub
+Fail:
+    Err.Raise Err.Number, "EnsureUi." & UiSubStep, Err.Description
 End Sub
 
 Private Sub CreateReferenceForms()
@@ -37,11 +52,10 @@ End Sub
 
 Private Sub CreateHomeForm()
     Dim frm As Form
-    Dim ctl As Control
 
     DeleteObjectIfExists acForm, FRM_HOME
     Set frm = CreateForm()
-    frm.RecordSource = TBL_PART
+    frm.RecordSource = QRY_HOME
     frm.Caption = "ProcDatabase Home"
     frm.DefaultView = 1
     frm.AllowAdditions = False
@@ -57,20 +71,12 @@ Private Sub CreateHomeForm()
     AddHomeField frm, "BasePart", 120, 600, 1800
     AddHomeField frm, "Active", 2040, 600, 900, True
     AddHomeField frm, "StatusDate", 3000, 600, 1200
-
-    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 4320, 600, 720, 300)
-    ctl.Name = "txtDays"
-    ctl.ControlSource = "=IIf(IsNull([StatusDate]),Null,DateDiff(""d"",[StatusDate],Date()))"
-    ctl.Enabled = False
-
+    AddHomeField frm, "Days", 4320, 600, 720
+    frm.Controls("txtDays").Enabled = False
     AddHomeField frm, "Highlight", 5100, 600, 1200
     AddHomeCombo frm, "HomeFFA", 6360, 600, 1440
-
-    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 7860, 600, 1800, 300)
-    ctl.Name = "txtFactories"
-    ctl.ControlSource = "=DLookup(""Factory"",""" & TBL_FFA & """,""FFA='"" & Replace(Nz([HomeFFA],""),""'"",""''"") & ""'"")"
-    ctl.Enabled = False
-
+    AddHomeField frm, "Factories", 7860, 600, 1800
+    frm.Controls("txtFactories").Enabled = False
     AddHomeField frm, COL_SHEET_NAME, 9720, 600, 1200
 
     AddHeaderButton frm, "btnRefresh", "Refresh Linked Data", 120, 120, "=UiRefreshLinkedData()", 2160

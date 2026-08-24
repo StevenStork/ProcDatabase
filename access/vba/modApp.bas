@@ -31,6 +31,9 @@ Fail:
     If BootstrapStep = "EnsureSchema" And Len(SchemaSubStep) > 0 Then
         detail = detail & vbCrLf & vbCrLf & "Schema sub-step: " & SchemaSubStep
     End If
+    If BootstrapStep = "EnsureUi" And Len(UiSubStep) > 0 Then
+        detail = detail & vbCrLf & vbCrLf & "UI sub-step: " & UiSubStep
+    End If
     MsgBox "Bootstrap failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & detail, vbCritical, "ProcDatabase"
 End Sub
 
@@ -82,7 +85,12 @@ Public Sub BuildUi()
     MsgBox "Schema, queries, and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
     Exit Sub
 Fail:
-    MsgBox "UI build failed: " & Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
+    Dim uiDetail As String
+    uiDetail = Err.Description & " (" & Err.Number & ")"
+    If Len(UiSubStep) > 0 Then
+        uiDetail = uiDetail & vbCrLf & vbCrLf & "UI sub-step: " & UiSubStep
+    End If
+    MsgBox "UI build failed: " & uiDetail, vbCritical, "ProcDatabase"
 End Sub
 
 Public Sub RebuildFilterOnly()
