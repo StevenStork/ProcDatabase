@@ -150,7 +150,9 @@ End Sub
 
 Private Sub UpgradeExistingSchema()
     If Not TableExists(TBL_PART) Then Exit Sub
-    AddTextColumnIfMissing TBL_PART, COL_SHEET_NAME, 50
+    If Not FieldExists(TBL_PART, COL_SHEET_NAME) Then
+        AddTextColumnIfMissing TBL_PART, COL_SHEET_NAME, 50
+    End If
     On Error Resume Next
     CurrentDb.Execute "UPDATE [" & TBL_PART & "] SET [" & COL_SHEET_NAME & "] = [BasePart] " & _
         "WHERE [" & COL_SHEET_NAME & "] IS NULL OR [" & COL_SHEET_NAME & "] = ''", dbFailOnError

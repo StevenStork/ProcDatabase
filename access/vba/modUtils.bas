@@ -217,11 +217,19 @@ End Sub
 Public Function FieldExists(ByVal tableName As String, ByVal fieldName As String) As Boolean
     Dim td As DAO.TableDef
     Dim fld As DAO.Field
-    On Error Resume Next
+
+    On Error GoTo Fail
     Set td = CurrentDb.TableDefs(tableName)
-    Set fld = td.Fields(fieldName)
-    FieldExists = (Err.Number = 0)
-    On Error GoTo 0
+    For Each fld In td.Fields
+        If StrComp(fld.Name, fieldName, vbTextCompare) = 0 Then
+            FieldExists = True
+            Exit Function
+        End If
+    Next fld
+    FieldExists = False
+    Exit Function
+Fail:
+    FieldExists = False
 End Function
 
 Public Sub AddTextFieldIfMissing(ByVal tableName As String, ByVal fieldName As String, ByVal size As Long)
@@ -234,7 +242,7 @@ Public Sub AddTextColumnIfMissing(ByVal tableName As String, ByVal fieldName As 
     CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] TEXT(" & size & ")", dbFailOnError
     Exit Sub
 Fail:
-    If Err.Number = 3029 Or Err.Number = 3191 Then
+    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Then
         Err.Clear
     Else
         Err.Raise Err.Number, "AddTextColumnIfMissing", Err.Description
@@ -247,7 +255,7 @@ Public Sub AddMemoColumnIfMissing(ByVal tableName As String, ByVal fieldName As 
     CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] MEMO", dbFailOnError
     Exit Sub
 Fail:
-    If Err.Number = 3029 Or Err.Number = 3191 Then
+    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Then
         Err.Clear
     Else
         Err.Raise Err.Number, "AddMemoColumnIfMissing", Err.Description
