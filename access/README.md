@@ -20,6 +20,7 @@ See [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) for column lists and refresh 
 
 1. Open your `.accdb` with the three linked tables.
 2. Alt+F11 → **Import File** → import every module in [`vba/`](vba/).
+   - If re-importing after an update, **delete the old ProcDatabase modules first** (same names under *Modules*). Duplicate imports cause **Ambiguous name** compile errors.
 3. Immediate window (`Ctrl+G`):
 
 ```vb
