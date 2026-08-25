@@ -34,22 +34,43 @@ Fail:
 End Sub
 
 Private Sub CreateReferenceForms()
-    CreateSimpleTableForm FRM_FFA, TBL_FFA, "FFAs"
-    CreateSimpleTableForm FRM_PRODUCT_LINE, TBL_PRODUCT_LINE, "Product Lines"
-    CreateSimpleTableForm FRM_EQUIPMENT, TBL_EQUIPMENT, "Equipment"
-End Sub
-
-Private Sub CreateSimpleTableForm(ByVal formName As String, ByVal tableName As String, ByVal caption As String)
     Dim frm As Form
-    DeleteObjectIfExists acForm, formName
+
+    ' Datasheet view only shows bound controls — empty forms look blank.
+    DeleteObjectIfExists acForm, FRM_FFA
     Set frm = CreateForm()
-    frm.RecordSource = tableName
-    frm.Caption = caption
+    frm.RecordSource = TBL_FFA
+    frm.Caption = "FFAs"
     frm.DefaultView = 2
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
-    SaveAndRenameForm frm, formName
+    AddDetailField frm, "FFA", 0, 0, 1800
+    AddDetailField frm, "Factory", 1900, 0, 3600
+    SaveAndRenameForm frm, FRM_FFA
+
+    DeleteObjectIfExists acForm, FRM_PRODUCT_LINE
+    Set frm = CreateForm()
+    frm.RecordSource = TBL_PRODUCT_LINE
+    frm.Caption = "Product Lines"
+    frm.DefaultView = 2
+    frm.AllowAdditions = True
+    frm.AllowDeletions = True
+    frm.AllowEdits = True
+    AddDetailField frm, "ProductLine", 0, 0, 3600
+    SaveAndRenameForm frm, FRM_PRODUCT_LINE
+
+    DeleteObjectIfExists acForm, FRM_EQUIPMENT
+    Set frm = CreateForm()
+    frm.RecordSource = TBL_EQUIPMENT
+    frm.Caption = "Equipment"
+    frm.DefaultView = 2
+    frm.AllowAdditions = True
+    frm.AllowDeletions = True
+    frm.AllowEdits = True
+    AddDetailField frm, "Equipment", 0, 0, 3600
+    AddDetailField frm, "OwningFFAs", 3700, 0, 4800
+    SaveAndRenameForm frm, FRM_EQUIPMENT
 End Sub
 
 Private Sub CreateHomeListSubform()
