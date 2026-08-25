@@ -3,7 +3,7 @@ Option Compare Database
 Option Explicit
 
 ' Seeds lookup tables from linked source data.
-' Equipment is user-maintained (name + FFA assignments) — not seeded from sources.
+' Equipment is user-maintained (name, type, and FFA assignments) — not seeded from sources.
 
 Public Sub SeedReferencesFromSources()
     SeedFfasFromStandards

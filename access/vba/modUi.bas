@@ -104,8 +104,9 @@ Private Sub CreateEquipmentForm()
     frm.AllowEdits = True
 
     AddDetailField frm, "Equipment", 1200, 200, 3600
+    AddDetailField frm, COL_EQUIP_TYPE, 1200, 600, 3600
 
-    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 700, 4200, 3000)
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 1100, 4200, 3000)
     ctl.Name = "subEquipmentFfas"
     ctl.SourceObject = SFRM_EQUIP_FFA
     ctl.LinkMasterFields = "Equipment"

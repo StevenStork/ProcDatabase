@@ -94,11 +94,13 @@ Private Sub EnsureLookupTables()
 
     If Not TableExists(TBL_EQUIPMENT) Then
         ExecuteDDL "CREATE TABLE [" & TBL_EQUIPMENT & "] (" & _
-            "[Equipment] TEXT(100) CONSTRAINT PK_tblEquipment PRIMARY KEY" & _
+            "[Equipment] TEXT(100) CONSTRAINT PK_tblEquipment PRIMARY KEY, " & _
+            "[" & COL_EQUIP_TYPE & "] TEXT(100)" & _
             ")"
     End If
 
     EnsureEquipmentFfaTable
+    EnsureEquipmentTypeColumn
 End Sub
 
 Public Sub EnsureEquipmentFfaTable()
@@ -108,6 +110,11 @@ Public Sub EnsureEquipmentFfaTable()
         "[FFA] TEXT(50), " & _
         "CONSTRAINT PK_tblEquipmentFFA PRIMARY KEY ([Equipment], [FFA])" & _
         ")"
+End Sub
+
+Public Sub EnsureEquipmentTypeColumn()
+    If Not TableExists(TBL_EQUIPMENT) Then Exit Sub
+    AddTextColumnIfMissing TBL_EQUIPMENT, COL_EQUIP_TYPE, 100
 End Sub
 
 Private Sub EnsurePartTables()
@@ -167,6 +174,7 @@ Private Sub UpgradeExistingSchema()
     MigratePartColumns
     EnsureProductLinePlCodeColumn
     EnsureEquipmentFfaTable
+    EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
     MigrateLegacyMetaColumns
 End Sub
@@ -282,6 +290,7 @@ Public Sub EnsureQueries()
     MigratePartColumns
     EnsureProductLinePlCodeColumn
     EnsureEquipmentFfaTable
+    EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
 
     ReplaceQuery QRY_OPERATIONS, _

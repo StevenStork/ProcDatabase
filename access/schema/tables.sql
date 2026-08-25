@@ -4,7 +4,7 @@
 -- tblActiveAssemblyFilter (AssemblyNo TEXT PK) — filled from tblRCCP
 -- tblPart (BasePart, Active, HomeFFA, StatusDate, Notes)
 -- tblPartDash, tblPartProductLine, tblOperation
--- tblFFA, tblProductLine (+ PL Code), tblEquipment, tblEquipmentFFA, tblMeta
+-- tblFFA, tblProductLine (+ PL Code), tblEquipment (+ Equipment Type), tblEquipmentFFA, tblMeta
 -- tblProcTmYld (optional)
 
 -- Filtered views (saved queries):
