@@ -72,8 +72,8 @@ Public Sub RebuildCatalogFromStandards()
     db.Execute "DELETE FROM [" & TBL_PART & "]", dbFailOnError
 
     For Each partKey In parts.Keys
-        db.Execute "INSERT INTO [" & TBL_PART & "] (BasePart, Active, HomeFFA, StatusDate, Highlight, [" & COL_SHEET_NAME & "]) VALUES (" & _
-            SqlText(CStr(partKey)) & ", False, Null, Null, Null, " & SqlText(CStr(partKey)) & ")", dbFailOnError
+        db.Execute "INSERT INTO [" & TBL_PART & "] (BasePart, Active, HomeFFA, StatusDate, [" & COL_NOTES & "]) VALUES (" & _
+            SqlText(CStr(partKey)) & ", False, Null, Null, Null)", dbFailOnError
         RestorePartState db, CStr(partKey), savedParts
         If dashes.Exists(partKey) Then
             For Each dashKey In dashes(partKey).Keys
@@ -92,6 +92,7 @@ Private Function SnapshotParts() As Object
     Dim rs As DAO.Recordset
     Dim map As Object
     Dim key As String
+    Dim notes As String
     Set map = CreateObject("Scripting.Dictionary")
     map.CompareMode = vbTextCompare
     If Not TableExists(TBL_PART) Then
@@ -102,18 +103,18 @@ Private Function SnapshotParts() As Object
     Do Until rs.EOF
         key = CoerceText(rs!BasePart)
         If Len(key) > 0 Then
-            Dim sheetName As String
-            If FieldExists(TBL_PART, COL_SHEET_NAME) Then
-                sheetName = CoerceText(Nz(rs.Fields(COL_SHEET_NAME).Value, key))
+            If FieldExists(TBL_PART, COL_NOTES) Then
+                notes = CoerceText(rs.Fields(COL_NOTES).Value)
+            ElseIf FieldExists(TBL_PART, "Highlight") Then
+                notes = CoerceText(rs.Fields("Highlight").Value)
             Else
-                sheetName = key
+                notes = vbNullString
             End If
             map.Add key, Array( _
                 CBool(Nz(rs!Active, False)), _
                 CoerceText(rs!HomeFFA), _
                 rs!StatusDate, _
-                CoerceText(rs!Highlight), _
-                sheetName)
+                notes)
         End If
         rs.MoveNext
     Loop
@@ -151,8 +152,7 @@ Private Sub RestorePartState(ByVal db As DAO.Database, ByVal basePart As String,
         "Active = " & SqlBool(state(0)) & ", " & _
         "HomeFFA = " & SqlNullableText(CStr(state(1))) & ", " & _
         "StatusDate = " & SqlNullableDate(state(2)) & ", " & _
-        "Highlight = " & SqlNullableText(CStr(state(3))) & ", " & _
-        "[" & COL_SHEET_NAME & "] = " & SqlNullableText(CStr(state(4))) & " " & _
+        "[" & COL_NOTES & "] = " & SqlNullableText(CStr(state(3))) & " " & _
         "WHERE BasePart = " & SqlText(basePart), dbFailOnError
 End Sub
 

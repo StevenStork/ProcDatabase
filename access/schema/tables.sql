@@ -2,7 +2,7 @@
 -- Linked: tblRouteCard, tblAssyStnd, tblOperComps (user-provided)
 
 -- tblActiveAssemblyFilter (AssemblyNo TEXT PK)
--- tblPart (+ SheetName TEXT legacy sheet label)
+-- tblPart (BasePart, Active, HomeFFA, StatusDate, Notes)
 -- tblPartDash, tblPartProductLine, tblOperation
 -- tblFFA, tblProductLine, tblEquipment, tblMeta
 -- tblProcTmYld (optional)

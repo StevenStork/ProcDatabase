@@ -199,7 +199,7 @@ Public Sub DeleteObjectIfExists(ByVal objectType As AcObjectType, ByVal objectNa
     On Error GoTo 0
 End Sub
 
-' Close open forms so schema DDL / form rebuild can lock local tables (avoids 3211).
+' Close open forms/tables/queries so schema DDL / form rebuild can lock tables (avoids 3211).
 Public Sub CloseProcDataForms()
     Dim safety As Long
     On Error Resume Next
@@ -214,6 +214,14 @@ Public Sub CloseProcDataForms()
     DoCmd.Close acForm, SFRM_DASH, acSaveNo
     DoCmd.Close acForm, SFRM_PL, acSaveNo
     DoCmd.Close acForm, SFRM_OPS, acSaveNo
+    ' Datasheet views also hold locks and are not in the Forms collection.
+    DoCmd.Close acTable, TBL_PART, acSaveNo
+    DoCmd.Close acTable, TBL_PART_DASH, acSaveNo
+    DoCmd.Close acTable, TBL_PART_PL, acSaveNo
+    DoCmd.Close acTable, TBL_OPERATION, acSaveNo
+    DoCmd.Close acQuery, QRY_HOME, acSaveNo
+    DoCmd.Close acQuery, QRY_OPERATIONS, acSaveNo
+    DoCmd.Close acQuery, QRY_EXPORT, acSaveNo
     ' Also clear any leftover Design-view FormN windows from a prior CreateForm.
     safety = 0
     Do While Forms.Count > 0 And safety < 50
@@ -288,6 +296,20 @@ Fail:
         Err.Clear
     Else
         Err.Raise Err.Number, "AddMemoColumnIfMissing", Err.Description
+    End If
+End Sub
+
+Public Sub DropColumnIfExists(ByVal tableName As String, ByVal fieldName As String)
+    If Not FieldExists(tableName, fieldName) Then Exit Sub
+    On Error GoTo Fail
+    CurrentDb.Execute "ALTER TABLE [" & tableName & "] DROP COLUMN [" & fieldName & "]", dbFailOnError
+    Exit Sub
+Fail:
+    ' 3211 = locked; ignore so UI rebuild can continue.
+    If Err.Number = 3211 Or Err.Number = 3029 Or Err.Number = 3191 Then
+        Err.Clear
+    Else
+        Err.Raise Err.Number, "DropColumnIfExists", Err.Description
     End If
 End Sub
 

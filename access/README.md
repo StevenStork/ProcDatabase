@@ -47,7 +47,7 @@ BuildUi
 ## Workflow
 
 1. **Refresh Linked Data** — `RefreshLink` on linked tables → rebuild part/dash catalog from `tblAssyStnd` → seed FFAs/equipment → rebuild `tblActiveAssemblyFilter`.
-2. Mark parts **Active** on Home; set **Date**, **Home FFA**, **Highlight**.
+2. Mark parts **Active** on Home; set **Date**, **Home FFA**, **Notes**.
 3. **Open Part** — activate dash conditions and product lines; **Seed Ops** from route card.
 4. Edit ops (batch, export overrides); **Process Hours** / **Avg Ex** / **Avg HPU** follow Excel W/X/Y rules.
 5. **Export** — FFA, product line, or all to `.xlsx` beside the database.

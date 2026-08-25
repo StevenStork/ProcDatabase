@@ -93,11 +93,10 @@ Private Sub CreateHomeListSubform()
     AddHomeField frm, "StatusDate", 3000, 0, 1200
     AddHomeField frm, "Days", 4320, 0, 720
     frm.Controls("txtDays").Enabled = False
-    AddHomeField frm, "Highlight", 5100, 0, 1200
-    AddHomeCombo frm, "HomeFFA", 6360, 0, 1440
-    AddHomeField frm, "Factories", 7860, 0, 1800
+    AddHomeField frm, COL_NOTES, 5100, 0, 2400
+    AddHomeCombo frm, "HomeFFA", 7560, 0, 1440
+    AddHomeField frm, "Factories", 9060, 0, 1800
     frm.Controls("txtFactories").Enabled = False
-    AddHomeField frm, COL_SHEET_NAME, 9720, 0, 1200
 
     SaveAndRenameForm frm, SFRM_HOME_LIST
     ApplyHomeDaysRagDesign SFRM_HOME_LIST

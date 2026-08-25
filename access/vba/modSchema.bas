@@ -105,8 +105,7 @@ Private Sub EnsurePartTables()
             "[Active] YESNO, " & _
             "[HomeFFA] TEXT(50), " & _
             "[StatusDate] DATETIME, " & _
-            "[Highlight] TEXT(255), " & _
-            "[" & COL_SHEET_NAME & "] TEXT(50)" & _
+            "[" & COL_NOTES & "] TEXT(255)" & _
             ")"
     End If
 
@@ -153,15 +152,28 @@ Private Sub UpgradeExistingSchema()
     On Error Resume Next
     CurrentDb.TableDefs.Refresh
     On Error GoTo 0
-    ' ALTER needs exclusive lock; skip quietly if Home/other UI still holds tblPart.
-    If Not FieldExists(TBL_PART, COL_SHEET_NAME) Then
-        AddTextColumnIfMissing TBL_PART, COL_SHEET_NAME, 50
-    End If
-    On Error Resume Next
-    CurrentDb.Execute "UPDATE [" & TBL_PART & "] SET [" & COL_SHEET_NAME & "] = [BasePart] " & _
-        "WHERE [" & COL_SHEET_NAME & "] IS NULL OR [" & COL_SHEET_NAME & "] = ''", dbFailOnError
-    On Error GoTo 0
+    MigratePartColumns
     MigrateLegacyMetaColumns
+End Sub
+
+' Highlight -> Notes; drop unused SheetName. Safe to re-run.
+Public Sub MigratePartColumns()
+    Dim db As DAO.Database
+    If Not TableExists(TBL_PART) Then Exit Sub
+    Set db = CurrentDb
+
+    If Not FieldExists(TBL_PART, COL_NOTES) Then
+        AddTextColumnIfMissing TBL_PART, COL_NOTES, 255
+        If FieldExists(TBL_PART, "Highlight") Then
+            On Error Resume Next
+            db.Execute "UPDATE [" & TBL_PART & "] SET [" & COL_NOTES & "] = [Highlight] " & _
+                "WHERE [" & COL_NOTES & "] IS NULL OR [" & COL_NOTES & "] = ''", dbFailOnError
+            On Error GoTo 0
+        End If
+    End If
+
+    DropColumnIfExists TBL_PART, "Highlight"
+    DropColumnIfExists TBL_PART, "SheetName"
 End Sub
 
 Private Sub MigrateLegacyMetaColumns()
@@ -206,6 +218,8 @@ Fail:
 End Sub
 
 Public Sub EnsureQueries()
+    MigratePartColumns
+
     ReplaceQuery QRY_OPERATIONS, _
         "SELECT q.*, " & _
         "IIf(Nz(q.BatchSize,0)=0 OR q.ProcessHours IS NULL OR q.AvgEx IS NULL, Null, (q.ProcessHours * q.AvgEx) / q.BatchSize) AS AvgHPU " & _
@@ -219,7 +233,7 @@ Public Sub EnsureQueries()
     ReplaceQuery QRY_HOME, _
         "SELECT p.BasePart, p.Active, p.StatusDate, " & _
         "IIf(p.StatusDate IS NULL, Null, DateDiff('d', p.StatusDate, Date())) AS Days, " & _
-        "p.Highlight, p.HomeFFA, p.[" & COL_SHEET_NAME & "], f.Factory AS Factories " & _
+        "p.[" & COL_NOTES & "], p.HomeFFA, f.Factory AS Factories " & _
         "FROM [" & TBL_PART & "] AS p LEFT JOIN [" & TBL_FFA & "] AS f ON p.HomeFFA = f.FFA"
 
     ReplaceQuery QRY_EXPORT, _
