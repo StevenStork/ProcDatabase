@@ -221,6 +221,7 @@ Public Sub CloseProcDataForms()
         safety = safety + 1
     Loop
     DoEvents
+    DBEngine.Idle dbRefreshCache
     On Error GoTo 0
 End Sub
 
@@ -269,12 +270,9 @@ Public Sub AddTextColumnIfMissing(ByVal tableName As String, ByVal fieldName As 
     CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] TEXT(" & size & ")", dbFailOnError
     Exit Sub
 Fail:
-    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Then
+    ' 3380 = field already exists; 3211 = table locked by open form — skip and continue.
+    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Or Err.Number = 3211 Then
         Err.Clear
-    ElseIf Err.Number = 3211 Then
-        Err.Raise Err.Number, "AddTextColumnIfMissing", _
-            Err.Description & vbCrLf & vbCrLf & _
-            "Close all open forms (especially Home) and run BuildUi / Bootstrap again."
     Else
         Err.Raise Err.Number, "AddTextColumnIfMissing", Err.Description
     End If
@@ -286,7 +284,7 @@ Public Sub AddMemoColumnIfMissing(ByVal tableName As String, ByVal fieldName As 
     CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] MEMO", dbFailOnError
     Exit Sub
 Fail:
-    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Then
+    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Or Err.Number = 3211 Then
         Err.Clear
     Else
         Err.Raise Err.Number, "AddMemoColumnIfMissing", Err.Description

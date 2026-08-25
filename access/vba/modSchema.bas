@@ -150,6 +150,10 @@ End Sub
 
 Private Sub UpgradeExistingSchema()
     If Not TableExists(TBL_PART) Then Exit Sub
+    On Error Resume Next
+    CurrentDb.TableDefs.Refresh
+    On Error GoTo 0
+    ' ALTER needs exclusive lock; skip quietly if Home/other UI still holds tblPart.
     If Not FieldExists(TBL_PART, COL_SHEET_NAME) Then
         AddTextColumnIfMissing TBL_PART, COL_SHEET_NAME, 50
     End If

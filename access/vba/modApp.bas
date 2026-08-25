@@ -87,15 +87,28 @@ End Sub
 
 Public Sub BuildUi()
     On Error GoTo Fail
+    Dim buildStep As String
+
+    ' Rebuild forms/queries only. Skip EnsureSchema — ALTER TABLE on tblPart
+    ' needs an exclusive lock and fails (3211) while Home/startup UI has it open.
+    buildStep = "CloseForms"
+    On Error Resume Next
+    SetDbProperty "StartupForm", dbText, vbNullString
+    On Error GoTo Fail
     CloseProcDataForms
-    EnsureSchema
+    DBEngine.Idle dbRefreshCache
+    DoEvents
+
+    buildStep = "EnsureQueries"
     EnsureQueries
+    buildStep = "EnsureUi"
     EnsureUi
+    buildStep = "EnsureStartup"
     EnsureStartup
     On Error Resume Next
     DoCmd.OpenForm FRM_HOME
     On Error GoTo Fail
-    MsgBox "Schema, queries, and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
+    MsgBox "Queries and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
     Exit Sub
 Fail:
     Dim uiDetail As String
@@ -103,7 +116,7 @@ Fail:
     If Len(UiSubStep) > 0 Then
         uiDetail = uiDetail & vbCrLf & vbCrLf & "UI sub-step: " & UiSubStep
     End If
-    MsgBox "UI build failed: " & uiDetail, vbCritical, "ProcDatabase"
+    MsgBox "UI build failed during " & buildStep & ":" & vbCrLf & vbCrLf & uiDetail, vbCritical, "ProcDatabase"
 End Sub
 
 Public Sub RebuildFilterOnly()
