@@ -22,9 +22,10 @@ Public Sub RefreshSourceData()
         End If
     End If
 
+    ' Catalog DELETE/INSERT invalidates open bound forms — close first.
+    CloseProcDataForms
     RebuildCatalogFromStandards
     SeedReferencesFromSources
-    RequeryOpenForms
     SetMeta "LastRefresh", Format$(Now, "yyyy-mm-dd hh:nn:ss")
     DoCmd.Hourglass False
     Exit Sub
@@ -57,15 +58,17 @@ Public Sub EnsureLinkedSourceTables()
 End Sub
 
 Public Function IsLinkedTable(ByVal tableName As String) As Boolean
+    Dim db As DAO.Database
     Dim td As DAO.TableDef
-    On Error Resume Next
-    Set td = CurrentDb.TableDefs(tableName)
-    If Err.Number <> 0 Then
-        IsLinkedTable = False
-        Exit Function
-    End If
-    On Error GoTo 0
+    On Error GoTo Fail
+    ' Must keep a Database variable — CurrentDb alone returns a temp object
+    ' and TableDef.Connect then raises 3420 (Object invalid or no longer set).
+    Set db = CurrentDb
+    Set td = db.TableDefs(tableName)
     IsLinkedTable = (Len(td.Connect) > 0)
+    Exit Function
+Fail:
+    IsLinkedTable = False
 End Function
 
 Public Sub RefreshLinkedTable(ByVal tableName As String)
@@ -89,11 +92,14 @@ Fail:
         "Could not refresh linked table '" & tableName & "': " & Err.Description
 End Sub
 
-Private Sub RequeryOpenForms()
-    Dim frm As Form
-    For Each frm In Forms
-        On Error Resume Next
-        frm.Requery
-        On Error GoTo 0
-    Next frm
+Private Sub CloseProcDataForms()
+    On Error Resume Next
+    DoCmd.Close acForm, FRM_PART, acSaveNo
+    DoCmd.Close acForm, FRM_HOME, acSaveNo
+    DoCmd.Close acForm, FRM_REFERENCES, acSaveNo
+    DoCmd.Close acForm, FRM_EXPORT, acSaveNo
+    DoCmd.Close acForm, FRM_FFA, acSaveNo
+    DoCmd.Close acForm, FRM_PRODUCT_LINE, acSaveNo
+    DoCmd.Close acForm, FRM_EQUIPMENT, acSaveNo
+    On Error GoTo 0
 End Sub

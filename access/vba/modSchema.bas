@@ -172,14 +172,8 @@ Private Sub MigrateLegacyMetaColumns()
 End Sub
 
 Private Sub EnsureOptionalProcTmYldTable()
-    If TableExists(TBL_PROC_TM_YLD) Then Exit Sub
-    ExecuteDDL "CREATE TABLE [" & TBL_PROC_TM_YLD & "] (" & _
-        "[" & COL_ASSEMBLY_NO_ALT & "] TEXT(50), " & _
-        "[" & COL_OPER_SEQ & "] LONG, " & _
-        "[" & COL_AVG_180 & "] DOUBLE, " & _
-        "[" & COL_AVG_90 & "] DOUBLE" & _
-        ")"
-    ExecuteDDL "CREATE INDEX ix_pty_assy ON [" & TBL_PROC_TM_YLD & "] ([" & COL_ASSEMBLY_NO_ALT & "], [" & COL_OPER_SEQ & "])"
+    ' Optional: user links or loads tblProcTmYld. Do not auto-create a local
+    ' empty table — that blocks linking a real yield source under the same name.
 End Sub
 
 Private Sub SeedDefaultProductLines()

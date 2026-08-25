@@ -70,10 +70,13 @@ Public Sub RefreshAll()
     On Error GoTo Fail
     RefreshSourceData
     RebuildActiveAssemblyFilter
+    On Error Resume Next
+    DoCmd.OpenForm FRM_HOME
+    On Error GoTo Fail
     MsgBox "Linked tables refreshed, catalog rebuilt, and active assembly filter updated.", vbInformation, "ProcDatabase"
     Exit Sub
 Fail:
-    MsgBox "Refresh failed: " & Err.Description, vbCritical, "ProcDatabase"
+    MsgBox "Refresh failed: " & Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
 End Sub
 
 Public Sub BuildUi()

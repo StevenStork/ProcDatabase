@@ -215,11 +215,13 @@ Public Sub SetDbProperty(ByVal propName As String, ByVal propType As Integer, By
 End Sub
 
 Public Function FieldExists(ByVal tableName As String, ByVal fieldName As String) As Boolean
+    Dim db As DAO.Database
     Dim td As DAO.TableDef
     Dim fld As DAO.Field
 
     On Error GoTo Fail
-    Set td = CurrentDb.TableDefs(tableName)
+    Set db = CurrentDb
+    Set td = db.TableDefs(tableName)
     For Each fld In td.Fields
         If StrComp(fld.Name, fieldName, vbTextCompare) = 0 Then
             FieldExists = True

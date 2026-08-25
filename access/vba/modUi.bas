@@ -418,11 +418,6 @@ End Function
 Public Function UiRefreshLinkedData() As Boolean
     On Error GoTo Fail
     RefreshAll
-    On Error Resume Next
-    If CurrentProject.AllForms(FRM_HOME).IsLoaded Then
-        Forms(FRM_HOME)!subParts.Requery
-    End If
-    On Error GoTo Fail
     UiRefreshLinkedData = True
     Exit Function
 Fail:
