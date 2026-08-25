@@ -91,15 +91,3 @@ Fail:
     Err.Raise vbObjectError + 621, "RefreshLinkedTable", _
         "Could not refresh linked table '" & tableName & "': " & Err.Description
 End Sub
-
-Private Sub CloseProcDataForms()
-    On Error Resume Next
-    DoCmd.Close acForm, FRM_PART, acSaveNo
-    DoCmd.Close acForm, FRM_HOME, acSaveNo
-    DoCmd.Close acForm, FRM_REFERENCES, acSaveNo
-    DoCmd.Close acForm, FRM_EXPORT, acSaveNo
-    DoCmd.Close acForm, FRM_FFA, acSaveNo
-    DoCmd.Close acForm, FRM_PRODUCT_LINE, acSaveNo
-    DoCmd.Close acForm, FRM_EQUIPMENT, acSaveNo
-    On Error GoTo 0
-End Sub

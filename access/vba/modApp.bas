@@ -9,6 +9,7 @@ Private BootstrapStep As String
 Public Sub BootstrapProcDatabase()
     On Error GoTo Fail
     DoCmd.Hourglass True
+    CloseProcDataForms
     BootstrapStep = "EnsureSchema"
     EnsureSchema
     BootstrapStep = "EnsureQueries"
@@ -20,6 +21,9 @@ Public Sub BootstrapProcDatabase()
     BootstrapStep = "SetMeta"
     SetMeta "SchemaVersion", SCHEMA_VERSION
     DoCmd.Hourglass False
+    On Error Resume Next
+    DoCmd.OpenForm FRM_HOME
+    On Error GoTo 0
     MsgBox "ProcDatabase is ready." & vbCrLf & vbCrLf & _
         "Linked: " & TBL_ROUTE_CARD & ", " & TBL_ASSY_STANDARD & ", " & TBL_OPER_COMPLETIONS & vbCrLf & _
         "Run RefreshAll to pull data and rebuild the catalog.", vbInformation, "ProcDatabase"
@@ -40,6 +44,7 @@ End Sub
 ' Schema + queries only (skip form build). Use if EnsureUi fails.
 Public Sub BootstrapSchemaOnly()
     On Error GoTo Fail
+    CloseProcDataForms
     BootstrapStep = "EnsureSchema"
     EnsureSchema
     BootstrapStep = "EnsureQueries"
@@ -58,6 +63,7 @@ Public Sub StartProcDatabase()
     EnsureQueries
     EnsureStartup
     If Not ObjectExists(acForm, FRM_HOME) Then
+        CloseProcDataForms
         EnsureUi
     End If
     DoCmd.OpenForm FRM_HOME
@@ -81,10 +87,14 @@ End Sub
 
 Public Sub BuildUi()
     On Error GoTo Fail
+    CloseProcDataForms
     EnsureSchema
     EnsureQueries
     EnsureUi
     EnsureStartup
+    On Error Resume Next
+    DoCmd.OpenForm FRM_HOME
+    On Error GoTo Fail
     MsgBox "Schema, queries, and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
     Exit Sub
 Fail:

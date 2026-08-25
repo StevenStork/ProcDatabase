@@ -199,6 +199,31 @@ Public Sub DeleteObjectIfExists(ByVal objectType As AcObjectType, ByVal objectNa
     On Error GoTo 0
 End Sub
 
+' Close open forms so schema DDL / form rebuild can lock local tables (avoids 3211).
+Public Sub CloseProcDataForms()
+    Dim safety As Long
+    On Error Resume Next
+    DoCmd.Close acForm, FRM_PART, acSaveNo
+    DoCmd.Close acForm, FRM_HOME, acSaveNo
+    DoCmd.Close acForm, FRM_REFERENCES, acSaveNo
+    DoCmd.Close acForm, FRM_EXPORT, acSaveNo
+    DoCmd.Close acForm, FRM_FFA, acSaveNo
+    DoCmd.Close acForm, FRM_PRODUCT_LINE, acSaveNo
+    DoCmd.Close acForm, FRM_EQUIPMENT, acSaveNo
+    DoCmd.Close acForm, SFRM_HOME_LIST, acSaveNo
+    DoCmd.Close acForm, SFRM_DASH, acSaveNo
+    DoCmd.Close acForm, SFRM_PL, acSaveNo
+    DoCmd.Close acForm, SFRM_OPS, acSaveNo
+    ' Also clear any leftover Design-view FormN windows from a prior CreateForm.
+    safety = 0
+    Do While Forms.Count > 0 And safety < 50
+        DoCmd.Close acForm, Forms(0).Name, acSaveNo
+        safety = safety + 1
+    Loop
+    DoEvents
+    On Error GoTo 0
+End Sub
+
 Public Sub SetDbProperty(ByVal propName As String, ByVal propType As Integer, ByVal propValue As Variant)
     Dim db As DAO.Database
     Dim prp As DAO.Property
@@ -246,6 +271,10 @@ Public Sub AddTextColumnIfMissing(ByVal tableName As String, ByVal fieldName As 
 Fail:
     If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Then
         Err.Clear
+    ElseIf Err.Number = 3211 Then
+        Err.Raise Err.Number, "AddTextColumnIfMissing", _
+            Err.Description & vbCrLf & vbCrLf & _
+            "Close all open forms (especially Home) and run BuildUi / Bootstrap again."
     Else
         Err.Raise Err.Number, "AddTextColumnIfMissing", Err.Description
     End If

@@ -9,6 +9,7 @@ Public UiSubStep As String
 
 Public Sub EnsureUi()
     On Error GoTo Fail
+    CloseProcDataForms
     UiSubStep = "CreateReferenceForms"
     CreateReferenceForms
     UiSubStep = "CreatePartDashSubform"
