@@ -73,6 +73,15 @@ If `tblRCCP` is missing, the filter falls back to Home Active × dash Active.
 
 Unknown PL codes from RCCP are inserted as new product-line rows (name = code) on refresh.
 
+## Equipment (manual)
+
+`tblEquipment` is **not** seeded from linked data. Maintain it under References → Edit Equipment:
+
+- Enter an equipment **name**
+- In the FFA subform, add each FFA where that equipment exists (`tblEquipmentFFA`)
+
+Operation rows pick equipment from this list via the Equipment Type combo.
+
 ## Refresh workflow
 
 1. `RefreshLink` on each linked table (including `tblRCCP`).

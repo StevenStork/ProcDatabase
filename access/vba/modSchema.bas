@@ -48,7 +48,7 @@ Private Function DescribeLocalTables() As String
     Dim names As Variant
     Dim i As Long
     Dim lines As String
-    names = Array(TBL_META, TBL_FFA, TBL_PRODUCT_LINE, TBL_EQUIPMENT, TBL_PART, _
+    names = Array(TBL_META, TBL_FFA, TBL_PRODUCT_LINE, TBL_EQUIPMENT, TBL_EQUIPMENT_FFA, TBL_PART, _
         TBL_PART_DASH, TBL_PART_PL, TBL_OPERATION, TBL_ACTIVE_FILTER)
     For i = LBound(names) To UBound(names)
         lines = lines & DescribeTable(CStr(names(i)))
@@ -94,10 +94,20 @@ Private Sub EnsureLookupTables()
 
     If Not TableExists(TBL_EQUIPMENT) Then
         ExecuteDDL "CREATE TABLE [" & TBL_EQUIPMENT & "] (" & _
-            "[Equipment] TEXT(100) CONSTRAINT PK_tblEquipment PRIMARY KEY, " & _
-            "[OwningFFAs] MEMO" & _
+            "[Equipment] TEXT(100) CONSTRAINT PK_tblEquipment PRIMARY KEY" & _
             ")"
     End If
+
+    EnsureEquipmentFfaTable
+End Sub
+
+Public Sub EnsureEquipmentFfaTable()
+    If TableExists(TBL_EQUIPMENT_FFA) Then Exit Sub
+    ExecuteDDL "CREATE TABLE [" & TBL_EQUIPMENT_FFA & "] (" & _
+        "[Equipment] TEXT(100), " & _
+        "[FFA] TEXT(50), " & _
+        "CONSTRAINT PK_tblEquipmentFFA PRIMARY KEY ([Equipment], [FFA])" & _
+        ")"
 End Sub
 
 Private Sub EnsurePartTables()
@@ -156,7 +166,50 @@ Private Sub UpgradeExistingSchema()
     On Error GoTo 0
     MigratePartColumns
     EnsureProductLinePlCodeColumn
+    EnsureEquipmentFfaTable
+    MigrateEquipmentOwningFfas
     MigrateLegacyMetaColumns
+End Sub
+
+' Move legacy OwningFFAs memo into tblEquipmentFFA, then drop the memo column.
+Public Sub MigrateEquipmentOwningFfas()
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+    Dim equipName As String
+    Dim owners As String
+    Dim parts() As String
+    Dim i As Long
+    Dim ffaValue As String
+
+    If Not TableExists(TBL_EQUIPMENT) Then Exit Sub
+    EnsureEquipmentFfaTable
+    If Not FieldExists(TBL_EQUIPMENT, "OwningFFAs") Then Exit Sub
+
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset("SELECT Equipment, OwningFFAs FROM [" & TBL_EQUIPMENT & "]", dbOpenSnapshot)
+    Do Until rs.EOF
+        equipName = CoerceText(rs!Equipment)
+        owners = CoerceText(rs!OwningFFAs)
+        If Len(equipName) > 0 And Len(owners) > 0 Then
+            parts = Split(owners, ",")
+            For i = LBound(parts) To UBound(parts)
+                ffaValue = Trim$(parts(i))
+                If Len(ffaValue) > 0 Then
+                    If IsNull(DLookup("FFA", TBL_EQUIPMENT_FFA, _
+                        "Equipment = " & SqlText(equipName) & " AND FFA = " & SqlText(ffaValue))) Then
+                        On Error Resume Next
+                        db.Execute "INSERT INTO [" & TBL_EQUIPMENT_FFA & "] (Equipment, FFA) VALUES (" & _
+                            SqlText(equipName) & ", " & SqlText(ffaValue) & ")", dbFailOnError
+                        On Error GoTo 0
+                    End If
+                End If
+            Next i
+        End If
+        rs.MoveNext
+    Loop
+    rs.Close
+
+    DropColumnIfExists TBL_EQUIPMENT, "OwningFFAs"
 End Sub
 
 Public Sub EnsureProductLinePlCodeColumn()
@@ -228,6 +281,8 @@ End Sub
 Public Sub EnsureQueries()
     MigratePartColumns
     EnsureProductLinePlCodeColumn
+    EnsureEquipmentFfaTable
+    MigrateEquipmentOwningFfas
 
     ReplaceQuery QRY_OPERATIONS, _
         "SELECT q.*, " & _

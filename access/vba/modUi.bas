@@ -12,6 +12,10 @@ Public Sub EnsureUi()
     CloseProcDataForms
     UiSubStep = "CreateReferenceForms"
     CreateReferenceForms
+    UiSubStep = "CreateEquipmentFfaSubform"
+    CreateEquipmentFfaSubform
+    UiSubStep = "CreateEquipmentForm"
+    CreateEquipmentForm
     UiSubStep = "CreatePartDashSubform"
     CreatePartDashSubform
     UiSubStep = "CreatePartProductLineSubform"
@@ -61,17 +65,52 @@ Private Sub CreateReferenceForms()
     AddDetailField frm, "ProductLine", 0, 0, 3600
     AddDetailField frm, COL_PL_CODE, 3700, 0, 1800
     SaveAndRenameForm frm, FRM_PRODUCT_LINE
+End Sub
 
-    DeleteObjectIfExists acForm, FRM_EQUIPMENT
+Private Sub CreateEquipmentFfaSubform()
+    Dim frm As Form
+    Dim ctl As Control
+
+    DeleteObjectIfExists acForm, SFRM_EQUIP_FFA
     Set frm = CreateForm()
-    frm.RecordSource = TBL_EQUIPMENT
-    frm.Caption = "Equipment"
+    frm.RecordSource = TBL_EQUIPMENT_FFA
     frm.DefaultView = 2
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
-    AddDetailField frm, "Equipment", 0, 0, 3600
-    AddDetailField frm, "OwningFFAs", 3700, 0, 4800
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "FFA", 0, 0, 2400, 300)
+    ctl.Name = "cboFFA"
+    ctl.ControlSource = "FFA"
+    ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = True
+
+    SaveAndRenameForm frm, SFRM_EQUIP_FFA
+End Sub
+
+Private Sub CreateEquipmentForm()
+    Dim frm As Form
+    Dim ctl As Control
+
+    ' Manual equipment catalog: name + which FFAs it exists in (subform).
+    DeleteObjectIfExists acForm, FRM_EQUIPMENT
+    Set frm = CreateForm()
+    frm.RecordSource = TBL_EQUIPMENT
+    frm.Caption = "Equipment"
+    frm.DefaultView = 0
+    frm.AllowAdditions = True
+    frm.AllowDeletions = True
+    frm.AllowEdits = True
+
+    AddDetailField frm, "Equipment", 1200, 200, 3600
+
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 700, 4200, 3000)
+    ctl.Name = "subEquipmentFfas"
+    ctl.SourceObject = SFRM_EQUIP_FFA
+    ctl.LinkMasterFields = "Equipment"
+    ctl.LinkChildFields = "Equipment"
+
     SaveAndRenameForm frm, FRM_EQUIPMENT
 End Sub
 
@@ -197,6 +236,7 @@ End Sub
 
 Private Sub CreateOperationSubform()
     Dim frm As Form
+    Dim ctl As Control
     DeleteObjectIfExists acForm, SFRM_OPS
     Set frm = CreateForm()
     frm.RecordSource = QRY_OPERATIONS
@@ -210,13 +250,20 @@ Private Sub CreateOperationSubform()
     AddDetailField frm, "BatchSize", 4700, 0, 900
     AddDetailField frm, "ExportHours", 5700, 0, 1200
     AddDetailField frm, "ExportEx", 7000, 0, 1100
-    AddDetailField frm, "EquipmentType", 8200, 0, 1400
-    AddDetailCheck frm, "UseExportHours", 9700, 0
-    AddDetailCheck frm, "UseExportEx", 10400, 0
-    AddDetailField frm, "ProcessHours", 11100, 0, 1200
-    AddDetailField frm, "AvgEx", 12400, 0, 1000
-    AddDetailField frm, "AvgHPU", 13500, 0, 1000
-    AddDetailField frm, "MadeInFFA", 14600, 0, 1400
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "EquipmentType", 8200, 0, 1800, 300)
+    ctl.Name = "cboEquipmentType"
+    ctl.ControlSource = "EquipmentType"
+    ctl.RowSource = "SELECT Equipment FROM [" & TBL_EQUIPMENT & "] ORDER BY Equipment"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = False
+
+    AddDetailCheck frm, "UseExportHours", 10100, 0
+    AddDetailCheck frm, "UseExportEx", 10800, 0
+    AddDetailField frm, "ProcessHours", 11500, 0, 1200
+    AddDetailField frm, "AvgEx", 12800, 0, 1000
+    AddDetailField frm, "AvgHPU", 13900, 0, 1000
+    AddDetailField frm, "MadeInFFA", 15000, 0, 1400
     SaveAndRenameForm frm, SFRM_OPS
 End Sub
 

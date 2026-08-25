@@ -62,7 +62,7 @@ BuildUi
 | Active assembly filter | From `tblRCCP` → `tblActiveAssemblyFilter` + filtered queries |
 | Home dashboard + RAG | `frmHome` / `sfrmHomeList`; Days >90 red, >30 yellow |
 | Part form + ops subform | `frmPart`, `sfrmOperation` |
-| References | `frmFFA`, `frmProductLine` (+ PL Code), `frmEquipment` |
+| References | `frmFFA`, `frmProductLine` (+ PL Code), `frmEquipment` (manual name + FFA list) |
 | Averages | `modAverages` (labor + yield fallbacks) |
 | Exports | `modExport` — 10 columns matching Excel export PR |
 
