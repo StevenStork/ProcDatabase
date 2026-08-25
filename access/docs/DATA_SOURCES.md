@@ -26,9 +26,12 @@ SQL for the three sources lives in **`dataQueries.xlsm`**, stored in the **same 
 
 ## Optional: process time / yield
 
-Link or load `tblProcTmYld` with:
+Link `tblProcTmYld` (do not leave an empty local table with that name). Expected columns:
 
-- `Assembly No`, `OPER SEQ`, `Avg 180 Day Ex`, `Avg 90 Day Ex`
+- `Assembly No`
+- `OPER SEQ`
+- `Avg 180 Day Ex`
+- `Avg 90 Day Ex`
 
 If absent, labor averages still work; execution averages stay blank until yield data exists.
 
