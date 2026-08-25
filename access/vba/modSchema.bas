@@ -39,6 +39,7 @@ Private Function DescribeLinkedTables() As String
     lines = lines & DescribeTable(TBL_ROUTE_CARD)
     lines = lines & DescribeTable(TBL_ASSY_STANDARD)
     lines = lines & DescribeTable(TBL_OPER_COMPLETIONS)
+    lines = lines & DescribeTable(TBL_RCCP)
     lines = lines & DescribeTable(TBL_PROC_TM_YLD)
     DescribeLinkedTables = lines
 End Function
@@ -85,7 +86,8 @@ Private Sub EnsureLookupTables()
 
     If Not TableExists(TBL_PRODUCT_LINE) Then
         ExecuteDDL "CREATE TABLE [" & TBL_PRODUCT_LINE & "] (" & _
-            "[ProductLine] TEXT(100) CONSTRAINT PK_tblProductLine PRIMARY KEY" & _
+            "[ProductLine] TEXT(100) CONSTRAINT PK_tblProductLine PRIMARY KEY, " & _
+            "[" & COL_PL_CODE & "] TEXT(50)" & _
             ")"
         SeedDefaultProductLines
     End If
@@ -153,7 +155,13 @@ Private Sub UpgradeExistingSchema()
     CurrentDb.TableDefs.Refresh
     On Error GoTo 0
     MigratePartColumns
+    EnsureProductLinePlCodeColumn
     MigrateLegacyMetaColumns
+End Sub
+
+Public Sub EnsureProductLinePlCodeColumn()
+    If Not TableExists(TBL_PRODUCT_LINE) Then Exit Sub
+    AddTextColumnIfMissing TBL_PRODUCT_LINE, COL_PL_CODE, 50
 End Sub
 
 ' Highlight -> Notes; drop unused SheetName. Safe to re-run.
@@ -219,6 +227,7 @@ End Sub
 
 Public Sub EnsureQueries()
     MigratePartColumns
+    EnsureProductLinePlCodeColumn
 
     ReplaceQuery QRY_OPERATIONS, _
         "SELECT q.*, " & _

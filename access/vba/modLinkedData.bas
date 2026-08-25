@@ -2,11 +2,9 @@ Attribute VB_Name = "modLinkedData"
 Option Compare Database
 Option Explicit
 
-' Refreshes the three linked source tables already in the Access file:
-'   tblRouteCard  <- Route_Card
-'   tblAssyStnd   <- Assembly_Standard / Assy_Standard
-'   tblOperComps  <- Oper_Completions
-' Then rebuilds the local part catalog from standards.
+' Refreshes linked source tables already in the Access file:
+'   tblRouteCard, tblAssyStnd, tblOperComps, tblRCCP (+ optional tblProcTmYld)
+' Then rebuilds the local part catalog and applies RCCP active selections.
 
 Public Sub RefreshSourceData()
     On Error GoTo Fail
@@ -16,6 +14,7 @@ Public Sub RefreshSourceData()
     RefreshLinkedTable TBL_ROUTE_CARD
     RefreshLinkedTable TBL_ASSY_STANDARD
     RefreshLinkedTable TBL_OPER_COMPLETIONS
+    RefreshLinkedTable TBL_RCCP
     If TableExists(TBL_PROC_TM_YLD) Then
         If IsLinkedTable(TBL_PROC_TM_YLD) Then
             RefreshLinkedTable TBL_PROC_TM_YLD
@@ -38,7 +37,8 @@ End Sub
 Public Function LinkedSourceTablesReady() As Boolean
     LinkedSourceTablesReady = TableExists(TBL_ROUTE_CARD) _
         And TableExists(TBL_ASSY_STANDARD) _
-        And TableExists(TBL_OPER_COMPLETIONS)
+        And TableExists(TBL_OPER_COMPLETIONS) _
+        And TableExists(TBL_RCCP)
 End Function
 
 Public Sub EnsureLinkedSourceTables()
@@ -47,12 +47,13 @@ Public Sub EnsureLinkedSourceTables()
     If Not TableExists(TBL_ROUTE_CARD) Then missing = missing & vbCrLf & "  - " & TBL_ROUTE_CARD
     If Not TableExists(TBL_ASSY_STANDARD) Then missing = missing & vbCrLf & "  - " & TBL_ASSY_STANDARD
     If Not TableExists(TBL_OPER_COMPLETIONS) Then missing = missing & vbCrLf & "  - " & TBL_OPER_COMPLETIONS
+    If Not TableExists(TBL_RCCP) Then missing = missing & vbCrLf & "  - " & TBL_RCCP
 
     If Len(missing) > 0 Then
         Err.Raise vbObjectError + 620, "EnsureLinkedSourceTables", _
             "Required linked tables are missing:" & missing & vbCrLf & vbCrLf & _
             "Link Route_Card as tblRouteCard, Assembly_Standard as tblAssyStnd, " & _
-            "and Oper_Completions as tblOperComps." & vbCrLf & vbCrLf & _
+            "Oper_Completions as tblOperComps, and RCCP as tblRCCP." & vbCrLf & vbCrLf & _
             "Run DiagnoseSchema for a full table report."
     End If
 End Sub

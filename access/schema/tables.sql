@@ -1,10 +1,10 @@
 -- Local tables (created by EnsureSchema)
--- Linked: tblRouteCard, tblAssyStnd, tblOperComps (user-provided)
+-- Linked: tblRouteCard, tblAssyStnd, tblOperComps, tblRCCP (user-provided)
 
--- tblActiveAssemblyFilter (AssemblyNo TEXT PK)
+-- tblActiveAssemblyFilter (AssemblyNo TEXT PK) — filled from tblRCCP
 -- tblPart (BasePart, Active, HomeFFA, StatusDate, Notes)
 -- tblPartDash, tblPartProductLine, tblOperation
--- tblFFA, tblProductLine, tblEquipment, tblMeta
+-- tblFFA, tblProductLine (+ PL Code), tblEquipment, tblMeta
 -- tblProcTmYld (optional)
 
 -- Filtered views (saved queries):

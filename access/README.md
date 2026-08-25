@@ -11,6 +11,7 @@ Link these tables in Access before importing VBA:
 | `tblRouteCard` | Route_Card                |
 | `tblAssyStnd`  | Assembly_Standard         |
 | `tblOperComps` | Oper_Completions          |
+| `tblRCCP`      | RCCP (defines active assemblies) |
 
 Optional: `tblProcTmYld` for 180/90-day execution averages.
 
@@ -18,7 +19,7 @@ See [`docs/DATA_SOURCES.md`](docs/DATA_SOURCES.md) for column lists and refresh 
 
 ## First-time setup (Windows + Access)
 
-1. Open your `.accdb` with the three linked tables.
+1. Open your `.accdb` with the four required linked tables.
 2. Alt+F11 → **Import File** → import every module in [`vba/`](vba/).
    - If re-importing after an update, **delete the old ProcDatabase modules first** (same names under *Modules*). Duplicate imports cause **Ambiguous name** compile errors.
 3. Immediate window (`Ctrl+G`):
@@ -41,14 +42,14 @@ BuildUi
 1. Run `DiagnoseSchema` in the Immediate window — it lists which linked/local tables Access sees.
 2. Re-import the latest `modSchema.bas`, `modUtils.bas`, and `modApp.bas`, then **Debug → Compile**.
 3. Run `BootstrapProcDatabase` again — errors now include the schema sub-step (for example `EnsurePartTables`).
-4. If a previous attempt created broken local tables (`tblMeta`, `tblPart`, …), delete those **local** tables in the navigation pane and run bootstrap again. Do **not** delete your linked `tblRouteCard`, `tblAssyStnd`, or `tblOperComps`.
+4. If a previous attempt created broken local tables (`tblMeta`, `tblPart`, …), delete those **local** tables in the navigation pane and run bootstrap again. Do **not** delete your linked `tblRouteCard`, `tblAssyStnd`, `tblOperComps`, or `tblRCCP`.
 5. If form creation fails after schema succeeds, run `BootstrapSchemaOnly`, then `BuildUi`.
 
 ## Workflow
 
-1. **Refresh Linked Data** — `RefreshLink` on linked tables → rebuild part/dash catalog from `tblAssyStnd` → seed FFAs/equipment → rebuild `tblActiveAssemblyFilter`.
-2. Mark parts **Active** on Home; set **Date**, **Home FFA**, **Notes**.
-3. **Open Part** — activate dash conditions and product lines; **Seed Ops** from route card.
+1. **Refresh Linked Data** — refresh linked tables → rebuild catalog from `tblAssyStnd` → apply **tblRCCP** (Active parts/dashes + product-line UseFlags) → rebuild `tblActiveAssemblyFilter`.
+2. On Home, review Active rows (driven by RCCP), set **Date**, **Home FFA**, **Notes** as needed.
+3. **Open Part** — confirm dashes/product lines; **Seed Ops** from route card.
 4. Edit ops (batch, export overrides); **Process Hours** / **Avg Ex** / **Avg HPU** follow Excel W/X/Y rules.
 5. **Export** — FFA, product line, or all to `.xlsx` beside the database.
 
@@ -57,11 +58,11 @@ BuildUi
 | Plan item | Implementation |
 |-----------|----------------|
 | Local Parts / Dashes / ProductLines / Operations | `tblPart`, `tblPartDash`, `tblPartProductLine`, `tblOperation` |
-| Linked standards / route / completions | Your `tblRouteCard`, `tblAssyStnd`, `tblOperComps` |
-| Active assembly filter | `tblActiveAssemblyFilter` + `qryRouteCardActive` etc. |
-| Home dashboard + RAG | `frmHome` bound to `tblPart`; Days >90 red, >30 yellow |
+| Linked standards / route / completions / RCCP | Your `tblRouteCard`, `tblAssyStnd`, `tblOperComps`, `tblRCCP` |
+| Active assembly filter | From `tblRCCP` → `tblActiveAssemblyFilter` + filtered queries |
+| Home dashboard + RAG | `frmHome` / `sfrmHomeList`; Days >90 red, >30 yellow |
 | Part form + ops subform | `frmPart`, `sfrmOperation` |
-| References | `frmFFA`, `frmProductLine`, `frmEquipment` + seed from sources |
+| References | `frmFFA`, `frmProductLine` (+ PL Code), `frmEquipment` |
 | Averages | `modAverages` (labor + yield fallbacks) |
 | Exports | `modExport` — 10 columns matching Excel export PR |
 

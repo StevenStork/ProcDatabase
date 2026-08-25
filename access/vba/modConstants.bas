@@ -2,13 +2,14 @@ Attribute VB_Name = "modConstants"
 Option Compare Database
 Option Explicit
 
-Public Const SCHEMA_VERSION As String = "5"
+Public Const SCHEMA_VERSION As String = "6"
 
 ' Linked tables (user-created; SQL lives in same-folder dataQueries.xlsm).
 Public Const TBL_ROUTE_CARD As String = "tblRouteCard"
 Public Const TBL_ASSY_STANDARD As String = "tblAssyStnd"
 Public Const TBL_OPER_COMPLETIONS As String = "tblOperComps"
 Public Const TBL_PROC_TM_YLD As String = "tblProcTmYld"
+Public Const TBL_RCCP As String = "tblRCCP"
 
 Public Const SOURCE_WORKBOOK_XLSM As String = "dataQueries.xlsm"
 
@@ -25,6 +26,7 @@ Public Const TBL_ACTIVE_FILTER As String = "tblActiveAssemblyFilter"
 
 Public Const COL_NOTES As String = "Notes"
 Public Const COL_ASSEMBLY_NO_FILTER As String = "AssemblyNo"
+Public Const COL_PL_CODE As String = "PL Code"
 
 Public Const QRY_HOME As String = "qryHomeParts"
 Public Const QRY_OPERATIONS As String = "qryOperations"
@@ -61,6 +63,8 @@ Public Const COL_PROGRAM_FAMILY As String = "PROGRAM FAMILY"
 Public Const COL_ASSEMBLY_NO_ALT As String = "Assembly No"
 Public Const COL_AVG_180 As String = "Avg 180 Day Ex"
 Public Const COL_AVG_90 As String = "Avg 90 Day Ex"
+Public Const COL_BASE_PN_TEXT As String = "Base PN: Text"
+Public Const COL_PRODUCT_LINE_TEXT As String = "PRODUCT LINE: Text"
 
 ' RAG thresholds (same as Excel Home sheet).
 Public Const RAG_YELLOW_DAYS As Long = 30

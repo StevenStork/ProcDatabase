@@ -59,6 +59,7 @@ Private Sub CreateReferenceForms()
     frm.AllowDeletions = True
     frm.AllowEdits = True
     AddDetailField frm, "ProductLine", 0, 0, 3600
+    AddDetailField frm, COL_PL_CODE, 3700, 0, 1800
     SaveAndRenameForm frm, FRM_PRODUCT_LINE
 
     DeleteObjectIfExists acForm, FRM_EQUIPMENT

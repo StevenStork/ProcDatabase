@@ -25,7 +25,7 @@ Public Sub BootstrapProcDatabase()
     DoCmd.OpenForm FRM_HOME
     On Error GoTo 0
     MsgBox "ProcDatabase is ready." & vbCrLf & vbCrLf & _
-        "Linked: " & TBL_ROUTE_CARD & ", " & TBL_ASSY_STANDARD & ", " & TBL_OPER_COMPLETIONS & vbCrLf & _
+        "Linked: " & TBL_ROUTE_CARD & ", " & TBL_ASSY_STANDARD & ", " & TBL_OPER_COMPLETIONS & ", " & TBL_RCCP & vbCrLf & _
         "Run RefreshAll to pull data and rebuild the catalog.", vbInformation, "ProcDatabase"
     Exit Sub
 Fail:

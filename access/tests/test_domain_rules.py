@@ -152,6 +152,26 @@ def active_assembly_numbers(parts: list[dict]) -> list[str]:
     return sorted(out)
 
 
+def active_assembly_numbers_from_rccp(rccp_rows: list[dict]) -> list[str]:
+    """Anything in tblRCCP is active; use ASSEMBLY NO (distinct)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in rccp_rows:
+        assembly_no = str(row.get("ASSEMBLY NO", "")).strip()
+        if assembly_no and assembly_no not in seen:
+            seen.add(assembly_no)
+            out.append(assembly_no)
+    return sorted(out)
+
+
+def apply_rccp_dash_active(assembly_no: str, base_pn: str | None = None) -> tuple[str, str]:
+    """Return (base_part, dash) for an RCCP row."""
+    base, dash = split_assembly_no(assembly_no)
+    if base_pn and str(base_pn).strip():
+        base = str(base_pn).strip()
+    return base, dash
+
+
 def rag_band(days: int | None) -> str | None:
     if days is None:
         return None
@@ -171,6 +191,21 @@ def test_active_assembly_filter():
     assert active_assembly_numbers(parts) == ["ABC123-001"]
 
 
+def test_rccp_active_assemblies():
+    rccp = [
+        {"ASSEMBLY NO": "ABC123-001", "PRODUCT LINE: Text": "COM"},
+        {"ASSEMBLY NO": "ABC123-001", "PRODUCT LINE: Text": "COM"},  # duplicate
+        {"ASSEMBLY NO": "XYZ-010", "PRODUCT LINE: Text": "MIL"},
+    ]
+    assert active_assembly_numbers_from_rccp(rccp) == ["ABC123-001", "XYZ-010"]
+
+
+def test_rccp_dash_from_assembly_no():
+    assert apply_rccp_dash_active("ABC123-001") == ("ABC123", "001")
+    assert apply_rccp_dash_active("ABC123-001", "ABC123") == ("ABC123", "001")
+    assert apply_rccp_dash_active("ABC123-002", "OVERRIDE") == ("OVERRIDE", "002")
+
+
 def test_rag_thresholds():
     assert rag_band(None) is None
     assert rag_band(10) == "green"
@@ -184,4 +219,5 @@ def test_linked_table_names():
         "tblRouteCard",
         "tblAssyStnd",
         "tblOperComps",
-    } == {"tblRouteCard", "tblAssyStnd", "tblOperComps"}
+        "tblRCCP",
+    } == {"tblRouteCard", "tblAssyStnd", "tblOperComps", "tblRCCP"}
