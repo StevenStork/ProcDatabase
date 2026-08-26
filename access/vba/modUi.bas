@@ -438,13 +438,13 @@ Private Sub CreateOperationSubform()
     leftPos = leftPos + 1100
     AddDetailField frm, "OpCode", leftPos, 0, 1100, True, True
     leftPos = leftPos + 1200
-    AddDetailField frm, "ProcessHours", leftPos, 0, 1200, True, False
+    AddDetailField frm, "ProcessHours", leftPos, 0, 1200, True, False, "0.00"
     leftPos = leftPos + 1300
     AddDetailField frm, "AvgEx", leftPos, 0, 1000, True, False
     leftPos = leftPos + 1100
     AddDetailField frm, "BatchSize", leftPos, 0, 1000, True, False
     leftPos = leftPos + 1100
-    AddDetailField frm, "ImportedHours", leftPos, 0, 1200, True, False
+    AddDetailField frm, "ImportedHours", leftPos, 0, 1200, True, False, "0.00"
     leftPos = leftPos + 1300
     AddDetailField frm, "ImportedEx", leftPos, 0, 1100, True, False
     leftPos = leftPos + 1200
@@ -458,7 +458,7 @@ Private Sub CreateOperationSubform()
     ctl.Enabled = False
     ctl.Locked = True
     On Error Resume Next
-    ctl.Format = "General Number"
+    ctl.Format = "0.00"
     On Error GoTo 0
     AttachFieldLabel frm, ctl, FriendlyFieldCaption("AvgHPU"), leftPos, 0, 1000
     leftPos = leftPos + 1100

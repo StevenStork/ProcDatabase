@@ -62,7 +62,7 @@ def avg_proc_tm_yld(base_part: str, op_seq: int, rows: list[dict]) -> float | No
 
 
 def hours_for_hpu(manual: float | None, imported: float | None, use_import: bool) -> float | None:
-    if use_import:
+    if use_import and imported is not None:
         return imported
     return manual
 

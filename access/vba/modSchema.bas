@@ -301,17 +301,18 @@ Public Sub EnsureQueries()
     EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
 
-    ' ProcessHours / AvgEx are stored manual fields. AvgHPU uses Import overrides when checked:
-    ' hours = IIf(UseImportHrs, ImportedHours, ProcessHours)
-    ' ex    = IIf(UseImportEx,  ImportedEx,    AvgEx)
+    ' ProcessHours / AvgEx are stored manual fields. AvgHPU uses Import overrides when checked
+    ' and the imported value is present; otherwise falls back to the manual field:
+    ' hours = IIf(UseImportHrs And ImportedHours Not Null, ImportedHours, ProcessHours)
+    ' ex    = IIf(UseImportEx  And ImportedEx  Not Null, ImportedEx,    AvgEx)
     ' HPU   = (hours * ex) / BatchSize
     ReplaceQuery QRY_OPERATIONS, _
         "SELECT o.*, " & _
         "IIf(Nz(o.BatchSize,0)=0 OR " & _
-        "IIf(o.UseExportHours<>0, o.ImportedHours, o.ProcessHours) IS NULL OR " & _
-        "IIf(o.UseExportEx<>0, o.ImportedEx, o.AvgEx) IS NULL, Null, " & _
-        "(IIf(o.UseExportHours<>0, o.ImportedHours, o.ProcessHours) * " & _
-        "IIf(o.UseExportEx<>0, o.ImportedEx, o.AvgEx)) / o.BatchSize) AS AvgHPU " & _
+        "IIf(o.UseExportHours<>0 And o.ImportedHours Is Not Null, o.ImportedHours, o.ProcessHours) IS NULL OR " & _
+        "IIf(o.UseExportEx<>0 And o.ImportedEx Is Not Null, o.ImportedEx, o.AvgEx) IS NULL, Null, " & _
+        "(IIf(o.UseExportHours<>0 And o.ImportedHours Is Not Null, o.ImportedHours, o.ProcessHours) * " & _
+        "IIf(o.UseExportEx<>0 And o.ImportedEx Is Not Null, o.ImportedEx, o.AvgEx)) / o.BatchSize) AS AvgHPU " & _
         "FROM [" & TBL_OPERATION & "] AS o"
 
     ReplaceQuery QRY_HOME, _
