@@ -71,7 +71,7 @@ BuildUi
 | Module | Role |
 |--------|------|
 | `modConstants` | Table/query/form names |
-| `modHome` | Home search/filter/jump controller (+ optional Form_frmHome class) |
+| `modHome` | Home search/filter/jump controller |
 | `modLinkedData` | Refresh linked tables |
 | `modActiveFilter` | Active assembly list + filtered queries |
 | `modCatalog` | Build parts/dashes from standards |

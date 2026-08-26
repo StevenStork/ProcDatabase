@@ -308,71 +308,7 @@ Private Sub CreateHomeForm()
     ctl.SourceObject = SFRM_HOME_LIST
 
     SaveAndRenameForm frm, FRM_HOME
-    EnsureHomeFormClassModule
 End Sub
-
-' Best-effort: install Form_frmHome class module when VBA project access is trusted.
-Public Sub EnsureHomeFormClassModule()
-    Dim comp As Object
-    Dim codeMod As Object
-    Dim src As String
-    On Error GoTo Fail
-
-    DoCmd.OpenForm FRM_HOME, acDesign
-    On Error Resume Next
-    Forms(FRM_HOME).HasModule = True
-    On Error GoTo Fail
-    DoCmd.Close acForm, FRM_HOME, acSaveYes
-
-    Set comp = Application.VBE.ActiveVBProject.VBComponents("Form_" & FRM_HOME)
-    Set codeMod = comp.CodeModule
-    src = HomeFormClassModuleSource()
-    If codeMod.CountOfLines > 0 Then
-        codeMod.DeleteLines 1, codeMod.CountOfLines
-    End If
-    codeMod.AddFromString src
-    Exit Sub
-Fail:
-    ' Trust Center may block VBIDE — OnLoad/=HomeForm_Load() still works.
-    On Error Resume Next
-    DoCmd.Close acForm, FRM_HOME, acSaveYes
-    On Error GoTo 0
-End Sub
-
-Private Function HomeFormClassModuleSource() As String
-    Dim s As String
-    s = "Option Compare Database" & vbCrLf
-    s = s & "Option Explicit" & vbCrLf & vbCrLf
-    s = s & "' Form class module — forwards to modHome controller." & vbCrLf
-    s = s & "Private Sub Form_Load()" & vbCrLf
-    s = s & "    HomeForm_Load" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub txtSearch_Change()" & vbCrLf
-    s = s & "    HomeSearchChanged" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub txtSearch_Exit(Cancel As Integer)" & vbCrLf
-    s = s & "    HomeApplyFilter" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub chkActiveOnly_AfterUpdate()" & vbCrLf
-    s = s & "    HomeApplyFilter" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub cboFilterFfa_AfterUpdate()" & vbCrLf
-    s = s & "    HomeApplyFilter" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub cboJumpPart_AfterUpdate()" & vbCrLf
-    s = s & "    HomeJumpToPart" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub btnJump_Click()" & vbCrLf
-    s = s & "    HomeJumpToPart" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub btnOpenPart_Click()" & vbCrLf
-    s = s & "    HomeOpenSelectedPart" & vbCrLf
-    s = s & "End Sub" & vbCrLf & vbCrLf
-    s = s & "Private Sub btnClearFilter_Click()" & vbCrLf
-    s = s & "    HomeClearFilter" & vbCrLf
-    s = s & "End Sub" & vbCrLf
-    HomeFormClassModuleSource = s
-End Function
 
 Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, Optional ByVal isCheckBox As Boolean = False)
     Dim ctl As Control

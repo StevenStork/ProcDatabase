@@ -4,7 +4,6 @@ Option Explicit
 
 ' Home page controller — search/filter/jump without scrolling the full catalog.
 ' Wired from frmHome control events (=HomeForm_Load(), =HomeApplyFilter(), etc.).
-' Optional Form_frmHome class module can forward to these same entry points.
 
 Public Function HomeForm_Load() As Boolean
     On Error GoTo Fail
