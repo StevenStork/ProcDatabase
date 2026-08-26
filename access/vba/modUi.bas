@@ -16,6 +16,8 @@ Public Sub EnsureUi()
     CreateEquipmentForm
     UiSubStep = "CreateEquipmentFfaForm"
     CreateEquipmentFfaForm
+    UiSubStep = "CreateEquipmentEntryForm"
+    CreateEquipmentEntryForm
     UiSubStep = "CreatePartDashSubform"
     CreatePartDashSubform
     UiSubStep = "CreatePartProductLineSubform"
@@ -128,6 +130,70 @@ Private Sub CreateEquipmentFfaForm()
     ctl.LimitToList = True
 
     SaveAndRenameForm frm, FRM_EQUIPMENT_FFA
+End Sub
+
+Private Sub CreateEquipmentEntryForm()
+    Dim frm As Form
+    Dim ctl As Control
+    Dim lbl As Control
+
+    ' Unbound entry form: fill fields → Add → clears for the next piece.
+    DeleteObjectIfExists acForm, FRM_EQUIPMENT_ENTRY
+    Set frm = CreateForm()
+    frm.RecordSource = vbNullString
+    frm.Caption = "Add Equipment"
+    frm.DefaultView = 0
+    frm.AllowAdditions = False
+    frm.AllowDeletions = False
+    frm.AllowEdits = False
+    frm.RecordSelectors = False
+    frm.NavigationButtons = False
+    frm.ScrollBars = 0
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 200, 2000, 300)
+    lbl.Name = "lblEquipment"
+    lbl.Caption = "Equipment name"
+
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 2200, 200, 3600, 300)
+    ctl.Name = "txtEquipment"
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 600, 2000, 300)
+    lbl.Name = "lblEquipType"
+    lbl.Caption = "Equipment type"
+
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 2200, 600, 3600, 300)
+    ctl.Name = "txtEquipmentType"
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 1000, 3600, 300)
+    lbl.Name = "lblFfas"
+    lbl.Caption = "FFAs where this equipment exists (click to select)"
+
+    Set ctl = CreateControl(frm.Name, acListBox, acDetail, , , 200, 1300, 5600, 2400)
+    ctl.Name = "lstFfas"
+    ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
+    ctl.RowSourceType = "Table/Query"
+    ctl.MultiSelect = 1
+
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 3900, 1800, 400)
+    ctl.Name = "btnAdd"
+    ctl.Caption = "Add Equipment"
+    ctl.OnClick = "=UiAddEquipmentEntry()"
+
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 2200, 3900, 1400, 400)
+    ctl.Name = "btnClear"
+    ctl.Caption = "Clear"
+    ctl.OnClick = "=UiClearEquipmentEntry()"
+
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 3800, 3900, 1400, 400)
+    ctl.Name = "btnClose"
+    ctl.Caption = "Close"
+    ctl.OnClick = "=UiCloseCurrentForm()"
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 4400, 5600, 300)
+    lbl.Name = "lblStatus"
+    lbl.Caption = "Enter a name, optional type, select FFAs, then Add."
+
+    SaveAndRenameForm frm, FRM_EQUIPMENT_ENTRY
 End Sub
 
 Private Sub CreateHomeListSubform()
@@ -350,14 +416,19 @@ Private Sub CreateReferencesForm()
     ctl.Caption = "Edit Product Lines"
     ctl.OnClick = "=UiOpenProductLineForm()"
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1200, 2200, 400)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1200, 2400, 400)
+    ctl.Name = "btnEquipAdd"
+    ctl.Caption = "Add Equipment"
+    ctl.OnClick = "=UiOpenEquipmentEntryForm()"
+
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1700, 2400, 400)
     ctl.Name = "btnEquip"
-    ctl.Caption = "Edit Equipment"
+    ctl.Caption = "View Equipment List"
     ctl.OnClick = "=UiOpenEquipmentForm()"
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1700, 2200, 400)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 2200, 2400, 400)
     ctl.Name = "btnEquipFfa"
-    ctl.Caption = "Assign Equipment FFAs"
+    ctl.Caption = "View Equipment FFAs"
     ctl.OnClick = "=UiOpenEquipmentFfaForm()"
 
     SaveAndRenameForm frm, FRM_REFERENCES
@@ -553,6 +624,16 @@ Fail:
     UiOpenEquipmentForm = False
 End Function
 
+Public Function UiOpenEquipmentEntryForm() As Boolean
+    On Error GoTo Fail
+    DoCmd.OpenForm FRM_EQUIPMENT_ENTRY
+    UiClearEquipmentEntry
+    UiOpenEquipmentEntryForm = True
+    Exit Function
+Fail:
+    UiOpenEquipmentEntryForm = False
+End Function
+
 Public Function UiOpenEquipmentFfaForm() As Boolean
     On Error GoTo Fail
     DoCmd.OpenForm FRM_EQUIPMENT_FFA
@@ -560,6 +641,103 @@ Public Function UiOpenEquipmentFfaForm() As Boolean
     Exit Function
 Fail:
     UiOpenEquipmentFfaForm = False
+End Function
+
+Public Function UiAddEquipmentEntry() As Boolean
+    Dim frm As Form
+    Dim lst As Control
+    Dim equipName As String
+    Dim equipType As String
+    Dim ffaValue As String
+    Dim i As Long
+    Dim addedFfas As Long
+    Dim db As DAO.Database
+
+    On Error GoTo Fail
+    If Not CurrentProject.AllForms(FRM_EQUIPMENT_ENTRY).IsLoaded Then
+        UiAddEquipmentEntry = False
+        Exit Function
+    End If
+
+    Set frm = Forms(FRM_EQUIPMENT_ENTRY)
+    equipName = Trim$(CoerceText(frm!txtEquipment))
+    equipType = Trim$(CoerceText(frm!txtEquipmentType))
+    If Len(equipName) = 0 Then
+        frm!lblStatus.Caption = "Enter an equipment name first."
+        MsgBox "Enter an equipment name.", vbExclamation, "Add Equipment"
+        UiAddEquipmentEntry = False
+        Exit Function
+    End If
+
+    Set db = CurrentDb
+    If IsNull(DLookup("Equipment", TBL_EQUIPMENT, "Equipment = " & SqlText(equipName))) Then
+        db.Execute "INSERT INTO [" & TBL_EQUIPMENT & "] (Equipment, [" & COL_EQUIP_TYPE & "]) VALUES (" & _
+            SqlText(equipName) & ", " & SqlNullableText(equipType) & ")", dbFailOnError
+    ElseIf Len(equipType) > 0 Then
+        db.Execute "UPDATE [" & TBL_EQUIPMENT & "] SET [" & COL_EQUIP_TYPE & "] = " & SqlText(equipType) & _
+            " WHERE Equipment = " & SqlText(equipName), dbFailOnError
+    End If
+
+    addedFfas = 0
+    Set lst = frm!lstFfas
+    For i = 0 To lst.ListCount - 1
+        If lst.Selected(i) Then
+            ffaValue = CoerceText(lst.ItemData(i))
+            If Len(ffaValue) > 0 Then
+                If IsNull(DLookup("FFA", TBL_EQUIPMENT_FFA, _
+                    "Equipment = " & SqlText(equipName) & " AND FFA = " & SqlText(ffaValue))) Then
+                    db.Execute "INSERT INTO [" & TBL_EQUIPMENT_FFA & "] (Equipment, FFA) VALUES (" & _
+                        SqlText(equipName) & ", " & SqlText(ffaValue) & ")", dbFailOnError
+                    addedFfas = addedFfas + 1
+                End If
+            End If
+        End If
+    Next i
+
+    frm!lblStatus.Caption = "Added '" & equipName & "' (" & CStr(addedFfas) & " new FFA link(s)). Ready for next."
+    UiClearEquipmentEntry
+    On Error Resume Next
+    frm!txtEquipment.SetFocus
+    On Error GoTo 0
+    UiAddEquipmentEntry = True
+    Exit Function
+Fail:
+    On Error Resume Next
+    If CurrentProject.AllForms(FRM_EQUIPMENT_ENTRY).IsLoaded Then
+        Forms(FRM_EQUIPMENT_ENTRY)!lblStatus.Caption = "Add failed: " & Err.Description
+    End If
+    MsgBox "Could not add equipment: " & Err.Description, vbCritical, "Add Equipment"
+    UiAddEquipmentEntry = False
+End Function
+
+Public Function UiClearEquipmentEntry() As Boolean
+    Dim frm As Form
+    Dim lst As Control
+    Dim i As Long
+    On Error GoTo Fail
+    If Not CurrentProject.AllForms(FRM_EQUIPMENT_ENTRY).IsLoaded Then
+        UiClearEquipmentEntry = False
+        Exit Function
+    End If
+    Set frm = Forms(FRM_EQUIPMENT_ENTRY)
+    frm!txtEquipment = Null
+    frm!txtEquipmentType = Null
+    Set lst = frm!lstFfas
+    For i = 0 To lst.ListCount - 1
+        lst.Selected(i) = False
+    Next i
+    UiClearEquipmentEntry = True
+    Exit Function
+Fail:
+    UiClearEquipmentEntry = False
+End Function
+
+Private Function SqlNullableText(ByVal value As String) As String
+    If Len(Trim$(value)) = 0 Then
+        SqlNullableText = "Null"
+    Else
+        SqlNullableText = SqlText(value)
+    End If
 End Function
 
 Public Function UiOpenFfaTable() As Boolean

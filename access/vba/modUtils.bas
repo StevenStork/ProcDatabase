@@ -211,6 +211,7 @@ Public Sub CloseProcDataForms()
     DoCmd.Close acForm, FRM_PRODUCT_LINE, acSaveNo
     DoCmd.Close acForm, FRM_EQUIPMENT, acSaveNo
     DoCmd.Close acForm, FRM_EQUIPMENT_FFA, acSaveNo
+    DoCmd.Close acForm, FRM_EQUIPMENT_ENTRY, acSaveNo
     DoCmd.Close acForm, SFRM_HOME_LIST, acSaveNo
     DoCmd.Close acForm, SFRM_DASH, acSaveNo
     DoCmd.Close acForm, SFRM_PL, acSaveNo
