@@ -43,8 +43,18 @@ End Sub
 Private Sub CreateReferenceForms()
     Dim frm As Form
 
+    If Not TableExists(TBL_FFA) Then
+        Err.Raise vbObjectError + 1, "CreateReferenceForms", _
+            "Table " & TBL_FFA & " is missing. Run BootstrapProcDatabase / EnsureSchema first."
+    End If
+    If Not TableExists(TBL_PRODUCT_LINE) Then
+        Err.Raise vbObjectError + 1, "CreateReferenceForms", _
+            "Table " & TBL_PRODUCT_LINE & " is missing. Run BootstrapProcDatabase / EnsureSchema first."
+    End If
+
     ' Datasheet view only shows bound controls — empty forms look blank.
-    DeleteObjectIfExists acForm, FRM_FFA
+    ' Build the replacement first, then swap names so a failed build does not leave
+    ' frmFFA deleted with nothing in its place.
     Set frm = CreateForm()
     frm.RecordSource = TBL_FFA
     frm.Caption = "FFAs"
@@ -56,7 +66,6 @@ Private Sub CreateReferenceForms()
     AddDetailField frm, "Factory", 1900, 0, 3600
     SaveAndRenameForm frm, FRM_FFA
 
-    DeleteObjectIfExists acForm, FRM_PRODUCT_LINE
     Set frm = CreateForm()
     frm.RecordSource = TBL_PRODUCT_LINE
     frm.Caption = "Product Lines"
@@ -73,8 +82,10 @@ Private Sub CreateEquipmentForm()
     Dim frm As Form
 
     ' Continuous form: fill a row, then use the blank row below for the next.
-    DeleteObjectIfExists acForm, FRM_EQUIPMENT
-    DeleteObjectIfExists acForm, "sfrmEquipmentFFA"
+    ' Remove legacy subform (older UI embedded Equipment↔FFA here). Current UI uses
+    ' frmEquipmentFFA / frmEquipmentEntry instead — do not recreate sfrmEquipmentFFA.
+    DeleteObjectIfExists acForm, LEGACY_SFRM_EQUIPMENT_FFA
+
     Set frm = CreateForm()
     frm.RecordSource = TBL_EQUIPMENT
     frm.Caption = "Equipment — Tab or ↓ for a new row"
@@ -99,8 +110,12 @@ Private Sub CreateEquipmentFfaForm()
     Dim frm As Form
     Dim ctl As Control
 
+    If Not TableExists(TBL_EQUIPMENT_FFA) Then
+        Err.Raise vbObjectError + 1, "CreateEquipmentFfaForm", _
+            "Table " & TBL_EQUIPMENT_FFA & " is missing. Run BootstrapProcDatabase / EnsureSchema first."
+    End If
+
     ' Continuous form: each row is one Equipment↔FFA link; blank row at bottom for next.
-    DeleteObjectIfExists acForm, FRM_EQUIPMENT_FFA
     Set frm = CreateForm()
     frm.RecordSource = TBL_EQUIPMENT_FFA
     frm.Caption = "Equipment FFAs — Tab or ↓ for a new row"
@@ -138,7 +153,6 @@ Private Sub CreateEquipmentEntryForm()
     Dim lbl As Control
 
     ' Unbound entry form: fill fields → Add → clears for the next piece.
-    DeleteObjectIfExists acForm, FRM_EQUIPMENT_ENTRY
     Set frm = CreateForm()
     frm.RecordSource = vbNullString
     frm.Caption = "Add Equipment"
@@ -210,7 +224,6 @@ End Sub
 Private Sub CreateHomeListSubform()
     Dim frm As Form
 
-    DeleteObjectIfExists acForm, SFRM_HOME_LIST
     Set frm = CreateForm()
     frm.RecordSource = QRY_HOME
     frm.DefaultView = 1
@@ -240,7 +253,6 @@ Private Sub CreateHomeForm()
     Dim ctl As Control
     Dim lbl As Control
 
-    DeleteObjectIfExists acForm, FRM_HOME
     Set frm = CreateForm()
     frm.RecordSource = vbNullString
     frm.Caption = "ProcDatabase Home"
@@ -363,7 +375,6 @@ End Sub
 
 Private Sub CreatePartDashSubform()
     Dim frm As Form
-    DeleteObjectIfExists acForm, SFRM_DASH
     Set frm = CreateForm()
     frm.RecordSource = TBL_PART_DASH
     frm.DefaultView = 2
@@ -375,7 +386,6 @@ End Sub
 
 Private Sub CreatePartProductLineSubform()
     Dim frm As Form
-    DeleteObjectIfExists acForm, SFRM_PL
     Set frm = CreateForm()
     frm.RecordSource = TBL_PART_PL
     frm.DefaultView = 2
@@ -388,7 +398,6 @@ End Sub
 Private Sub CreateOperationSubform()
     Dim frm As Form
     Dim ctl As Control
-    DeleteObjectIfExists acForm, SFRM_OPS
     Set frm = CreateForm()
     frm.RecordSource = QRY_OPERATIONS
     frm.DefaultView = 2
@@ -425,10 +434,9 @@ Private Sub CreatePartForm()
     Dim contentH As Long
     Dim halfW As Long
     Dim midH As Long
-    Dim opsTop As Long
+    Dim     opsTop As Long
     Dim opsH As Long
 
-    DeleteObjectIfExists acForm, FRM_PART
     Set frm = CreateForm()
     frm.RecordSource = TBL_PART
     frm.Caption = "Part"
@@ -491,7 +499,6 @@ Private Sub CreateReferencesForm()
     Dim frm As Form
     Dim ctl As Control
 
-    DeleteObjectIfExists acForm, FRM_REFERENCES
     Set frm = CreateForm()
     frm.Caption = "References"
     frm.RecordSource = vbNullString
@@ -529,7 +536,6 @@ Private Sub CreateExportForm()
     Dim frm As Form
     Dim ctl As Control
 
-    DeleteObjectIfExists acForm, FRM_EXPORT
     Set frm = CreateForm()
     frm.Caption = "Export"
     frm.RecordSource = vbNullString
@@ -584,9 +590,13 @@ End Sub
 
 Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
     Dim savedName As String
+    Dim errNum As Long
+    Dim errDesc As String
+
+    On Error GoTo Fail
 
     ' Single-form shells: grow detail to fill the Access workspace.
-    ' Continuous/datasheet forms: large window only — keep row height intact.
+    ' Continuous/datasheet forms: wide window only — keep row height intact.
     Select Case desiredName
         Case FRM_HOME, FRM_PART, FRM_EQUIPMENT_ENTRY, FRM_REFERENCES, FRM_EXPORT
             ApplyLargeFormLayout frm, 0.96, 0.92, True
@@ -599,9 +609,31 @@ Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
     savedName = frm.Name
     DoCmd.Close acForm, savedName, acSaveYes
     Set frm = Nothing
+    DoEvents
+
     If StrComp(savedName, desiredName, vbTextCompare) <> 0 Then
+        ' Replace any prior copy only after the new form saved successfully.
+        DeleteObjectIfExists acForm, desiredName
+        DoEvents
         DoCmd.Rename desiredName, acForm, savedName
     End If
+
+    If Not ObjectExists(acForm, desiredName) Then
+        Err.Raise vbObjectError + 1, "SaveAndRenameForm", _
+            "Form '" & desiredName & "' was not created (temp name '" & savedName & "')."
+    End If
+    Exit Sub
+
+Fail:
+    errNum = Err.Number
+    errDesc = Err.Description
+    On Error Resume Next
+    If Not frm Is Nothing Then
+        DoCmd.Close acForm, frm.Name, acSaveNo
+        Set frm = Nothing
+    End If
+    On Error GoTo 0
+    Err.Raise errNum, "SaveAndRenameForm." & desiredName, errDesc
 End Sub
 
 Public Function OpenSelectedPart() As Boolean
@@ -686,6 +718,7 @@ Public Function UiOpenFfaForm() As Boolean
     UiOpenFfaForm = True
     Exit Function
 Fail:
+    MsgBox Err.Description, vbExclamation, "Edit FFAs"
     UiOpenFfaForm = False
 End Function
 
@@ -695,6 +728,7 @@ Public Function UiOpenProductLineForm() As Boolean
     UiOpenProductLineForm = True
     Exit Function
 Fail:
+    MsgBox Err.Description, vbExclamation, "Edit Product Lines"
     UiOpenProductLineForm = False
 End Function
 
@@ -704,6 +738,7 @@ Public Function UiOpenEquipmentForm() As Boolean
     UiOpenEquipmentForm = True
     Exit Function
 Fail:
+    MsgBox Err.Description, vbExclamation, "Equipment"
     UiOpenEquipmentForm = False
 End Function
 
@@ -714,6 +749,7 @@ Public Function UiOpenEquipmentEntryForm() As Boolean
     UiOpenEquipmentEntryForm = True
     Exit Function
 Fail:
+    MsgBox Err.Description, vbExclamation, "Add Equipment"
     UiOpenEquipmentEntryForm = False
 End Function
 
@@ -723,6 +759,7 @@ Public Function UiOpenEquipmentFfaForm() As Boolean
     UiOpenEquipmentFfaForm = True
     Exit Function
 Fail:
+    MsgBox Err.Description, vbExclamation, "Equipment FFAs"
     UiOpenEquipmentFfaForm = False
 End Function
 

@@ -123,3 +123,31 @@ Public Sub RebuildFilterOnly()
     RebuildActiveAssemblyFilter
     MsgBox "Active assembly filter rebuilt: " & ActiveAssemblyNumberList(), vbInformation, "ProcDatabase"
 End Sub
+
+' Lists which ProcDatabase forms exist — useful when BuildUi partially failed.
+Public Sub DiagnoseUi()
+    Dim msg As String
+    msg = "Forms present:" & vbCrLf & _
+        FormStatusLine(FRM_HOME) & _
+        FormStatusLine(SFRM_HOME_LIST) & _
+        FormStatusLine(FRM_PART) & _
+        FormStatusLine(FRM_FFA) & _
+        FormStatusLine(FRM_PRODUCT_LINE) & _
+        FormStatusLine(FRM_EQUIPMENT) & _
+        FormStatusLine(FRM_EQUIPMENT_FFA) & _
+        FormStatusLine(FRM_EQUIPMENT_ENTRY) & _
+        FormStatusLine(FRM_REFERENCES) & _
+        FormStatusLine(FRM_EXPORT) & vbCrLf & _
+        "Legacy (should be absent):" & vbCrLf & _
+        FormStatusLine(LEGACY_SFRM_EQUIPMENT_FFA) & vbCrLf & _
+        "If anything required is missing, close all forms and run BuildUi."
+    MsgBox msg, vbInformation, "DiagnoseUi"
+End Sub
+
+Private Function FormStatusLine(ByVal formName As String) As String
+    If ObjectExists(acForm, formName) Then
+        FormStatusLine = "  OK  " & formName & vbCrLf
+    Else
+        FormStatusLine = "  --  " & formName & vbCrLf
+    End If
+End Function

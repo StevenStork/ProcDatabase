@@ -50,6 +50,8 @@ Public Const SFRM_DASH As String = "sfrmPartDash"
 Public Const SFRM_PL As String = "sfrmPartProductLine"
 Public Const SFRM_OPS As String = "sfrmOperation"
 Public Const SFRM_HOME_LIST As String = "sfrmHomeList"
+' Legacy subform from older Equipment UI — deleted during BuildUi; do not recreate.
+Public Const LEGACY_SFRM_EQUIPMENT_FFA As String = "sfrmEquipmentFFA"
 
 Public Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
 Public Const COL_OPER_SEQ As String = "OPER SEQ"

@@ -2,6 +2,10 @@ Attribute VB_Name = "modUtils"
 Option Compare Database
 Option Explicit
 
+' Large form defaults in twips (~12.5" x ~7.6"). Used when UsableWidth is unavailable.
+Private Const LAYOUT_DEFAULT_WIDTH As Long = 18000
+Private Const LAYOUT_DEFAULT_HEIGHT As Long = 11000
+
 Public Sub SplitAssemblyNo(ByVal assemblyNo As String, ByRef basePart As String, ByRef dashCondition As String)
     Dim dashPos As Long
 
@@ -201,11 +205,7 @@ End Sub
 
 ' Workspace size in twips. Do NOT use Application.UsableWidth/Height —
 ' many Access builds lack those members (compile: method or data member not found).
-' Prefer late-bound CallByName; otherwise a large fixed default. Maximize still
-' fills the Access window at runtime.
-
-Private Const LAYOUT_DEFAULT_WIDTH As Long = 18000   ' ~12.5"
-Private Const LAYOUT_DEFAULT_HEIGHT As Long = 11000  ' ~7.6"
+' Prefer late-bound CallByName; otherwise LAYOUT_DEFAULT_* . Maximize fills the window.
 
 Private Function LayoutLateBoundTwips(ByVal propName As String) As Long
     Dim raw As Variant
@@ -249,14 +249,13 @@ Public Sub ApplyLargeFormLayout(ByVal frm As Form, _
     targetH = LayoutUsableHeight(heightFrac)
 
     frm.Width = targetW
-    frm.InsideHeight = targetH
     If expandDetail Then
+        ' Single-form shells: grow the detail section to fill the window.
+        frm.InsideHeight = targetH
         frm.Section(acDetail).Height = targetH
     End If
+    ' List/datasheet forms keep their own row height; Maximize at open fills the screen.
     frm.AutoCenter = True
-    frm.AutoResize = True
-    ' Optional property — skip silently if missing on this Access build.
-    CallByName frm, "FitToWindow", VbLet, True
     frm.MinMaxButtons = True
     frm.CloseButton = True
     frm.BorderStyle = 2 ' sizable
@@ -320,6 +319,11 @@ Public Sub OpenFormSized(ByVal formName As String, _
     Optional ByVal maximizeWindow As Boolean = True)
 
     On Error GoTo Fail
+    If Not ObjectExists(acForm, formName) Then
+        Err.Raise vbObjectError + 2102, "OpenFormSized", _
+            "Form '" & formName & "' does not exist. Close open forms and run BuildUi " & _
+            "(or BootstrapProcDatabase) from the Immediate window."
+    End If
     If Len(whereCondition) > 0 Then
         DoCmd.OpenForm formName, , , whereCondition
     Else
@@ -354,6 +358,7 @@ Public Sub CloseProcDataForms()
     DoCmd.Close acForm, SFRM_DASH, acSaveNo
     DoCmd.Close acForm, SFRM_PL, acSaveNo
     DoCmd.Close acForm, SFRM_OPS, acSaveNo
+    DoCmd.Close acForm, LEGACY_SFRM_EQUIPMENT_FFA, acSaveNo
     ' Datasheet views also hold locks and are not in the Forms collection.
     DoCmd.Close acTable, TBL_PART, acSaveNo
     DoCmd.Close acTable, TBL_PART_DASH, acSaveNo
