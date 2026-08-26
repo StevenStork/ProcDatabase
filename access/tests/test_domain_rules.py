@@ -133,12 +133,16 @@ def test_hpu_and_import_overrides():
     assert ex == 3.0
     assert avg_hpu(hours, ex, 2.0) == 1.5
 
-    # Use Import Hrs / Use Import Ex swap in Imported values.
+    # Use Import Hrs / Use Import Ex swap in Imported values when present.
     hours = hours_for_hpu(1.0, 9.0, True)
     ex = hours_for_hpu(3.0, 8.0, True)
     assert hours == 9.0
     assert ex == 8.0
     assert avg_hpu(hours, ex, 2.0) == 36.0
+
+    # Missing imported values fall back to manual even when Use Import is on.
+    assert hours_for_hpu(1.5, None, True) == 1.5
+    assert hours_for_hpu(4.0, None, True) == 4.0
 
 
 def test_catalog_from_assy_stnd():

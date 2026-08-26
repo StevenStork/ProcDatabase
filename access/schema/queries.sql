@@ -1,4 +1,5 @@
 -- qryOperations: stored ProcessHours / AvgEx; AvgHPU with Use Import overrides
+--   (falls back to ProcessHours/AvgEx when imported value is null)
 -- qryHomeParts: Days since StatusDate, factory lookup
 -- qryExportOps: 10 export columns; active part + active dash required
 -- qryRouteCardActive: tblRouteCard INNER JOIN tblActiveAssemblyFilter

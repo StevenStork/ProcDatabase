@@ -727,7 +727,8 @@ FailSoft:
 End Sub
 
 Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, _
-    Optional ByVal attachLabel As Boolean = True, Optional ByVal asText As Boolean = True)
+    Optional ByVal attachLabel As Boolean = True, Optional ByVal asText As Boolean = True, _
+    Optional ByVal numberFormat As String = "General Number")
 
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
@@ -737,7 +738,7 @@ Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal l
     If asText Then
         ctl.Format = vbNullString
     Else
-        ctl.Format = "General Number"
+        ctl.Format = numberFormat
     End If
     On Error GoTo 0
     If attachLabel Then
