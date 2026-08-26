@@ -48,7 +48,7 @@ BuildUi
 ## Workflow
 
 1. **Refresh Linked Data** — refresh linked tables → rebuild catalog from `tblAssyStnd` → apply **tblRCCP** (Active parts/dashes + product-line UseFlags) → rebuild `tblActiveAssemblyFilter`.
-2. On Home, review Active rows (driven by RCCP), set **Date**, **Home FFA**, **Notes** as needed.
+2. On Home, find parts with **Search**, **Active only**, **FFA**, or **Jump to part** (no need to scroll the full list). Set **Date**, **Home FFA**, **Notes** as needed.
 3. **Open Part** — confirm dashes/product lines; **Seed Ops** from route card.
 4. Edit ops (batch, export overrides); **Process Hours** / **Avg Ex** / **Avg HPU** follow Excel W/X/Y rules.
 5. **Export** — FFA, product line, or all to `.xlsx` beside the database.
@@ -71,6 +71,7 @@ BuildUi
 | Module | Role |
 |--------|------|
 | `modConstants` | Table/query/form names |
+| `modHome` | Home search/filter/jump controller (+ optional Form_frmHome class) |
 | `modLinkedData` | Refresh linked tables |
 | `modActiveFilter` | Active assembly list + filtered queries |
 | `modCatalog` | Build parts/dashes from standards |

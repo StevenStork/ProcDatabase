@@ -145,7 +145,7 @@ Private Sub CreateEquipmentEntryForm()
     frm.DefaultView = 0
     frm.AllowAdditions = False
     frm.AllowDeletions = False
-    frm.AllowEdits = False
+    frm.AllowEdits = True
     frm.RecordSelectors = False
     frm.NavigationButtons = False
     frm.ScrollBars = 0
@@ -156,6 +156,8 @@ Private Sub CreateEquipmentEntryForm()
 
     Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 2200, 200, 3600, 300)
     ctl.Name = "txtEquipment"
+    ctl.Enabled = True
+    ctl.Locked = False
 
     Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 600, 2000, 300)
     lbl.Name = "lblEquipType"
@@ -163,6 +165,8 @@ Private Sub CreateEquipmentEntryForm()
 
     Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 2200, 600, 3600, 300)
     ctl.Name = "txtEquipmentType"
+    ctl.Enabled = True
+    ctl.Locked = False
 
     Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 1000, 3600, 300)
     lbl.Name = "lblFfas"
@@ -227,6 +231,7 @@ End Sub
 Private Sub CreateHomeForm()
     Dim frm As Form
     Dim ctl As Control
+    Dim lbl As Control
 
     DeleteObjectIfExists acForm, FRM_HOME
     Set frm = CreateForm()
@@ -235,21 +240,139 @@ Private Sub CreateHomeForm()
     frm.DefaultView = 0
     frm.AllowAdditions = False
     frm.AllowDeletions = False
-    frm.AllowEdits = False
-    frm.ScrollBars = 0
+    frm.AllowEdits = True
+    frm.ScrollBars = 2
+    frm.RecordSelectors = False
+    frm.NavigationButtons = False
+    frm.OnLoad = "=HomeForm_Load()"
 
+    ' Row 1 — actions
     AddToolbarButton frm, "btnRefresh", "Refresh Linked Data", 120, 120, "=UiRefreshLinkedData()", 2160
-    AddToolbarButton frm, "btnOpenPart", "Open Part", 2400, 120, "=OpenSelectedPart()", 1440
-    AddToolbarButton frm, "btnSeedOps", "Seed Active Ops", 3960, 120, "=UiSeedActiveOps()", 1800
-    AddToolbarButton frm, "btnReferences", "References", 5880, 120, "=UiOpenReferences()", 1440
-    AddToolbarButton frm, "btnExport", "Export", 7440, 120, "=UiOpenExport()", 1200
+    AddToolbarButton frm, "btnSeedOps", "Seed Active Ops", 2400, 120, "=UiSeedActiveOps()", 1800
+    AddToolbarButton frm, "btnReferences", "References", 4320, 120, "=UiOpenReferences()", 1440
+    AddToolbarButton frm, "btnExport", "Export", 5880, 120, "=UiOpenExport()", 1200
 
-    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 120, 540, 11040, 4800)
+    ' Row 2 — find / filter (avoid scrolling an infinite list)
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 120, 560, 900, 300)
+    lbl.Name = "lblSearch"
+    lbl.Caption = "Search"
+
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , , 1000, 540, 2400, 360)
+    ctl.Name = "txtSearch"
+    ctl.OnChange = "=HomeSearchChanged()"
+    ctl.OnExit = "=HomeApplyFilter()"
+
+    Set ctl = CreateControl(frm.Name, acCheckBox, acDetail, , , 3600, 560, 300, 300)
+    ctl.Name = "chkActiveOnly"
+    ctl.DefaultValue = "True"
+    ctl.AfterUpdate = "=HomeApplyFilter()"
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 3960, 560, 1200, 300)
+    lbl.Name = "lblActiveOnly"
+    lbl.Caption = "Active only"
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 5400, 560, 600, 300)
+    lbl.Name = "lblFilterFfa"
+    lbl.Caption = "FFA"
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , , 6000, 540, 1800, 360)
+    ctl.Name = "cboFilterFfa"
+    ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = False
+    ctl.AfterUpdate = "=HomeApplyFilter()"
+
+    AddToolbarButton frm, "btnClearFilter", "Clear filters", 8000, 540, "=HomeClearFilter()", 1600
+
+    ' Row 3 — jump to part
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 120, 1020, 1200, 300)
+    lbl.Name = "lblJump"
+    lbl.Caption = "Jump to part"
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , , 1400, 1000, 3600, 360)
+    ctl.Name = "cboJumpPart"
+    ctl.RowSource = "SELECT BasePart FROM [" & QRY_HOME & "] ORDER BY BasePart"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = False
+    ctl.AfterUpdate = "=HomeJumpToPart()"
+
+    AddToolbarButton frm, "btnJump", "Go", 5200, 1000, "=HomeJumpToPart()", 900
+    AddToolbarButton frm, "btnOpenPart", "Open Part", 6240, 1000, "=HomeOpenSelectedPart()", 1440
+
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 120, 1440, 10000, 300)
+    lbl.Name = "lblStatus"
+    lbl.Caption = "Use Search / Active only / FFA / Jump to find parts without scrolling."
+
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 120, 1800, 11040, 4200)
     ctl.Name = "subParts"
     ctl.SourceObject = SFRM_HOME_LIST
 
     SaveAndRenameForm frm, FRM_HOME
+    EnsureHomeFormClassModule
 End Sub
+
+' Best-effort: install Form_frmHome class module when VBA project access is trusted.
+Public Sub EnsureHomeFormClassModule()
+    Dim comp As Object
+    Dim codeMod As Object
+    Dim src As String
+    On Error GoTo Fail
+
+    DoCmd.OpenForm FRM_HOME, acDesign
+    On Error Resume Next
+    Forms(FRM_HOME).HasModule = True
+    On Error GoTo Fail
+    DoCmd.Close acForm, FRM_HOME, acSaveYes
+
+    Set comp = Application.VBE.ActiveVBProject.VBComponents("Form_" & FRM_HOME)
+    Set codeMod = comp.CodeModule
+    src = HomeFormClassModuleSource()
+    If codeMod.CountOfLines > 0 Then
+        codeMod.DeleteLines 1, codeMod.CountOfLines
+    End If
+    codeMod.AddFromString src
+    Exit Sub
+Fail:
+    ' Trust Center may block VBIDE — OnLoad/=HomeForm_Load() still works.
+    On Error Resume Next
+    DoCmd.Close acForm, FRM_HOME, acSaveYes
+    On Error GoTo 0
+End Sub
+
+Private Function HomeFormClassModuleSource() As String
+    Dim s As String
+    s = "Option Compare Database" & vbCrLf
+    s = s & "Option Explicit" & vbCrLf & vbCrLf
+    s = s & "' Form class module — forwards to modHome controller." & vbCrLf
+    s = s & "Private Sub Form_Load()" & vbCrLf
+    s = s & "    HomeForm_Load" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub txtSearch_Change()" & vbCrLf
+    s = s & "    HomeSearchChanged" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub txtSearch_Exit(Cancel As Integer)" & vbCrLf
+    s = s & "    HomeApplyFilter" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub chkActiveOnly_AfterUpdate()" & vbCrLf
+    s = s & "    HomeApplyFilter" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub cboFilterFfa_AfterUpdate()" & vbCrLf
+    s = s & "    HomeApplyFilter" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub cboJumpPart_AfterUpdate()" & vbCrLf
+    s = s & "    HomeJumpToPart" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub btnJump_Click()" & vbCrLf
+    s = s & "    HomeJumpToPart" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub btnOpenPart_Click()" & vbCrLf
+    s = s & "    HomeOpenSelectedPart" & vbCrLf
+    s = s & "End Sub" & vbCrLf & vbCrLf
+    s = s & "Private Sub btnClearFilter_Click()" & vbCrLf
+    s = s & "    HomeClearFilter" & vbCrLf
+    s = s & "End Sub" & vbCrLf
+    HomeFormClassModuleSource = s
+End Function
 
 Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, Optional ByVal isCheckBox As Boolean = False)
     Dim ctl As Control
@@ -502,28 +625,7 @@ Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
 End Sub
 
 Public Function OpenSelectedPart() As Boolean
-    Dim basePart As String
-    Dim listForm As Form
-    On Error GoTo Fail
-    If Not CurrentProject.AllForms(FRM_HOME).IsLoaded Then
-        OpenSelectedPart = False
-        Exit Function
-    End If
-    Set listForm = Forms(FRM_HOME)!subParts.Form
-    basePart = CoerceText(listForm!txtBasePart)
-    If Len(basePart) = 0 Then
-        basePart = CoerceText(listForm!BasePart)
-    End If
-    If Len(basePart) = 0 Then
-        MsgBox "Select a part row first.", vbExclamation, "Open Part"
-        OpenSelectedPart = False
-        Exit Function
-    End If
-    DoCmd.OpenForm FRM_PART, , , "BasePart = " & SqlText(basePart)
-    OpenSelectedPart = True
-    Exit Function
-Fail:
-    OpenSelectedPart = False
+    OpenSelectedPart = HomeOpenSelectedPart()
 End Function
 
 Public Function SeedOperationsForCurrentPart() As Boolean
@@ -558,6 +660,7 @@ End Function
 Public Function UiRefreshLinkedData() As Boolean
     On Error GoTo Fail
     RefreshAll
+    HomeRefreshAfterDataChange
     UiRefreshLinkedData = True
     Exit Function
 Fail:
