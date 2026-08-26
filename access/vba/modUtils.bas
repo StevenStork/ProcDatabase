@@ -32,6 +32,43 @@ Public Function SqlText(ByVal value As String) As String
     SqlText = "'" & Replace(value, "'", "''") & "'"
 End Function
 
+Public Function SqlNullableText(ByVal value As String) As String
+    value = Trim$(value)
+    If Len(value) = 0 Then
+        SqlNullableText = "Null"
+    Else
+        SqlNullableText = SqlText(value)
+    End If
+End Function
+
+Public Function SqlNullableNumber(ByVal value As Variant) As String
+    If IsError(value) Or IsNull(value) Or IsEmpty(value) Then
+        SqlNullableNumber = "Null"
+    ElseIf Not IsNumeric(value) Then
+        SqlNullableNumber = "Null"
+    Else
+        SqlNullableNumber = Str$(CDbl(value))
+    End If
+End Function
+
+Public Function SqlNullableDate(ByVal value As Variant) As String
+    If IsError(value) Or IsNull(value) Or IsEmpty(value) Then
+        SqlNullableDate = "Null"
+    ElseIf Not IsDate(value) Then
+        SqlNullableDate = "Null"
+    Else
+        SqlNullableDate = "#" & Format$(CDate(value), "yyyy-mm-dd") & "#"
+    End If
+End Function
+
+Public Function SqlBool(ByVal value As Boolean) As String
+    If value Then
+        SqlBool = "True"
+    Else
+        SqlBool = "False"
+    End If
+End Function
+
 Public Function TableExists(ByVal tableName As String) As Boolean
     Dim td As DAO.TableDef
     On Error Resume Next
@@ -50,23 +87,6 @@ End Function
 
 Public Function ObjectExists(ByVal objectType As AcObjectType, ByVal objectName As String) As Boolean
     Dim i As Long
-    Dim containerName As String
-
-    Select Case objectType
-        Case acForm
-            containerName = "Forms"
-        Case acReport
-            containerName = "Reports"
-        Case acMacro
-            containerName = "Scripts"
-        Case Else
-            ObjectExists = False
-            Exit Function
-    End Select
-
-    For i = 0 To CurrentProject.AllForms.Count - 1
-        ' Walked below by type.
-    Next i
 
     Select Case objectType
         Case acForm
@@ -90,6 +110,8 @@ Public Function ObjectExists(ByVal objectType As AcObjectType, ByVal objectName 
                     Exit Function
                 End If
             Next i
+        Case Else
+            ObjectExists = False
     End Select
 End Function
 
@@ -169,30 +191,6 @@ Public Function CoerceText(ByVal rawValue As Variant) As String
         CoerceText = vbNullString
     Else
         CoerceText = Trim$(CStr(rawValue))
-    End If
-End Function
-
-Public Function CoerceLong(ByVal rawValue As Variant) As Variant
-    If IsError(rawValue) Or IsNull(rawValue) Or IsEmpty(rawValue) Then
-        CoerceLong = Null
-    ElseIf Len(Trim$(CStr(rawValue))) = 0 Then
-        CoerceLong = Null
-    ElseIf IsNumeric(rawValue) Then
-        CoerceLong = CLng(rawValue)
-    Else
-        CoerceLong = Null
-    End If
-End Function
-
-Public Function CoerceDouble(ByVal rawValue As Variant) As Variant
-    If IsError(rawValue) Or IsNull(rawValue) Or IsEmpty(rawValue) Then
-        CoerceDouble = Null
-    ElseIf Len(Trim$(CStr(rawValue))) = 0 Then
-        CoerceDouble = Null
-    ElseIf IsNumeric(rawValue) Then
-        CoerceDouble = CDbl(rawValue)
-    Else
-        CoerceDouble = Null
     End If
 End Function
 

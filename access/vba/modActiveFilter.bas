@@ -9,51 +9,27 @@ Option Explicit
 
 Public Sub RebuildActiveAssemblyFilter()
     Dim db As DAO.Database
-    Dim rs As DAO.Recordset
-    Dim assemblyNo As String
-    Dim seen As Object
     Dim sql As String
 
     EnsureActiveAssemblyFilterTable
     Set db = CurrentDb
     db.Execute "DELETE FROM [" & TBL_ACTIVE_FILTER & "]", dbFailOnError
 
-    Set seen = CreateObject("Scripting.Dictionary")
-    seen.CompareMode = vbTextCompare
-
     If TableExists(TBL_RCCP) Then
-        sql = "SELECT [" & COL_ASSEMBLY_NO & "] FROM [" & TBL_RCCP & "]"
-        Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
-        Do Until rs.EOF
-            assemblyNo = CoerceText(rs.Fields(COL_ASSEMBLY_NO).Value)
-            If Len(assemblyNo) > 0 Then
-                If Not seen.Exists(assemblyNo) Then
-                    seen.Add assemblyNo, True
-                    db.Execute "INSERT INTO [" & TBL_ACTIVE_FILTER & "] ([" & COL_ASSEMBLY_NO_FILTER & "]) VALUES (" & _
-                        SqlText(assemblyNo) & ")", dbFailOnError
-                End If
-            End If
-            rs.MoveNext
-        Loop
-        rs.Close
+        ' Set-based distinct load — avoids per-row INSERT Execute.
+        sql = "INSERT INTO [" & TBL_ACTIVE_FILTER & "] ([" & COL_ASSEMBLY_NO_FILTER & "]) " & _
+            "SELECT DISTINCT [" & COL_ASSEMBLY_NO & "] FROM [" & TBL_RCCP & "] " & _
+            "WHERE Len(Nz([" & COL_ASSEMBLY_NO & "],'')) > 0"
+        db.Execute sql, dbFailOnError
     Else
-        sql = "SELECT p.BasePart, d.Dash FROM [" & TBL_PART & "] AS p " & _
+        sql = "INSERT INTO [" & TBL_ACTIVE_FILTER & "] ([" & COL_ASSEMBLY_NO_FILTER & "]) " & _
+            "SELECT DISTINCT p.BasePart & '-' & d.Dash FROM [" & TBL_PART & "] AS p " & _
             "INNER JOIN [" & TBL_PART_DASH & "] AS d ON p.BasePart = d.BasePart " & _
             "WHERE p.Active <> 0 AND d.Active <> 0"
-        Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
-        Do Until rs.EOF
-            assemblyNo = CoerceText(rs!BasePart) & "-" & CoerceText(rs!Dash)
-            If Len(assemblyNo) > 1 And Not seen.Exists(assemblyNo) Then
-                seen.Add assemblyNo, True
-                db.Execute "INSERT INTO [" & TBL_ACTIVE_FILTER & "] ([" & COL_ASSEMBLY_NO_FILTER & "]) VALUES (" & _
-                    SqlText(assemblyNo) & ")", dbFailOnError
-            End If
-            rs.MoveNext
-        Loop
-        rs.Close
+        db.Execute sql, dbFailOnError
     End If
 
-    SetMeta "ActiveAssemblyList", ActiveAssemblyNumberList()
+    SetMeta META_ACTIVE_ASSEMBLY_LIST, ActiveAssemblyNumberList()
 End Sub
 
 Public Sub EnsureActiveAssemblyFilterTable()
@@ -97,33 +73,22 @@ End Function
 
 Public Function ActiveAssemblyNumberList() As String
     Dim rs As DAO.Recordset
-    Dim items As Collection
-    Dim i As Long
-    Dim names() As String
+    Dim parts As String
 
-    Set items = New Collection
     If Not TableExists(TBL_ACTIVE_FILTER) Then
         ActiveAssemblyNumberList = vbNullString
         Exit Function
     End If
 
+    parts = vbNullString
     Set rs = CurrentDb.OpenRecordset( _
         "SELECT [" & COL_ASSEMBLY_NO_FILTER & "] FROM [" & TBL_ACTIVE_FILTER & "] " & _
         "ORDER BY [" & COL_ASSEMBLY_NO_FILTER & "]", dbOpenSnapshot)
     Do Until rs.EOF
-        items.Add CoerceText(rs.Fields(COL_ASSEMBLY_NO_FILTER).Value)
+        If Len(parts) > 0 Then parts = parts & ", "
+        parts = parts & CoerceText(rs.Fields(COL_ASSEMBLY_NO_FILTER).Value)
         rs.MoveNext
     Loop
     rs.Close
-
-    If items.Count = 0 Then
-        ActiveAssemblyNumberList = vbNullString
-        Exit Function
-    End If
-
-    ReDim names(1 To items.Count)
-    For i = 1 To items.Count
-        names(i) = items(i)
-    Next i
-    ActiveAssemblyNumberList = Join(names, ", ")
+    ActiveAssemblyNumberList = parts
 End Function

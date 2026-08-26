@@ -18,6 +18,9 @@ Public Sub RebuildCatalogFromStandards()
     Dim parts As Object
     Dim dashes As Object
     Dim ffas As Object
+    Dim existingFfas As Object
+    Dim existingPartPl As Object
+    Dim allProductLines As Object
     Dim partKey As Variant
     Dim dashKey As Variant
     Dim ffaKey As Variant
@@ -61,8 +64,10 @@ Public Sub RebuildCatalogFromStandards()
     Loop
     rs.Close
 
+    ' Insert only FFAs not already in tblFFA (one read of existing keys).
+    Set existingFfas = LoadKeySet(db, "SELECT FFA FROM [" & TBL_FFA & "]", "FFA")
     For Each ffaKey In ffas.Keys
-        If IsNull(DLookup("FFA", TBL_FFA, "FFA = " & SqlText(CStr(ffaKey)))) Then
+        If Not existingFfas.Exists(CStr(ffaKey)) Then
             db.Execute "INSERT INTO [" & TBL_FFA & "] (FFA, Factory) VALUES (" & _
                 SqlText(CStr(ffaKey)) & ", '')", dbFailOnError
         End If
@@ -70,6 +75,9 @@ Public Sub RebuildCatalogFromStandards()
 
     db.Execute "DELETE FROM [" & TBL_PART_DASH & "]", dbFailOnError
     db.Execute "DELETE FROM [" & TBL_PART & "]", dbFailOnError
+
+    Set existingPartPl = LoadPartProductLineSet(db)
+    Set allProductLines = LoadKeyList(db, "SELECT ProductLine FROM [" & TBL_PRODUCT_LINE & "]")
 
     For Each partKey In parts.Keys
         db.Execute "INSERT INTO [" & TBL_PART & "] (BasePart, Active, HomeFFA, StatusDate, [" & COL_NOTES & "]) VALUES (" & _
@@ -82,7 +90,7 @@ Public Sub RebuildCatalogFromStandards()
                 RestoreDashState db, CStr(partKey), CStr(dashKey), savedDashes
             Next dashKey
         End If
-        EnsureProductLineRows db, CStr(partKey)
+        EnsureProductLineRows db, CStr(partKey), allProductLines, existingPartPl
     Next partKey
 
     ApplyRccpSelections
@@ -101,6 +109,9 @@ Public Sub ApplyRccpSelections()
     Dim plCode As String
     Dim productLine As String
     Dim sql As String
+    Dim hasBasePn As Boolean
+    Dim hasFfa As Boolean
+    Dim hasPlText As Boolean
 
     If Not TableExists(TBL_RCCP) Then Exit Sub
     EnsureProductLinePlCodeColumn
@@ -112,16 +123,14 @@ Public Sub ApplyRccpSelections()
         db.Execute "UPDATE [" & TBL_PART_PL & "] SET UseFlag = False", dbFailOnError
     End If
 
+    hasBasePn = FieldExists(TBL_RCCP, COL_BASE_PN_TEXT)
+    hasFfa = FieldExists(TBL_RCCP, COL_FFA)
+    hasPlText = FieldExists(TBL_RCCP, COL_PRODUCT_LINE_TEXT)
+
     sql = "SELECT [" & COL_ASSEMBLY_NO & "]"
-    If FieldExists(TBL_RCCP, COL_BASE_PN_TEXT) Then
-        sql = sql & ", [" & COL_BASE_PN_TEXT & "]"
-    End If
-    If FieldExists(TBL_RCCP, COL_FFA) Then
-        sql = sql & ", [" & COL_FFA & "]"
-    End If
-    If FieldExists(TBL_RCCP, COL_PRODUCT_LINE_TEXT) Then
-        sql = sql & ", [" & COL_PRODUCT_LINE_TEXT & "]"
-    End If
+    If hasBasePn Then sql = sql & ", [" & COL_BASE_PN_TEXT & "]"
+    If hasFfa Then sql = sql & ", [" & COL_FFA & "]"
+    If hasPlText Then sql = sql & ", [" & COL_PRODUCT_LINE_TEXT & "]"
     sql = sql & " FROM [" & TBL_RCCP & "]"
 
     Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
@@ -129,7 +138,7 @@ Public Sub ApplyRccpSelections()
         assemblyNo = CoerceText(rs.Fields(COL_ASSEMBLY_NO).Value)
         If Len(assemblyNo) > 0 Then
             SplitAssemblyNo assemblyNo, basePart, dashCondition
-            If FieldExists(TBL_RCCP, COL_BASE_PN_TEXT) Then
+            If hasBasePn Then
                 baseFromCol = CoerceText(rs.Fields(COL_BASE_PN_TEXT).Value)
                 If Len(baseFromCol) > 0 Then basePart = baseFromCol
             End If
@@ -139,7 +148,7 @@ Public Sub ApplyRccpSelections()
                 db.Execute "UPDATE [" & TBL_PART & "] SET Active = True WHERE BasePart = " & _
                     SqlText(basePart), dbFailOnError
 
-                If FieldExists(TBL_RCCP, COL_FFA) Then
+                If hasFfa Then
                     ffaValue = CoerceText(rs.Fields(COL_FFA).Value)
                     If Len(ffaValue) > 0 Then
                         EnsureFfaRow db, ffaValue
@@ -155,7 +164,7 @@ Public Sub ApplyRccpSelections()
                         SqlText(basePart) & " AND Dash = " & SqlText(dashCondition), dbFailOnError
                 End If
 
-                If FieldExists(TBL_RCCP, COL_PRODUCT_LINE_TEXT) Then
+                If hasPlText Then
                     plCode = CoerceText(rs.Fields(COL_PRODUCT_LINE_TEXT).Value)
                     If Len(plCode) > 0 Then
                         productLine = ResolveProductLineFromPlCode(db, plCode)
@@ -174,10 +183,14 @@ Public Sub ApplyRccpSelections()
 End Sub
 
 Private Sub EnsurePartRow(ByVal db As DAO.Database, ByVal basePart As String)
+    Dim allPl As Object
+    Dim existingPl As Object
     If Not IsNull(DLookup("BasePart", TBL_PART, "BasePart = " & SqlText(basePart))) Then Exit Sub
     db.Execute "INSERT INTO [" & TBL_PART & "] (BasePart, Active, HomeFFA, StatusDate, [" & COL_NOTES & "]) VALUES (" & _
         SqlText(basePart) & ", False, Null, Null, Null)", dbFailOnError
-    EnsureProductLineRows db, basePart
+    Set allPl = LoadKeyList(db, "SELECT ProductLine FROM [" & TBL_PRODUCT_LINE & "]")
+    Set existingPl = LoadPartProductLineSet(db)
+    EnsureProductLineRows db, basePart, allPl, existingPl
 End Sub
 
 Private Sub EnsureDashRow(ByVal db As DAO.Database, ByVal basePart As String, ByVal dashCondition As String)
@@ -228,19 +241,34 @@ Private Function SnapshotParts() As Object
     Dim map As Object
     Dim key As String
     Dim notes As String
+    Dim hasNotes As Boolean
+    Dim hasHighlight As Boolean
+    Dim sql As String
+
     Set map = CreateObject("Scripting.Dictionary")
     map.CompareMode = vbTextCompare
     If Not TableExists(TBL_PART) Then
         Set SnapshotParts = map
         Exit Function
     End If
-    Set rs = CurrentDb.OpenRecordset("SELECT * FROM [" & TBL_PART & "]", dbOpenSnapshot)
+
+    hasNotes = FieldExists(TBL_PART, COL_NOTES)
+    hasHighlight = FieldExists(TBL_PART, "Highlight")
+    sql = "SELECT BasePart, Active, HomeFFA, StatusDate"
+    If hasNotes Then
+        sql = sql & ", [" & COL_NOTES & "]"
+    ElseIf hasHighlight Then
+        sql = sql & ", [Highlight]"
+    End If
+    sql = sql & " FROM [" & TBL_PART & "]"
+
+    Set rs = CurrentDb.OpenRecordset(sql, dbOpenSnapshot)
     Do Until rs.EOF
         key = CoerceText(rs!BasePart)
         If Len(key) > 0 Then
-            If FieldExists(TBL_PART, COL_NOTES) Then
+            If hasNotes Then
                 notes = CoerceText(rs.Fields(COL_NOTES).Value)
-            ElseIf FieldExists(TBL_PART, "Highlight") Then
+            ElseIf hasHighlight Then
                 notes = CoerceText(rs.Fields("Highlight").Value)
             Else
                 notes = vbNullString
@@ -267,7 +295,8 @@ Private Function SnapshotDashes() As Object
         Set SnapshotDashes = map
         Exit Function
     End If
-    Set rs = CurrentDb.OpenRecordset("SELECT * FROM [" & TBL_PART_DASH & "]", dbOpenSnapshot)
+    Set rs = CurrentDb.OpenRecordset( _
+        "SELECT BasePart, Dash, Active FROM [" & TBL_PART_DASH & "]", dbOpenSnapshot)
     Do Until rs.EOF
         key = CoerceText(rs!BasePart) & vbTab & CoerceText(rs!Dash)
         If Not map.Exists(key) Then
@@ -299,42 +328,70 @@ Private Sub RestoreDashState(ByVal db As DAO.Database, ByVal basePart As String,
         " WHERE BasePart = " & SqlText(basePart) & " AND Dash = " & SqlText(dashCondition), dbFailOnError
 End Sub
 
-Private Sub EnsureProductLineRows(ByVal db As DAO.Database, ByVal basePart As String)
-    Dim rs As DAO.Recordset
-    Set rs = db.OpenRecordset("SELECT ProductLine FROM [" & TBL_PRODUCT_LINE & "]", dbOpenSnapshot)
-    Do Until rs.EOF
-        If IsNull(DLookup("ProductLine", TBL_PART_PL, _
-            "BasePart = " & SqlText(basePart) & " AND ProductLine = " & SqlText(CStr(rs!ProductLine)))) Then
+Private Sub EnsureProductLineRows(ByVal db As DAO.Database, ByVal basePart As String, _
+    ByVal allProductLines As Object, ByVal existingPartPl As Object)
+
+    Dim i As Long
+    Dim pl As String
+    Dim key As String
+
+    If allProductLines Is Nothing Then Exit Sub
+    For i = 1 To allProductLines.Count
+        pl = CStr(allProductLines(i))
+        key = basePart & vbTab & pl
+        If Not existingPartPl.Exists(key) Then
             db.Execute "INSERT INTO [" & TBL_PART_PL & "] (BasePart, ProductLine, UseFlag) VALUES (" & _
-                SqlText(basePart) & ", " & SqlText(CStr(rs!ProductLine)) & ", False)", dbFailOnError
+                SqlText(basePart) & ", " & SqlText(pl) & ", False)", dbFailOnError
+            existingPartPl.Add key, True
         End If
+    Next i
+End Sub
+
+Private Function LoadKeySet(ByVal db As DAO.Database, ByVal sql As String, ByVal fieldName As String) As Object
+    Dim rs As DAO.Recordset
+    Dim map As Object
+    Dim key As String
+    Set map = CreateObject("Scripting.Dictionary")
+    map.CompareMode = vbTextCompare
+    Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
+    Do Until rs.EOF
+        key = CoerceText(rs.Fields(fieldName).Value)
+        If Len(key) > 0 And Not map.Exists(key) Then map.Add key, True
         rs.MoveNext
     Loop
     rs.Close
-End Sub
-
-Private Function SqlBool(ByVal value As Boolean) As String
-    If value Then
-        SqlBool = "True"
-    Else
-        SqlBool = "False"
-    End If
+    Set LoadKeySet = map
 End Function
 
-Private Function SqlNullableText(ByVal value As String) As String
-    If Len(value) = 0 Then
-        SqlNullableText = "Null"
-    Else
-        SqlNullableText = SqlText(value)
-    End If
+Private Function LoadKeyList(ByVal db As DAO.Database, ByVal sql As String) As Object
+    Dim rs As DAO.Recordset
+    Dim list As Collection
+    Set list = New Collection
+    Set rs = db.OpenRecordset(sql, dbOpenSnapshot)
+    Do Until rs.EOF
+        list.Add CoerceText(rs.Fields(0).Value)
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set LoadKeyList = list
 End Function
 
-Private Function SqlNullableDate(ByVal value As Variant) As String
-    If IsError(value) Or IsNull(value) Or IsEmpty(value) Then
-        SqlNullableDate = "Null"
-    ElseIf Not IsDate(value) Then
-        SqlNullableDate = "Null"
-    Else
-        SqlNullableDate = "#" & Format$(CDate(value), "yyyy-mm-dd") & "#"
+Private Function LoadPartProductLineSet(ByVal db As DAO.Database) As Object
+    Dim rs As DAO.Recordset
+    Dim map As Object
+    Dim key As String
+    Set map = CreateObject("Scripting.Dictionary")
+    map.CompareMode = vbTextCompare
+    If Not TableExists(TBL_PART_PL) Then
+        Set LoadPartProductLineSet = map
+        Exit Function
     End If
+    Set rs = db.OpenRecordset("SELECT BasePart, ProductLine FROM [" & TBL_PART_PL & "]", dbOpenSnapshot)
+    Do Until rs.EOF
+        key = CoerceText(rs!BasePart) & vbTab & CoerceText(rs!ProductLine)
+        If Not map.Exists(key) Then map.Add key, True
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set LoadPartProductLineSet = map
 End Function

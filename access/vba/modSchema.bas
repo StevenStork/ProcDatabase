@@ -14,8 +14,6 @@ Public Sub EnsureSchema()
     EnsurePartTables
     SchemaSubStep = "EnsureActiveAssemblyFilterTable"
     EnsureActiveAssemblyFilterTable
-    SchemaSubStep = "EnsureOptionalProcTmYldTable"
-    EnsureOptionalProcTmYldTable
     SchemaSubStep = "UpgradeExistingSchema"
     UpgradeExistingSchema
     SchemaSubStep = vbNullString
@@ -257,8 +255,7 @@ Private Sub MigrateLegacyMetaColumns()
 End Sub
 
 Private Sub EnsureOptionalProcTmYldTable()
-    ' Optional: user links or loads tblProcTmYld. Do not auto-create a local
-    ' empty table — that blocks linking a real yield source under the same name.
+    ' Optional linked yield source — intentionally not auto-created.
 End Sub
 
 Private Sub SeedDefaultProductLines()
@@ -340,11 +337,11 @@ End Sub
 Public Sub EnsureStartup()
     On Error Resume Next
     If ObjectExists(acForm, FRM_HOME) Then
-        SetDbProperty "StartupForm", dbText, FRM_HOME
+        SetDbProperty PROP_STARTUP_FORM, dbText, FRM_HOME
     Else
-        SetDbProperty "StartupForm", dbText, vbNullString
+        SetDbProperty PROP_STARTUP_FORM, dbText, vbNullString
     End If
-    SetDbProperty "AppTitle", dbText, "ProcDatabase"
+    SetDbProperty PROP_APP_TITLE, dbText, APP_TITLE
     Application.RefreshTitleBar
     On Error GoTo 0
 End Sub

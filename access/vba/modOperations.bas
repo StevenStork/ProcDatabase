@@ -6,29 +6,42 @@ Option Explicit
 ' Imported hours / executions use the same average fallbacks as the Excel UDFs.
 ' Existing override columns are preserved when an op row already exists.
 
-Public Sub SeedOperationsForPart(ByVal basePart As String)
-    RebuildActiveAssemblyFilter
+Public Sub SeedOperationsForPart(ByVal basePart As String, Optional ByVal rebuildFilter As Boolean = True)
     Dim db As DAO.Database
     Dim rsDash As DAO.Recordset
     Dim rsRoute As DAO.Recordset
+    Dim existingOps As Object
     Dim assemblyNo As String
     Dim opSeq As Variant
     Dim opCode As String
     Dim madeInFfa As String
     Dim importedHours As Variant
     Dim importedEx As Variant
+    Dim routeSource As String
     Dim sql As String
+    Dim ownCache As Boolean
 
     basePart = Trim$(basePart)
     If Len(basePart) = 0 Then Exit Sub
 
+    If rebuildFilter Then RebuildActiveAssemblyFilter
+
+    ' Single-part seed from the UI owns its average cache; batch seed wraps outside.
+    ownCache = Not AverageCacheIsActive()
+    If ownCache Then BeginAverageCache
+
+    On Error GoTo CleanUp
     Set db = CurrentDb
-    sql = "SELECT Dash FROM [" & TBL_PART_DASH & "] WHERE BasePart = " & SqlText(basePart) & " AND Active <> 0"
+    routeSource = RouteCardSourceName()
+    Set existingOps = LoadExistingOpMap(db, basePart)
+
+    sql = "SELECT Dash FROM [" & TBL_PART_DASH & "] WHERE BasePart = " & SqlText(basePart) & _
+        " AND Active <> 0"
     Set rsDash = db.OpenRecordset(sql, dbOpenSnapshot)
     Do Until rsDash.EOF
         assemblyNo = basePart & "-" & CoerceText(rsDash!Dash)
         sql = "SELECT [" & COL_OPER_SEQ & "], [" & COL_OPER_CODE & "], [" & COL_FFA & "] " & _
-            "FROM [" & RouteCardSourceName() & "] WHERE [" & COL_ASSEMBLY_NO & "] = " & SqlText(assemblyNo) & _
+            "FROM [" & routeSource & "] WHERE [" & COL_ASSEMBLY_NO & "] = " & SqlText(assemblyNo) & _
             " ORDER BY [" & COL_OPER_SEQ & "]"
         Set rsRoute = db.OpenRecordset(sql, dbOpenSnapshot)
         Do Until rsRoute.EOF
@@ -38,7 +51,7 @@ Public Sub SeedOperationsForPart(ByVal basePart As String)
                 madeInFfa = CoerceText(rsRoute.Fields(COL_FFA).Value)
                 importedHours = AvgLaborHoursByBasePartAndOp(basePart, opSeq)
                 importedEx = AvgProcTmYldByBasePartAndOp(basePart, opSeq)
-                UpsertOperation db, basePart, CLng(opSeq), opCode, importedHours, importedEx, madeInFfa
+                UpsertOperation db, existingOps, basePart, CLng(opSeq), opCode, importedHours, importedEx, madeInFfa
             End If
             rsRoute.MoveNext
         Loop
@@ -46,21 +59,54 @@ Public Sub SeedOperationsForPart(ByVal basePart As String)
         rsDash.MoveNext
     Loop
     rsDash.Close
+
+CleanUp:
+    If ownCache Then EndAverageCache
+    If Err.Number <> 0 Then Err.Raise Err.Number, "SeedOperationsForPart", Err.Description
 End Sub
 
 Public Sub SeedOperationsForActiveParts()
-    RebuildActiveAssemblyFilter
     Dim rs As DAO.Recordset
-    Set rs = CurrentDb.OpenRecordset("SELECT BasePart FROM [" & TBL_PART & "] WHERE Active <> 0", dbOpenSnapshot)
+    Dim db As DAO.Database
+
+    RebuildActiveAssemblyFilter
+    BeginAverageCache
+    On Error GoTo CleanUp
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset("SELECT BasePart FROM [" & TBL_PART & "] WHERE Active <> 0", dbOpenSnapshot)
     Do Until rs.EOF
-        SeedOperationsForPart CStr(rs!BasePart)
+        SeedOperationsForPart CStr(rs!BasePart), False
         rs.MoveNext
     Loop
     rs.Close
+
+CleanUp:
+    EndAverageCache
+    If Err.Number <> 0 Then Err.Raise Err.Number, "SeedOperationsForActiveParts", Err.Description
 End Sub
+
+Private Function LoadExistingOpMap(ByVal db As DAO.Database, ByVal basePart As String) As Object
+    Dim rs As DAO.Recordset
+    Dim map As Object
+    Dim key As String
+
+    Set map = CreateObject("Scripting.Dictionary")
+    map.CompareMode = vbTextCompare
+    Set rs = db.OpenRecordset( _
+        "SELECT OperationID, OpSequence FROM [" & TBL_OPERATION & "] WHERE BasePart = " & SqlText(basePart), _
+        dbOpenSnapshot)
+    Do Until rs.EOF
+        key = CStr(CLng(rs!OpSequence))
+        If Not map.Exists(key) Then map.Add key, CLng(rs!OperationID)
+        rs.MoveNext
+    Loop
+    rs.Close
+    Set LoadExistingOpMap = map
+End Function
 
 Private Sub UpsertOperation( _
     ByVal db As DAO.Database, _
+    ByVal existingOps As Object, _
     ByVal basePart As String, _
     ByVal opSeq As Long, _
     ByVal opCode As String, _
@@ -68,44 +114,25 @@ Private Sub UpsertOperation( _
     ByVal importedEx As Variant, _
     ByVal madeInFfa As String)
 
-    Dim existingId As Variant
+    Dim key As String
     Dim sql As String
 
-    existingId = DLookup("OperationID", TBL_OPERATION, _
-        "BasePart = " & SqlText(basePart) & " AND OpSequence = " & opSeq)
-
-    If IsNull(existingId) Then
+    key = CStr(opSeq)
+    If Not existingOps.Exists(key) Then
         sql = "INSERT INTO [" & TBL_OPERATION & "] " & _
             "(BasePart, OpSequence, OpCode, ImportedHours, ImportedEx, BatchSize, " & _
             "ExportHours, ExportEx, EquipmentType, UseExportHours, UseExportEx, MadeInFFA) VALUES (" & _
             SqlText(basePart) & ", " & opSeq & ", " & SqlText(opCode) & ", " & SqlNullableNumber(importedHours) & ", " & _
             SqlNullableNumber(importedEx) & ", Null, Null, Null, Null, False, False, " & SqlNullableText(madeInFfa) & ")"
         db.Execute sql, dbFailOnError
+        existingOps.Add key, True
     Else
         sql = "UPDATE [" & TBL_OPERATION & "] SET " & _
             "OpCode = " & SqlText(opCode) & ", " & _
             "ImportedHours = " & SqlNullableNumber(importedHours) & ", " & _
             "ImportedEx = " & SqlNullableNumber(importedEx) & ", " & _
             "MadeInFFA = " & SqlNullableText(madeInFfa) & " " & _
-            "WHERE OperationID = " & CLng(existingId)
+            "WHERE BasePart = " & SqlText(basePart) & " AND OpSequence = " & opSeq
         db.Execute sql, dbFailOnError
     End If
 End Sub
-
-Private Function SqlNullableNumber(ByVal value As Variant) As String
-    If IsError(value) Or IsNull(value) Or IsEmpty(value) Then
-        SqlNullableNumber = "Null"
-    ElseIf Not IsNumeric(value) Then
-        SqlNullableNumber = "Null"
-    Else
-        SqlNullableNumber = Str$(CDbl(value))
-    End If
-End Function
-
-Private Function SqlNullableText(ByVal value As String) As String
-    If Len(value) = 0 Then
-        SqlNullableText = "Null"
-    Else
-        SqlNullableText = SqlText(value)
-    End If
-End Function

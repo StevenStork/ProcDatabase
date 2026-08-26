@@ -19,14 +19,14 @@ Public Sub BootstrapProcDatabase()
     BootstrapStep = "EnsureStartup"
     EnsureStartup
     BootstrapStep = "SetMeta"
-    SetMeta "SchemaVersion", SCHEMA_VERSION
+    SetMeta META_SCHEMA_VERSION, SCHEMA_VERSION
     DoCmd.Hourglass False
     On Error Resume Next
     OpenFormSized FRM_HOME
     On Error GoTo 0
     MsgBox "ProcDatabase is ready." & vbCrLf & vbCrLf & _
         "Linked: " & TBL_ROUTE_CARD & ", " & TBL_ASSY_STANDARD & ", " & TBL_OPER_COMPLETIONS & ", " & TBL_RCCP & vbCrLf & _
-        "Run RefreshAll to pull data and rebuild the catalog.", vbInformation, "ProcDatabase"
+        "Run RefreshAll to pull data and rebuild the catalog.", vbInformation, APP_TITLE
     Exit Sub
 Fail:
     DoCmd.Hourglass False
@@ -38,7 +38,7 @@ Fail:
     If BootstrapStep = "EnsureUi" And Len(UiSubStep) > 0 Then
         detail = detail & vbCrLf & vbCrLf & "UI sub-step: " & UiSubStep
     End If
-    MsgBox "Bootstrap failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & detail, vbCritical, "ProcDatabase"
+    MsgBox "Bootstrap failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & detail, vbCritical, APP_TITLE
 End Sub
 
 ' Schema + queries only (skip form build). Use if EnsureUi fails.
@@ -49,12 +49,12 @@ Public Sub BootstrapSchemaOnly()
     EnsureSchema
     BootstrapStep = "EnsureQueries"
     EnsureQueries
-    SetMeta "SchemaVersion", SCHEMA_VERSION
-    MsgBox "Schema and queries are ready. Run BuildUi to create forms.", vbInformation, "ProcDatabase"
+    SetMeta META_SCHEMA_VERSION, SCHEMA_VERSION
+    MsgBox "Schema and queries are ready. Run BuildUi to create forms.", vbInformation, APP_TITLE
     Exit Sub
 Fail:
     MsgBox "BootstrapSchemaOnly failed during " & BootstrapStep & ":" & vbCrLf & vbCrLf & _
-        Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
+        Err.Description & " (" & Err.Number & ")", vbCritical, APP_TITLE
 End Sub
 
 Public Sub StartProcDatabase()
@@ -69,20 +69,20 @@ Public Sub StartProcDatabase()
     OpenFormSized FRM_HOME
     Exit Sub
 Fail:
-    MsgBox "Start failed: " & Err.Description, vbCritical, "ProcDatabase"
+    MsgBox "Start failed: " & Err.Description, vbCritical, APP_TITLE
 End Sub
 
 Public Sub RefreshAll()
     On Error GoTo Fail
+    ' RefreshSourceData → RebuildCatalogFromStandards already rebuilds the active filter.
     RefreshSourceData
-    RebuildActiveAssemblyFilter
     On Error Resume Next
     OpenFormSized FRM_HOME
     On Error GoTo Fail
-    MsgBox "Linked tables refreshed, catalog rebuilt, and active assembly filter updated.", vbInformation, "ProcDatabase"
+    MsgBox "Linked tables refreshed, catalog rebuilt, and active assembly filter updated.", vbInformation, APP_TITLE
     Exit Sub
 Fail:
-    MsgBox "Refresh failed: " & Err.Description & " (" & Err.Number & ")", vbCritical, "ProcDatabase"
+    MsgBox "Refresh failed: " & Err.Description & " (" & Err.Number & ")", vbCritical, APP_TITLE
 End Sub
 
 Public Sub BuildUi()
@@ -93,7 +93,7 @@ Public Sub BuildUi()
     ' needs an exclusive lock and fails (3211) while Home/startup UI has it open.
     buildStep = "CloseForms"
     On Error Resume Next
-    SetDbProperty "StartupForm", dbText, vbNullString
+    SetDbProperty PROP_STARTUP_FORM, dbText, vbNullString
     On Error GoTo Fail
     CloseProcDataForms
     DBEngine.Idle dbRefreshCache
@@ -108,7 +108,7 @@ Public Sub BuildUi()
     On Error Resume Next
     OpenFormSized FRM_HOME
     On Error GoTo Fail
-    MsgBox "Queries and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
+    MsgBox "Queries and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, APP_TITLE
     Exit Sub
 Fail:
     Dim uiDetail As String
@@ -116,12 +116,12 @@ Fail:
     If Len(UiSubStep) > 0 Then
         uiDetail = uiDetail & vbCrLf & vbCrLf & "UI sub-step: " & UiSubStep
     End If
-    MsgBox "UI build failed during " & buildStep & ":" & vbCrLf & vbCrLf & uiDetail, vbCritical, "ProcDatabase"
+    MsgBox "UI build failed during " & buildStep & ":" & vbCrLf & vbCrLf & uiDetail, vbCritical, APP_TITLE
 End Sub
 
 Public Sub RebuildFilterOnly()
     RebuildActiveAssemblyFilter
-    MsgBox "Active assembly filter rebuilt: " & ActiveAssemblyNumberList(), vbInformation, "ProcDatabase"
+    MsgBox "Active assembly filter rebuilt: " & ActiveAssemblyNumberList(), vbInformation, APP_TITLE
 End Sub
 
 ' Lists which ProcDatabase forms exist — useful when BuildUi partially failed.

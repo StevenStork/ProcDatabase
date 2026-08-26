@@ -11,8 +11,6 @@ Public Const TBL_OPER_COMPLETIONS As String = "tblOperComps"
 Public Const TBL_PROC_TM_YLD As String = "tblProcTmYld"
 Public Const TBL_RCCP As String = "tblRCCP"
 
-Public Const SOURCE_WORKBOOK_XLSM As String = "dataQueries.xlsm"
-
 ' Local app tables.
 Public Const TBL_META As String = "tblMeta"
 Public Const TBL_FFA As String = "tblFFA"
@@ -29,6 +27,27 @@ Public Const COL_NOTES As String = "Notes"
 Public Const COL_ASSEMBLY_NO_FILTER As String = "AssemblyNo"
 Public Const COL_PL_CODE As String = "PL Code"
 Public Const COL_EQUIP_TYPE As String = "Equipment Type"
+Public Const COL_BASE_PART As String = "BasePart"
+Public Const COL_ACTIVE As String = "Active"
+Public Const COL_HOME_FFA As String = "HomeFFA"
+Public Const COL_STATUS_DATE As String = "StatusDate"
+Public Const COL_DASH As String = "Dash"
+Public Const COL_PRODUCT_LINE As String = "ProductLine"
+Public Const COL_FACTORY As String = "Factory"
+Public Const COL_USE_FLAG As String = "UseFlag"
+Public Const COL_EQUIPMENT As String = "Equipment"
+Public Const COL_OP_SEQUENCE As String = "OpSequence"
+Public Const COL_OP_CODE As String = "OpCode"
+
+Public Const META_SCHEMA_VERSION As String = "SchemaVersion"
+Public Const META_LAST_REFRESH As String = "LastRefresh"
+Public Const META_ACTIVE_ASSEMBLY_LIST As String = "ActiveAssemblyList"
+
+Public Const APP_TITLE As String = "ProcDatabase"
+Public Const PROP_STARTUP_FORM As String = "StartupForm"
+Public Const PROP_APP_TITLE As String = "AppTitle"
+
+Public Const QRY_EXPORT_TEMP As String = "qryExportTemp"
 
 Public Const QRY_HOME As String = "qryHomeParts"
 Public Const QRY_OPERATIONS As String = "qryOperations"

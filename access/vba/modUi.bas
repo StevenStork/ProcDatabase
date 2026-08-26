@@ -806,10 +806,6 @@ Private Sub SetCompactDetailHeight(ByVal frm As Form, Optional ByVal rowTwips As
     On Error GoTo 0
 End Sub
 
-Public Function OpenSelectedPart() As Boolean
-    OpenSelectedPart = HomeOpenSelectedPart()
-End Function
-
 Public Function SeedOperationsForCurrentPart() As Boolean
     Dim basePart As String
     On Error GoTo Fail
@@ -841,8 +837,8 @@ End Function
 
 Public Function UiRefreshLinkedData() As Boolean
     On Error GoTo Fail
+    ' RefreshAll rebuilds data and reopens Home (HomeForm_Load applies filters).
     RefreshAll
-    HomeRefreshAfterDataChange
     UiRefreshLinkedData = True
     Exit Function
 Fail:
@@ -1049,26 +1045,6 @@ Public Function UiClearEquipmentEntry() As Boolean
     Exit Function
 Fail:
     UiClearEquipmentEntry = False
-End Function
-
-Private Function SqlNullableText(ByVal value As String) As String
-    If Len(Trim$(value)) = 0 Then
-        SqlNullableText = "Null"
-    Else
-        SqlNullableText = SqlText(value)
-    End If
-End Function
-
-Public Function UiOpenFfaTable() As Boolean
-    UiOpenFfaTable = UiOpenFfaForm()
-End Function
-
-Public Function UiOpenProductLineTable() As Boolean
-    UiOpenProductLineTable = UiOpenProductLineForm()
-End Function
-
-Public Function UiOpenEquipmentTable() As Boolean
-    UiOpenEquipmentTable = UiOpenEquipmentForm()
 End Function
 
 Public Function UiExportFfa() As Boolean

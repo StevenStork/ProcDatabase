@@ -25,7 +25,7 @@ Public Sub RefreshSourceData()
     CloseProcDataForms
     RebuildCatalogFromStandards
     SeedReferencesFromSources
-    SetMeta "LastRefresh", Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    SetMeta META_LAST_REFRESH, Format$(Now, "yyyy-mm-dd hh:nn:ss")
     DoCmd.Hourglass False
     Exit Sub
 

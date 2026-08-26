@@ -32,11 +32,11 @@ Fail:
 End Function
 
 Public Function HomeApplyFilter() As Boolean
-    HomeApplyFilter = HomeApplyFilterCore(True)
+    HomeApplyFilter = HomeApplyFilterCore(True, True)
 End Function
 
-' Live search: filter as you type without refreshing the jump combo every keystroke
-' (combo Requery steals focus / selects all text in the search box).
+' Live search: filter as you type without refreshing the jump combo or recounting
+' every keystroke (both steal focus / add latency).
 Public Function HomeSearchChanged() As Boolean
     Dim ctl As Control
     Dim cursorPos As Long
@@ -53,7 +53,7 @@ Public Function HomeSearchChanged() As Boolean
     On Error GoTo Fail
 
     ' Do NOT assign .Value = .Text — that selects the entire search box.
-    HomeApplyFilterCore False
+    HomeApplyFilterCore False, False
 
     On Error Resume Next
     ctl.SetFocus
@@ -66,7 +66,7 @@ Fail:
     HomeSearchChanged = False
 End Function
 
-Private Function HomeApplyFilterCore(ByVal refreshJump As Boolean) As Boolean
+Private Function HomeApplyFilterCore(ByVal refreshJump As Boolean, ByVal updateStatus As Boolean) As Boolean
     Dim frm As Form
     Dim listForm As Form
     Dim criteria As String
@@ -107,7 +107,7 @@ Private Function HomeApplyFilterCore(ByVal refreshJump As Boolean) As Boolean
     End If
 
     If refreshJump Then HomeRefreshJumpCombo
-    HomeUpdateStatus
+    If updateStatus Then HomeUpdateStatus
     HomeApplyFilterCore = True
     Exit Function
 Fail:

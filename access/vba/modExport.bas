@@ -60,7 +60,7 @@ End Function
 Private Sub ExportQuery(ByVal sql As String, ByVal destPath As String, ByVal sheetName As String)
     Dim qdf As DAO.QueryDef
     Dim tempName As String
-    tempName = "qryExportTemp"
+    tempName = QRY_EXPORT_TEMP
     ReplaceQuery tempName, sql
     If Len(Dir$(destPath)) > 0 Then
         Kill destPath
