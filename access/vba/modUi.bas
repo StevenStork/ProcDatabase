@@ -667,6 +667,25 @@ Private Sub AddStandaloneLabel(ByVal frm As Form, ByVal caption As String, _
     lbl.Caption = caption
 End Sub
 
+' CreateForm() leaves Header/Footer off. Toggle them on before referencing acHeader
+' (otherwise Section/CreateControl raises 2148).
+Private Function EnsureFormHeader(ByVal frm As Form, Optional ByVal headerHeight As Long = 360) As Boolean
+    Dim probe As Long
+    On Error Resume Next
+    probe = frm.Section(acHeader).Height
+    If Err.Number <> 0 Then
+        Err.Clear
+        ' Form is already open in Design from CreateForm — toggle Header/Footer on.
+        DoCmd.SelectObject acForm, frm.Name, False
+        DoCmd.RunCommand acCmdFormHdrFtr
+    End If
+    Err.Clear
+    frm.Section(acHeader).Height = headerHeight
+    EnsureFormHeader = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+End Function
+
 ' Column titles once in the Form Header for continuous (multi-row) forms.
 Private Sub AddContinuousColumnHeaders(ByVal frm As Form, ByVal headers As Variant)
     Dim i As Long
@@ -675,9 +694,8 @@ Private Sub AddContinuousColumnHeaders(ByVal frm As Form, ByVal headers As Varia
     Dim leftPos As Long
     Dim widthPos As Long
 
-    On Error Resume Next
-    frm.Section(acHeader).Height = 360
-    On Error GoTo 0
+    On Error GoTo FailSoft
+    If Not EnsureFormHeader(frm) Then Exit Sub
 
     For i = LBound(headers) To UBound(headers)
         caption = CStr(headers(i)(0))
@@ -688,6 +706,9 @@ Private Sub AddContinuousColumnHeaders(ByVal frm As Form, ByVal headers As Varia
         lbl.Caption = caption
         lbl.FontBold = True
     Next i
+    Exit Sub
+FailSoft:
+    ' Headers are optional — do not fail BuildUi (2148 if Header still missing).
 End Sub
 
 Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, _
