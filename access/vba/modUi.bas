@@ -12,10 +12,10 @@ Public Sub EnsureUi()
     CloseProcDataForms
     UiSubStep = "CreateReferenceForms"
     CreateReferenceForms
-    UiSubStep = "CreateEquipmentFfaSubform"
-    CreateEquipmentFfaSubform
     UiSubStep = "CreateEquipmentForm"
     CreateEquipmentForm
+    UiSubStep = "CreateEquipmentFfaForm"
+    CreateEquipmentFfaForm
     UiSubStep = "CreatePartDashSubform"
     CreatePartDashSubform
     UiSubStep = "CreatePartProductLineSubform"
@@ -67,52 +67,55 @@ Private Sub CreateReferenceForms()
     SaveAndRenameForm frm, FRM_PRODUCT_LINE
 End Sub
 
-Private Sub CreateEquipmentFfaSubform()
+Private Sub CreateEquipmentForm()
     Dim frm As Form
-    Dim ctl As Control
 
-    DeleteObjectIfExists acForm, SFRM_EQUIP_FFA
+    ' Datasheet so many equipment rows can be entered at once.
+    DeleteObjectIfExists acForm, FRM_EQUIPMENT
+    DeleteObjectIfExists acForm, "sfrmEquipmentFFA"
     Set frm = CreateForm()
-    frm.RecordSource = TBL_EQUIPMENT_FFA
+    frm.RecordSource = TBL_EQUIPMENT
+    frm.Caption = "Equipment"
     frm.DefaultView = 2
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
 
-    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "FFA", 0, 0, 2400, 300)
+    AddDetailField frm, "Equipment", 0, 0, 3600
+    AddDetailField frm, COL_EQUIP_TYPE, 3700, 0, 2400
+
+    SaveAndRenameForm frm, FRM_EQUIPMENT
+End Sub
+
+Private Sub CreateEquipmentFfaForm()
+    Dim frm As Form
+    Dim ctl As Control
+
+    ' Datasheet of equipment↔FFA links — add many assignments at once.
+    DeleteObjectIfExists acForm, FRM_EQUIPMENT_FFA
+    Set frm = CreateForm()
+    frm.RecordSource = TBL_EQUIPMENT_FFA
+    frm.Caption = "Equipment FFAs"
+    frm.DefaultView = 2
+    frm.AllowAdditions = True
+    frm.AllowDeletions = True
+    frm.AllowEdits = True
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "Equipment", 0, 0, 3600, 300)
+    ctl.Name = "cboEquipment"
+    ctl.ControlSource = "Equipment"
+    ctl.RowSource = "SELECT Equipment FROM [" & TBL_EQUIPMENT & "] ORDER BY Equipment"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = True
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "FFA", 3700, 0, 2400, 300)
     ctl.Name = "cboFFA"
     ctl.ControlSource = "FFA"
     ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = True
 
-    SaveAndRenameForm frm, SFRM_EQUIP_FFA
-End Sub
-
-Private Sub CreateEquipmentForm()
-    Dim frm As Form
-    Dim ctl As Control
-
-    ' Manual equipment catalog: name + which FFAs it exists in (subform).
-    DeleteObjectIfExists acForm, FRM_EQUIPMENT
-    Set frm = CreateForm()
-    frm.RecordSource = TBL_EQUIPMENT
-    frm.Caption = "Equipment"
-    frm.DefaultView = 0
-    frm.AllowAdditions = True
-    frm.AllowDeletions = True
-    frm.AllowEdits = True
-
-    AddDetailField frm, "Equipment", 1200, 200, 3600
-    AddDetailField frm, COL_EQUIP_TYPE, 1200, 600, 3600
-
-    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 1100, 4200, 3000)
-    ctl.Name = "subEquipmentFfas"
-    ctl.SourceObject = SFRM_EQUIP_FFA
-    ctl.LinkMasterFields = "Equipment"
-    ctl.LinkChildFields = "Equipment"
-
-    SaveAndRenameForm frm, FRM_EQUIPMENT
+    SaveAndRenameForm frm, FRM_EQUIPMENT_FFA
 End Sub
 
 Private Sub CreateHomeListSubform()
