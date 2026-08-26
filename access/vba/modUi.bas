@@ -64,9 +64,12 @@ Private Sub CreateReferenceForms()
     frm.RecordSelectors = True
     frm.NavigationButtons = True
     frm.ScrollBars = 2
-    AddDetailField frm, "FFA", 120, 30, 1800
-    AddDetailField frm, "Factory", 2040, 30, 3600
+    AddDetailField frm, "FFA", 120, 30, 1800, False
+    AddDetailField frm, "Factory", 2040, 30, 3600, False
     SetCompactDetailHeight frm
+    AddContinuousColumnHeaders frm, Array( _
+        Array("FFA", 120&, 1800&), _
+        Array("Factory", 2040&, 3600&))
     SaveAndRenameForm frm, FRM_FFA
 
     Set frm = CreateForm()
@@ -79,9 +82,12 @@ Private Sub CreateReferenceForms()
     frm.RecordSelectors = True
     frm.NavigationButtons = True
     frm.ScrollBars = 2
-    AddDetailField frm, "ProductLine", 120, 30, 3600
-    AddDetailField frm, COL_PL_CODE, 3840, 30, 1800
+    AddDetailField frm, "ProductLine", 120, 30, 3600, False
+    AddDetailField frm, COL_PL_CODE, 3840, 30, 1800, False
     SetCompactDetailHeight frm
+    AddContinuousColumnHeaders frm, Array( _
+        Array("Product Line", 120&, 3600&), _
+        Array("PL Code", 3840&, 1800&))
     SaveAndRenameForm frm, FRM_PRODUCT_LINE
 End Sub
 
@@ -104,9 +110,12 @@ Private Sub CreateEquipmentForm()
     frm.NavigationButtons = True
     frm.ScrollBars = 2
 
-    AddDetailField frm, "Equipment", 120, 30, 3600
-    AddDetailField frm, COL_EQUIP_TYPE, 3840, 30, 2400
+    AddDetailField frm, "Equipment", 120, 30, 3600, False
+    AddDetailField frm, COL_EQUIP_TYPE, 3840, 30, 2400, False
     SetCompactDetailHeight frm
+    AddContinuousColumnHeaders frm, Array( _
+        Array("Equipment", 120&, 3600&), _
+        Array("Equipment Type", 3840&, 2400&))
 
     SaveAndRenameForm frm, FRM_EQUIPMENT
 End Sub
@@ -146,6 +155,9 @@ Private Sub CreateEquipmentFfaForm()
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = True
     SetCompactDetailHeight frm
+    AddContinuousColumnHeaders frm, Array( _
+        Array("Equipment", 120&, 3600&), _
+        Array("FFA", 3840&, 2400&))
 
     SaveAndRenameForm frm, FRM_EQUIPMENT_FFA
 End Sub
@@ -213,7 +225,7 @@ Private Sub CreateEquipmentEntryForm()
     Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 3800, LayoutUsableHeight() - 900, 1400, 400)
     ctl.Name = "btnClose"
     ctl.Caption = "Close"
-    ctl.OnClick = "=UiCloseCurrentForm()"
+    ctl.OnClick = "=UiCloseForm(""" & FRM_EQUIPMENT_ENTRY & """)"
     AnchorBottom ctl
 
     Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, LayoutUsableHeight() - 480, LayoutUsableWidth() - 440, 300)
@@ -247,6 +259,14 @@ Private Sub CreateHomeListSubform()
     AddHomeField frm, "Factories", 9060, 0, 1800
     frm.Controls("txtFactories").Enabled = False
     SetCompactDetailHeight frm
+    AddContinuousColumnHeaders frm, Array( _
+        Array("Base Part", 120&, 1800&), _
+        Array("Active", 2040&, 900&), _
+        Array("Status Date", 3000&, 1200&), _
+        Array("Days", 4320&, 720&), _
+        Array("Notes", 5100&, 2400&), _
+        Array("Home FFA", 7560&, 1440&), _
+        Array("Factories", 9060&, 1800&))
 
     SaveAndRenameForm frm, SFRM_HOME_LIST
     ApplyHomeDaysRagDesign SFRM_HOME_LIST
@@ -340,10 +360,10 @@ Private Sub AddHomeField(ByVal frm As Form, ByVal fieldName As String, ByVal lef
     Dim ctl As Control
     If isCheckBox Then
         Set ctl = CreateControl(frm.Name, acCheckBox, acDetail, , fieldName, leftPos, topPos, 300, 300)
-        ctl.Name = "chk" & fieldName
+        ctl.Name = "chk" & ControlBaseName(fieldName)
     Else
         Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
-        ctl.Name = "txt" & fieldName
+        ctl.Name = "txt" & ControlBaseName(fieldName)
     End If
     ctl.ControlSource = fieldName
 End Sub
@@ -351,7 +371,7 @@ End Sub
 Private Sub AddHomeCombo(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
-    ctl.Name = "cbo" & fieldName
+    ctl.Name = "cbo" & ControlBaseName(fieldName)
     ctl.ControlSource = fieldName
     ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
     ctl.RowSourceType = "Table/Query"
@@ -421,6 +441,7 @@ Private Sub CreateOperationSubform()
     ctl.RowSource = "SELECT Equipment FROM [" & TBL_EQUIPMENT & "] ORDER BY Equipment"
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = False
+    AttachFieldLabel frm, ctl, FriendlyFieldCaption("EquipmentType"), 8200, 0, 1800
 
     AddDetailCheck frm, "UseExportHours", 10100, 0
     AddDetailCheck frm, "UseExportEx", 10800, 0
@@ -438,7 +459,7 @@ Private Sub CreatePartForm()
     Dim contentH As Long
     Dim halfW As Long
     Dim midH As Long
-    Dim     opsTop As Long
+    Dim opsTop As Long
     Dim opsH As Long
 
     Set frm = CreateForm()
@@ -458,10 +479,14 @@ Private Sub CreatePartForm()
     opsH = contentH - opsTop - 200
     If opsH < 2800 Then opsH = 2800
 
-    AddDetailField frm, "BasePart", 1200, 200, 2000
-    AddDetailCheck frm, "Active", 3400, 200
-    AddDetailCombo frm, "HomeFFA", 1200, 600, 2000
-    AddDetailField frm, "StatusDate", 1200, 1000, 1600
+    AddStandaloneLabel frm, "Base Part", 200, 200, 900
+    AddDetailField frm, "BasePart", 1200, 200, 2000, False
+    AddDetailCheck frm, "Active", 3400, 200, False
+    AddStandaloneLabel frm, "Active", 3700, 200, 800
+    AddStandaloneLabel frm, "Home FFA", 200, 600, 900
+    AddDetailCombo frm, "HomeFFA", 1200, 600, 2000, False
+    AddStandaloneLabel frm, "Status Date", 200, 1000, 900
+    AddDetailField frm, "StatusDate", 1200, 1000, 1600, False
 
     Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 1600, halfW, midH)
     ctl.Name = "subDashes"
@@ -493,7 +518,7 @@ Private Sub CreatePartForm()
     Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , LayoutUsableWidth() - 1840, 600, 1600, 360)
     ctl.Name = "btnClose"
     ctl.Caption = "Close"
-    ctl.OnClick = "=UiCloseCurrentForm()"
+    ctl.OnClick = "=UiCloseForm(""" & FRM_PART & """)"
     AnchorTopRight ctl
 
     SaveAndRenameForm frm, FRM_PART
@@ -533,6 +558,11 @@ Private Sub CreateReferencesForm()
     ctl.Caption = "View Equipment FFAs"
     ctl.OnClick = "=UiOpenEquipmentFfaForm()"
 
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 2800, 1400, 400)
+    ctl.Name = "btnClose"
+    ctl.Caption = "Close"
+    ctl.OnClick = "=UiCloseForm(""" & FRM_REFERENCES & """)"
+
     SaveAndRenameForm frm, FRM_REFERENCES
 End Sub
 
@@ -565,31 +595,138 @@ Private Sub CreateExportForm()
     ctl.Caption = "Export Product Line"
     ctl.OnClick = "=ExportSelectedProductLine()"
 
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1900, 1400, 400)
+    ctl.Name = "btnClose"
+    ctl.Caption = "Close"
+    ctl.OnClick = "=UiCloseForm(""" & FRM_EXPORT & """)"
+
     SaveAndRenameForm frm, FRM_EXPORT
 End Sub
 
-Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
+Private Function ControlBaseName(ByVal fieldName As String) As String
+    ControlBaseName = Replace(Replace(Replace(fieldName, " ", vbNullString), ":", vbNullString), "/", vbNullString)
+End Function
+
+' Datasheet column headers use the attached label Caption — not txtOpSequence.
+Private Function FriendlyFieldCaption(ByVal fieldName As String) As String
+    Select Case fieldName
+        Case "OpSequence": FriendlyFieldCaption = "Op Sequence"
+        Case "OpCode": FriendlyFieldCaption = "Op Code"
+        Case "ImportedHours": FriendlyFieldCaption = "Imported Hours"
+        Case "ImportedEx": FriendlyFieldCaption = "Imported Ex"
+        Case "BatchSize": FriendlyFieldCaption = "Batch Size"
+        Case "ExportHours": FriendlyFieldCaption = "Export Hours"
+        Case "ExportEx": FriendlyFieldCaption = "Export Ex"
+        Case "EquipmentType": FriendlyFieldCaption = "Equipment Type"
+        Case "UseExportHours": FriendlyFieldCaption = "Use Exp Hrs"
+        Case "UseExportEx": FriendlyFieldCaption = "Use Exp Ex"
+        Case "ProcessHours": FriendlyFieldCaption = "Process Hours"
+        Case "AvgEx": FriendlyFieldCaption = "Avg Ex"
+        Case "AvgHPU": FriendlyFieldCaption = "Avg HPU"
+        Case "MadeInFFA": FriendlyFieldCaption = "Made In FFA"
+        Case "BasePart": FriendlyFieldCaption = "Base Part"
+        Case "StatusDate": FriendlyFieldCaption = "Status Date"
+        Case "HomeFFA": FriendlyFieldCaption = "Home FFA"
+        Case "ProductLine": FriendlyFieldCaption = "Product Line"
+        Case "UseFlag": FriendlyFieldCaption = "Use"
+        Case "Active": FriendlyFieldCaption = "Active"
+        Case "Dash": FriendlyFieldCaption = "Dash"
+        Case "Days": FriendlyFieldCaption = "Days"
+        Case "Factories": FriendlyFieldCaption = "Factories"
+        Case "FFA": FriendlyFieldCaption = "FFA"
+        Case "Factory": FriendlyFieldCaption = "Factory"
+        Case "Equipment": FriendlyFieldCaption = "Equipment"
+        Case COL_NOTES: FriendlyFieldCaption = "Notes"
+        Case COL_PL_CODE: FriendlyFieldCaption = "PL Code"
+        Case COL_EQUIP_TYPE: FriendlyFieldCaption = "Equipment Type"
+        Case Else: FriendlyFieldCaption = fieldName
+    End Select
+End Function
+
+' Attached label Caption becomes the datasheet column heading.
+Private Sub AttachFieldLabel(ByVal frm As Form, ByVal ctl As Control, ByVal caption As String, _
+    ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
+
+    Dim lbl As Control
+    On Error Resume Next
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, ctl.Name, , leftPos, topPos, widthPos, 240)
+    If Not lbl Is Nothing Then
+        lbl.Name = "lbl" & ControlBaseName(ctl.Name)
+        lbl.Caption = caption
+        lbl.Width = widthPos
+    End If
+    On Error GoTo 0
+End Sub
+
+Private Sub AddStandaloneLabel(ByVal frm As Form, ByVal caption As String, _
+    ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
+
+    Dim lbl As Control
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , leftPos, topPos, widthPos, 300)
+    lbl.Name = "lbl" & ControlBaseName(caption) & CStr(leftPos)
+    lbl.Caption = caption
+End Sub
+
+' Column titles once in the Form Header for continuous (multi-row) forms.
+Private Sub AddContinuousColumnHeaders(ByVal frm As Form, ByVal headers As Variant)
+    Dim i As Long
+    Dim lbl As Control
+    Dim caption As String
+    Dim leftPos As Long
+    Dim widthPos As Long
+
+    On Error Resume Next
+    frm.Section(acHeader).Height = 360
+    On Error GoTo 0
+
+    For i = LBound(headers) To UBound(headers)
+        caption = CStr(headers(i)(0))
+        leftPos = CLng(headers(i)(1))
+        widthPos = CLng(headers(i)(2))
+        Set lbl = CreateControl(frm.Name, acLabel, acHeader, , , leftPos, 40, widthPos, 280)
+        lbl.Name = "hdr" & ControlBaseName(caption) & CStr(i)
+        lbl.Caption = caption
+        lbl.FontBold = True
+    Next i
+End Sub
+
+Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, _
+    Optional ByVal attachLabel As Boolean = True)
+
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
-    ctl.Name = "txt" & fieldName
+    ctl.Name = "txt" & ControlBaseName(fieldName)
     ctl.ControlSource = fieldName
+    If attachLabel Then
+        AttachFieldLabel frm, ctl, FriendlyFieldCaption(fieldName), leftPos, topPos, widthPos
+    End If
 End Sub
 
-Private Sub AddDetailCheck(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long)
+Private Sub AddDetailCheck(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, _
+    Optional ByVal attachLabel As Boolean = True)
+
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acCheckBox, acDetail, , fieldName, leftPos, topPos, 300, 300)
-    ctl.Name = "chk" & fieldName
+    ctl.Name = "chk" & ControlBaseName(fieldName)
     ctl.ControlSource = fieldName
+    If attachLabel Then
+        AttachFieldLabel frm, ctl, FriendlyFieldCaption(fieldName), leftPos, topPos, 1200
+    End If
 End Sub
 
-Private Sub AddDetailCombo(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long)
+Private Sub AddDetailCombo(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, _
+    Optional ByVal attachLabel As Boolean = True)
+
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
-    ctl.Name = "cbo" & fieldName
+    ctl.Name = "cbo" & ControlBaseName(fieldName)
     ctl.ControlSource = fieldName
     ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = False
+    If attachLabel Then
+        AttachFieldLabel frm, ctl, FriendlyFieldCaption(fieldName), leftPos, topPos, widthPos
+    End If
 End Sub
 
 Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
@@ -719,9 +856,38 @@ Fail:
 End Function
 
 Public Function UiCloseCurrentForm() As Boolean
+    Dim formName As String
     On Error Resume Next
-    DoCmd.Close acForm
+    ' Expression-button clicks often have no default "current" object for
+    ' DoCmd.Close acForm with no name — close the active form explicitly.
+    formName = Screen.ActiveForm.Name
+    If Len(formName) = 0 Then
+        formName = ParentFormName(Screen.ActiveControl)
+    End If
+    If Len(formName) > 0 Then
+        DoCmd.Close acForm, formName, acSaveYes
+    End If
     UiCloseCurrentForm = True
+End Function
+
+' Prefer this from OnClick when the form name is known.
+Public Function UiCloseForm(ByVal formName As String) As Boolean
+    On Error Resume Next
+    DoCmd.Close acForm, formName, acSaveYes
+    UiCloseForm = True
+End Function
+
+Private Function ParentFormName(ByVal ctl As Control) As String
+    Dim p As Object
+    On Error Resume Next
+    Set p = ctl
+    Do While Not p Is Nothing
+        If TypeOf p Is Form Then
+            ParentFormName = p.Name
+            Exit Function
+        End If
+        Set p = p.Parent
+    Loop
 End Function
 
 Public Function UiOpenFfaForm() As Boolean
