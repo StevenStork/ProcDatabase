@@ -645,7 +645,7 @@ End Function
 
 Public Function UiAddEquipmentEntry() As Boolean
     Dim frm As Form
-    Dim lst As Control
+    Dim lst As ListBox
     Dim equipName As String
     Dim equipType As String
     Dim ffaValue As String
@@ -694,8 +694,8 @@ Public Function UiAddEquipmentEntry() As Boolean
         End If
     Next i
 
-    frm!lblStatus.Caption = "Added '" & equipName & "' (" & CStr(addedFfas) & " new FFA link(s)). Ready for next."
     UiClearEquipmentEntry
+    frm!lblStatus.Caption = "Added '" & equipName & "' (" & CStr(addedFfas) & " new FFA link(s)). Ready for next."
     On Error Resume Next
     frm!txtEquipment.SetFocus
     On Error GoTo 0
@@ -712,7 +712,7 @@ End Function
 
 Public Function UiClearEquipmentEntry() As Boolean
     Dim frm As Form
-    Dim lst As Control
+    Dim lst As ListBox
     Dim i As Long
     On Error GoTo Fail
     If Not CurrentProject.AllForms(FRM_EQUIPMENT_ENTRY).IsLoaded Then
