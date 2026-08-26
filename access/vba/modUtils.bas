@@ -442,6 +442,19 @@ Fail:
     End If
 End Sub
 
+Public Sub AddDoubleColumnIfMissing(ByVal tableName As String, ByVal fieldName As String)
+    If FieldExists(tableName, fieldName) Then Exit Sub
+    On Error GoTo Fail
+    CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] DOUBLE", dbFailOnError
+    Exit Sub
+Fail:
+    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Or Err.Number = 3211 Then
+        Err.Clear
+    Else
+        Err.Raise Err.Number, "AddDoubleColumnIfMissing", Err.Description
+    End If
+End Sub
+
 Public Sub DropColumnIfExists(ByVal tableName As String, ByVal fieldName As String)
     If Not FieldExists(tableName, fieldName) Then Exit Sub
     On Error GoTo Fail

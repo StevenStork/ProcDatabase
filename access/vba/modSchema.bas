@@ -150,9 +150,11 @@ Private Sub EnsurePartTables()
             "[BasePart] TEXT(50), " & _
             "[OpSequence] LONG, " & _
             "[OpCode] TEXT(50), " & _
+            "[ProcessHours] DOUBLE, " & _
+            "[AvgEx] DOUBLE, " & _
+            "[BatchSize] DOUBLE, " & _
             "[ImportedHours] DOUBLE, " & _
             "[ImportedEx] DOUBLE, " & _
-            "[BatchSize] DOUBLE, " & _
             "[ExportHours] DOUBLE, " & _
             "[ExportEx] DOUBLE, " & _
             "[EquipmentType] TEXT(100), " & _
@@ -170,11 +172,19 @@ Private Sub UpgradeExistingSchema()
     CurrentDb.TableDefs.Refresh
     On Error GoTo 0
     MigratePartColumns
+    EnsureOperationManualColumns
     EnsureProductLinePlCodeColumn
     EnsureEquipmentFfaTable
     EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
     MigrateLegacyMetaColumns
+End Sub
+
+' Process Hours / Avg Ex are manual inputs (not derived from Import/Export overrides).
+Public Sub EnsureOperationManualColumns()
+    If Not TableExists(TBL_OPERATION) Then Exit Sub
+    AddDoubleColumnIfMissing TBL_OPERATION, "ProcessHours"
+    AddDoubleColumnIfMissing TBL_OPERATION, "AvgEx"
 End Sub
 
 ' Move legacy OwningFFAs memo into tblEquipmentFFA, then drop the memo column.
@@ -285,20 +295,24 @@ End Sub
 
 Public Sub EnsureQueries()
     MigratePartColumns
+    EnsureOperationManualColumns
     EnsureProductLinePlCodeColumn
     EnsureEquipmentFfaTable
     EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
 
+    ' ProcessHours / AvgEx are stored manual fields. AvgHPU uses Import overrides when checked:
+    ' hours = IIf(UseImportHrs, ImportedHours, ProcessHours)
+    ' ex    = IIf(UseImportEx,  ImportedEx,    AvgEx)
+    ' HPU   = (hours * ex) / BatchSize
     ReplaceQuery QRY_OPERATIONS, _
-        "SELECT q.*, " & _
-        "IIf(Nz(q.BatchSize,0)=0 OR q.ProcessHours IS NULL OR q.AvgEx IS NULL, Null, (q.ProcessHours * q.AvgEx) / q.BatchSize) AS AvgHPU " & _
-        "FROM (" & _
         "SELECT o.*, " & _
-        "IIf(o.UseExportHours <> 0 AND o.ExportHours IS NOT NULL, o.ExportHours, o.ImportedHours) AS ProcessHours, " & _
-        "IIf(o.UseExportEx <> 0 AND o.ExportEx IS NOT NULL, o.ExportEx, o.ImportedEx) AS AvgEx " & _
-        "FROM [" & TBL_OPERATION & "] AS o" & _
-        ") AS q"
+        "IIf(Nz(o.BatchSize,0)=0 OR " & _
+        "IIf(o.UseExportHours<>0, o.ImportedHours, o.ProcessHours) IS NULL OR " & _
+        "IIf(o.UseExportEx<>0, o.ImportedEx, o.AvgEx) IS NULL, Null, " & _
+        "(IIf(o.UseExportHours<>0, o.ImportedHours, o.ProcessHours) * " & _
+        "IIf(o.UseExportEx<>0, o.ImportedEx, o.AvgEx)) / o.BatchSize) AS AvgHPU " & _
+        "FROM [" & TBL_OPERATION & "] AS o"
 
     ReplaceQuery QRY_HOME, _
         "SELECT p.BasePart, p.Active, p.StatusDate, " & _

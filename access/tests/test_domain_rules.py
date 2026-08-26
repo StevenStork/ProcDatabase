@@ -61,10 +61,10 @@ def avg_proc_tm_yld(base_part: str, op_seq: int, rows: list[dict]) -> float | No
     return match("Avg 90 Day Ex")
 
 
-def process_hours(imported: float | None, export: float | None, use_export: bool) -> float | None:
-    if use_export and export is not None:
-        return export
-    return imported
+def hours_for_hpu(manual: float | None, imported: float | None, use_import: bool) -> float | None:
+    if use_import:
+        return imported
+    return manual
 
 
 def avg_hpu(hours: float | None, executions: float | None, batch: float | None) -> float | None:
@@ -125,12 +125,20 @@ def test_avg_proc_prefers_180_then_90():
     assert avg_proc_tm_yld("P1", 20, rows180) == 8.0
 
 
-def test_hpu_and_override():
-    hours = process_hours(1.0, 2.0, True)
-    ex = process_hours(3.0, 4.0, False)
-    assert hours == 2.0
+def test_hpu_and_import_overrides():
+    # Manual process/ex with no overrides.
+    hours = hours_for_hpu(1.0, 9.0, False)
+    ex = hours_for_hpu(3.0, 8.0, False)
+    assert hours == 1.0
     assert ex == 3.0
-    assert avg_hpu(hours, ex, 2.0) == 3.0
+    assert avg_hpu(hours, ex, 2.0) == 1.5
+
+    # Use Import Hrs / Use Import Ex swap in Imported values.
+    hours = hours_for_hpu(1.0, 9.0, True)
+    ex = hours_for_hpu(3.0, 8.0, True)
+    assert hours == 9.0
+    assert ex == 8.0
+    assert avg_hpu(hours, ex, 2.0) == 36.0
 
 
 def test_catalog_from_assy_stnd():

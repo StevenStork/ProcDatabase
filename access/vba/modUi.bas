@@ -422,33 +422,48 @@ End Sub
 Private Sub CreateOperationSubform()
     Dim frm As Form
     Dim ctl As Control
+    Dim leftPos As Long
+
     Set frm = CreateForm()
     frm.RecordSource = QRY_OPERATIONS
     frm.DefaultView = 2
     frm.AllowAdditions = True
     frm.AllowDeletions = True
-    AddDetailField frm, "OpSequence", 0, 0, 900
-    AddDetailField frm, "OpCode", 1000, 0, 1100
-    AddDetailField frm, "ImportedHours", 2200, 0, 1200
-    AddDetailField frm, "ImportedEx", 3500, 0, 1100
-    AddDetailField frm, "BatchSize", 4700, 0, 900
-    AddDetailField frm, "ExportHours", 5700, 0, 1200
-    AddDetailField frm, "ExportEx", 7000, 0, 1100
 
-    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "EquipmentType", 8200, 0, 1800, 300)
-    ctl.Name = "cboEquipmentType"
-    ctl.ControlSource = "EquipmentType"
-    ctl.RowSource = "SELECT Equipment FROM [" & TBL_EQUIPMENT & "] ORDER BY Equipment"
-    ctl.RowSourceType = "Table/Query"
-    ctl.LimitToList = False
-    AttachFieldLabel frm, ctl, FriendlyFieldCaption("EquipmentType"), 8200, 0, 1800
+    ' Column order: Op Sequence, Op Code, Process Hours, Avg Ex, Batch Size,
+    ' Imported Hours, Imported Ex, Use Import Hrs, Use Import Ex, Avg HPU, Made In FFA.
+    ' Only Op Code + Made In FFA are text; Avg HPU is calculated (locked).
+    leftPos = 0
+    AddDetailField frm, "OpSequence", leftPos, 0, 1000, True, False
+    leftPos = leftPos + 1100
+    AddDetailField frm, "OpCode", leftPos, 0, 1100, True, True
+    leftPos = leftPos + 1200
+    AddDetailField frm, "ProcessHours", leftPos, 0, 1200, True, False
+    leftPos = leftPos + 1300
+    AddDetailField frm, "AvgEx", leftPos, 0, 1000, True, False
+    leftPos = leftPos + 1100
+    AddDetailField frm, "BatchSize", leftPos, 0, 1000, True, False
+    leftPos = leftPos + 1100
+    AddDetailField frm, "ImportedHours", leftPos, 0, 1200, True, False
+    leftPos = leftPos + 1300
+    AddDetailField frm, "ImportedEx", leftPos, 0, 1100, True, False
+    leftPos = leftPos + 1200
+    AddDetailCheck frm, "UseExportHours", leftPos, 0
+    leftPos = leftPos + 1400
+    AddDetailCheck frm, "UseExportEx", leftPos, 0
+    leftPos = leftPos + 1400
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , "AvgHPU", leftPos, 0, 1000, 300)
+    ctl.Name = "txtAvgHPU"
+    ctl.ControlSource = "AvgHPU"
+    ctl.Enabled = False
+    ctl.Locked = True
+    On Error Resume Next
+    ctl.Format = "General Number"
+    On Error GoTo 0
+    AttachFieldLabel frm, ctl, FriendlyFieldCaption("AvgHPU"), leftPos, 0, 1000
+    leftPos = leftPos + 1100
+    AddDetailField frm, "MadeInFFA", leftPos, 0, 1400, True, True
 
-    AddDetailCheck frm, "UseExportHours", 10100, 0
-    AddDetailCheck frm, "UseExportEx", 10800, 0
-    AddDetailField frm, "ProcessHours", 11500, 0, 1200
-    AddDetailField frm, "AvgEx", 12800, 0, 1000
-    AddDetailField frm, "AvgHPU", 13900, 0, 1000
-    AddDetailField frm, "MadeInFFA", 15000, 0, 1400
     SaveAndRenameForm frm, SFRM_OPS
 End Sub
 
@@ -618,8 +633,8 @@ Private Function FriendlyFieldCaption(ByVal fieldName As String) As String
         Case "ExportHours": FriendlyFieldCaption = "Export Hours"
         Case "ExportEx": FriendlyFieldCaption = "Export Ex"
         Case "EquipmentType": FriendlyFieldCaption = "Equipment Type"
-        Case "UseExportHours": FriendlyFieldCaption = "Use Exp Hrs"
-        Case "UseExportEx": FriendlyFieldCaption = "Use Exp Ex"
+        Case "UseExportHours": FriendlyFieldCaption = "Use Import Hrs"
+        Case "UseExportEx": FriendlyFieldCaption = "Use Import Ex"
         Case "ProcessHours": FriendlyFieldCaption = "Process Hours"
         Case "AvgEx": FriendlyFieldCaption = "Avg Ex"
         Case "AvgHPU": FriendlyFieldCaption = "Avg HPU"
@@ -712,12 +727,19 @@ FailSoft:
 End Sub
 
 Private Sub AddDetailField(ByVal frm As Form, ByVal fieldName As String, ByVal leftPos As Long, ByVal topPos As Long, ByVal widthPos As Long, _
-    Optional ByVal attachLabel As Boolean = True)
+    Optional ByVal attachLabel As Boolean = True, Optional ByVal asText As Boolean = True)
 
     Dim ctl As Control
     Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , fieldName, leftPos, topPos, widthPos, 300)
     ctl.Name = "txt" & ControlBaseName(fieldName)
     ctl.ControlSource = fieldName
+    On Error Resume Next
+    If asText Then
+        ctl.Format = vbNullString
+    Else
+        ctl.Format = "General Number"
+    End If
+    On Error GoTo 0
     If attachLabel Then
         AttachFieldLabel frm, ctl, FriendlyFieldCaption(fieldName), leftPos, topPos, widthPos
     End If
@@ -731,7 +753,7 @@ Private Sub AddDetailCheck(ByVal frm As Form, ByVal fieldName As String, ByVal l
     ctl.Name = "chk" & ControlBaseName(fieldName)
     ctl.ControlSource = fieldName
     If attachLabel Then
-        AttachFieldLabel frm, ctl, FriendlyFieldCaption(fieldName), leftPos, topPos, 1200
+        AttachFieldLabel frm, ctl, FriendlyFieldCaption(fieldName), leftPos, topPos, 1400
     End If
 End Sub
 
