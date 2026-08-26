@@ -199,6 +199,123 @@ Public Sub DeleteObjectIfExists(ByVal objectType As AcObjectType, ByVal objectNa
     On Error GoTo 0
 End Sub
 
+' Access workspace size in twips (falls back if UsableWidth is unavailable).
+Public Function LayoutUsableWidth(Optional ByVal frac As Double = 0.96) As Long
+    On Error Resume Next
+    LayoutUsableWidth = CLng(Application.UsableWidth * frac)
+    If LayoutUsableWidth < 14000 Then LayoutUsableWidth = 14000
+    On Error GoTo 0
+End Function
+
+Public Function LayoutUsableHeight(Optional ByVal frac As Double = 0.92) As Long
+    On Error Resume Next
+    LayoutUsableHeight = CLng(Application.UsableHeight * frac)
+    If LayoutUsableHeight < 9000 Then LayoutUsableHeight = 9000
+    On Error GoTo 0
+End Function
+
+' Size a form in design to ~full Access workspace (twips).
+' expandDetail:=False for continuous/datasheet forms (keeps row height normal).
+Public Sub ApplyLargeFormLayout(ByVal frm As Form, _
+    Optional ByVal widthFrac As Double = 0.96, _
+    Optional ByVal heightFrac As Double = 0.92, _
+    Optional ByVal expandDetail As Boolean = True)
+
+    Dim targetW As Long
+    Dim targetH As Long
+
+    On Error Resume Next
+    targetW = LayoutUsableWidth(widthFrac)
+    targetH = LayoutUsableHeight(heightFrac)
+
+    frm.Width = targetW
+    frm.InsideHeight = targetH
+    If expandDetail Then
+        frm.Section(acDetail).Height = targetH
+    End If
+    frm.AutoCenter = True
+    frm.AutoResize = True
+    frm.FitToWindow = True
+    frm.MinMaxButtons = True
+    frm.CloseButton = True
+    frm.BorderStyle = 2 ' sizable
+    frm.PopUp = False
+    frm.Modal = False
+    On Error GoTo 0
+End Sub
+
+' Place a control so it fills the remaining client area (design-time).
+Public Sub SizeFillControl(ByVal ctl As Control, _
+    ByVal leftMargin As Long, _
+    ByVal topMargin As Long, _
+    Optional ByVal rightMargin As Long = 240, _
+    Optional ByVal bottomMargin As Long = 240)
+
+    Dim w As Long
+    Dim h As Long
+
+    w = LayoutUsableWidth() - leftMargin - rightMargin
+    h = LayoutUsableHeight() - topMargin - bottomMargin
+    If w < 6000 Then w = 6000
+    If h < 2400 Then h = 2400
+    ctl.Left = leftMargin
+    ctl.Top = topMargin
+    ctl.Width = w
+    ctl.Height = h
+End Sub
+
+' Stretch with the form window when the user resizes (Access 2010+).
+Public Sub AnchorStretch(ByVal ctl As Control, _
+    Optional ByVal stretchHorizontal As Boolean = True, _
+    Optional ByVal stretchVertical As Boolean = False)
+
+    On Error Resume Next
+    If stretchHorizontal Then ctl.HorizontalAnchor = 2 ' acHorizontalAnchorBoth
+    If stretchVertical Then ctl.VerticalAnchor = 2     ' acVerticalAnchorBoth
+    On Error GoTo 0
+End Sub
+
+Public Sub AnchorTopRight(ByVal ctl As Control)
+    On Error Resume Next
+    ctl.HorizontalAnchor = 1 ' acHorizontalAnchorRight
+    ctl.VerticalAnchor = 0   ' acVerticalAnchorTop
+    On Error GoTo 0
+End Sub
+
+Public Sub AnchorBottom(ByVal ctl As Control, Optional ByVal stretchHorizontal As Boolean = False)
+    On Error Resume Next
+    If stretchHorizontal Then
+        ctl.HorizontalAnchor = 2 ' acHorizontalAnchorBoth
+    Else
+        ctl.HorizontalAnchor = 0 ' acHorizontalAnchorLeft
+    End If
+    ctl.VerticalAnchor = 1 ' acVerticalAnchorBottom
+    On Error GoTo 0
+End Sub
+
+' Open a form and expand it to the workspace (maximize main windows).
+Public Sub OpenFormSized(ByVal formName As String, _
+    Optional ByVal whereCondition As String = vbNullString, _
+    Optional ByVal maximizeWindow As Boolean = True)
+
+    On Error GoTo Fail
+    If Len(whereCondition) > 0 Then
+        DoCmd.OpenForm formName, , , whereCondition
+    Else
+        DoCmd.OpenForm formName
+    End If
+    On Error Resume Next
+    If maximizeWindow Then
+        DoCmd.Maximize
+    Else
+        DoCmd.MoveSize 0, 0, Application.UsableWidth, Application.UsableHeight
+    End If
+    On Error GoTo 0
+    Exit Sub
+Fail:
+    Err.Raise Err.Number, "OpenFormSized", Err.Description
+End Sub
+
 ' Close open forms/tables/queries so schema DDL / form rebuild can lock tables (avoids 3211).
 Public Sub CloseProcDataForms()
     Dim safety As Long

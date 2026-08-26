@@ -11,6 +11,9 @@ Public Function HomeForm_Load() As Boolean
         HomeForm_Load = False
         Exit Function
     End If
+    On Error Resume Next
+    DoCmd.Maximize
+    On Error GoTo Fail
     With Forms(FRM_HOME)
         .AllowEdits = True
         On Error Resume Next
@@ -167,7 +170,7 @@ Public Function HomeOpenSelectedPart() As Boolean
         Exit Function
     End If
 
-    DoCmd.OpenForm FRM_PART, , , "BasePart = " & SqlText(basePart)
+    OpenFormSized FRM_PART, "BasePart = " & SqlText(basePart)
     HomeOpenSelectedPart = True
     Exit Function
 Fail:

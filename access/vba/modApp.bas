@@ -22,7 +22,7 @@ Public Sub BootstrapProcDatabase()
     SetMeta "SchemaVersion", SCHEMA_VERSION
     DoCmd.Hourglass False
     On Error Resume Next
-    DoCmd.OpenForm FRM_HOME
+    OpenFormSized FRM_HOME
     On Error GoTo 0
     MsgBox "ProcDatabase is ready." & vbCrLf & vbCrLf & _
         "Linked: " & TBL_ROUTE_CARD & ", " & TBL_ASSY_STANDARD & ", " & TBL_OPER_COMPLETIONS & ", " & TBL_RCCP & vbCrLf & _
@@ -66,7 +66,7 @@ Public Sub StartProcDatabase()
         CloseProcDataForms
         EnsureUi
     End If
-    DoCmd.OpenForm FRM_HOME
+    OpenFormSized FRM_HOME
     Exit Sub
 Fail:
     MsgBox "Start failed: " & Err.Description, vbCritical, "ProcDatabase"
@@ -77,7 +77,7 @@ Public Sub RefreshAll()
     RefreshSourceData
     RebuildActiveAssemblyFilter
     On Error Resume Next
-    DoCmd.OpenForm FRM_HOME
+    OpenFormSized FRM_HOME
     On Error GoTo Fail
     MsgBox "Linked tables refreshed, catalog rebuilt, and active assembly filter updated.", vbInformation, "ProcDatabase"
     Exit Sub
@@ -106,7 +106,7 @@ Public Sub BuildUi()
     buildStep = "EnsureStartup"
     EnsureStartup
     On Error Resume Next
-    DoCmd.OpenForm FRM_HOME
+    OpenFormSized FRM_HOME
     On Error GoTo Fail
     MsgBox "Queries and forms are ready. Startup form is " & FRM_HOME & ".", vbInformation, "ProcDatabase"
     Exit Sub

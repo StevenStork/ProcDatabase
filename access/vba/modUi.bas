@@ -177,25 +177,32 @@ Private Sub CreateEquipmentEntryForm()
     ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
     ctl.RowSourceType = "Table/Query"
     ctl.MultiSelect = 1
+    ' Leave room below for Add/Clear/Close + status (~900 twips).
+    SizeFillControl ctl, 200, 1300, 240, 1000
+    AnchorStretch ctl, True, True
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 3900, 1800, 400)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, LayoutUsableHeight() - 900, 1800, 400)
     ctl.Name = "btnAdd"
     ctl.Caption = "Add Equipment"
     ctl.OnClick = "=UiAddEquipmentEntry()"
+    AnchorBottom ctl
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 2200, 3900, 1400, 400)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 2200, LayoutUsableHeight() - 900, 1400, 400)
     ctl.Name = "btnClear"
     ctl.Caption = "Clear"
     ctl.OnClick = "=UiClearEquipmentEntry()"
+    AnchorBottom ctl
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 3800, 3900, 1400, 400)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 3800, LayoutUsableHeight() - 900, 1400, 400)
     ctl.Name = "btnClose"
     ctl.Caption = "Close"
     ctl.OnClick = "=UiCloseCurrentForm()"
+    AnchorBottom ctl
 
-    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, 4400, 5600, 300)
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 200, LayoutUsableHeight() - 480, LayoutUsableWidth() - 440, 300)
     lbl.Name = "lblStatus"
     lbl.Caption = "Enter a name, optional type, select FFAs, then Add."
+    AnchorBottom lbl, True
 
     SaveAndRenameForm frm, FRM_EQUIPMENT_ENTRY
 End Sub
@@ -299,13 +306,16 @@ Private Sub CreateHomeForm()
     AddToolbarButton frm, "btnJump", "Go", 5200, 1000, "=HomeJumpToPart()", 900
     AddToolbarButton frm, "btnOpenPart", "Open Part", 6240, 1000, "=HomeOpenSelectedPart()", 1440
 
-    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 120, 1440, 10000, 300)
+    Set lbl = CreateControl(frm.Name, acLabel, acDetail, , , 120, 1440, LayoutUsableWidth() - 360, 300)
     lbl.Name = "lblStatus"
     lbl.Caption = "Use Search / Active only / FFA / Jump to find parts without scrolling."
+    AnchorStretch lbl, True, False
 
     Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 120, 1800, 11040, 4200)
     ctl.Name = "subParts"
     ctl.SourceObject = SFRM_HOME_LIST
+    SizeFillControl ctl, 120, 1800, 240, 240
+    AnchorStretch ctl, True, True
 
     SaveAndRenameForm frm, FRM_HOME
 End Sub
@@ -411,6 +421,12 @@ End Sub
 Private Sub CreatePartForm()
     Dim frm As Form
     Dim ctl As Control
+    Dim contentW As Long
+    Dim contentH As Long
+    Dim halfW As Long
+    Dim midH As Long
+    Dim opsTop As Long
+    Dim opsH As Long
 
     DeleteObjectIfExists acForm, FRM_PART
     Set frm = CreateForm()
@@ -419,38 +435,54 @@ Private Sub CreatePartForm()
     frm.DefaultView = 0
     frm.AllowAdditions = False
 
+    contentW = LayoutUsableWidth() - 400
+    contentH = LayoutUsableHeight() - 400
+    If contentW < 10000 Then contentW = 10000
+    If contentH < 7000 Then contentH = 7000
+    halfW = (contentW - 200) \ 2
+    midH = CLng(contentH * 0.32)
+    If midH < 2200 Then midH = 2200
+    opsTop = 1600 + midH + 200
+    opsH = contentH - opsTop - 200
+    If opsH < 2800 Then opsH = 2800
+
     AddDetailField frm, "BasePart", 1200, 200, 2000
     AddDetailCheck frm, "Active", 3400, 200
     AddDetailCombo frm, "HomeFFA", 1200, 600, 2000
     AddDetailField frm, "StatusDate", 1200, 1000, 1600
 
-    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 1600, 3200, 2400)
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 1600, halfW, midH)
     ctl.Name = "subDashes"
     ctl.SourceObject = SFRM_DASH
     ctl.LinkMasterFields = "BasePart"
     ctl.LinkChildFields = "BasePart"
+    AnchorStretch ctl, True, False
 
-    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 3600, 1600, 3600, 2400)
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200 + halfW + 200, 1600, halfW, midH)
     ctl.Name = "subProductLines"
     ctl.SourceObject = SFRM_PL
     ctl.LinkMasterFields = "BasePart"
     ctl.LinkChildFields = "BasePart"
+    AnchorStretch ctl, True, False
 
-    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, 4200, 9000, 3600)
+    Set ctl = CreateControl(frm.Name, acSubform, acDetail, , , 200, opsTop, contentW, opsH)
     ctl.Name = "subOperations"
     ctl.SourceObject = SFRM_OPS
     ctl.LinkMasterFields = "BasePart"
     ctl.LinkChildFields = "BasePart"
+    AnchorStretch ctl, True, True
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 7400, 200, 1600, 360)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , LayoutUsableWidth() - 1840, 200, 1600, 360)
     ctl.Name = "btnSeed"
     ctl.Caption = "Seed Ops"
     ctl.OnClick = "=SeedOperationsForCurrentPart()"
+    AnchorTopRight ctl
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 7400, 600, 1600, 360)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , LayoutUsableWidth() - 1840, 600, 1600, 360)
     ctl.Name = "btnClose"
     ctl.Caption = "Close"
     ctl.OnClick = "=UiCloseCurrentForm()"
+    AnchorTopRight ctl
 
     SaveAndRenameForm frm, FRM_PART
 End Sub
@@ -552,6 +584,18 @@ End Sub
 
 Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
     Dim savedName As String
+
+    ' Single-form shells: grow detail to fill the Access workspace.
+    ' Continuous/datasheet forms: large window only — keep row height intact.
+    Select Case desiredName
+        Case FRM_HOME, FRM_PART, FRM_EQUIPMENT_ENTRY, FRM_REFERENCES, FRM_EXPORT
+            ApplyLargeFormLayout frm, 0.96, 0.92, True
+        Case FRM_EQUIPMENT, FRM_EQUIPMENT_FFA, FRM_FFA, FRM_PRODUCT_LINE, SFRM_HOME_LIST
+            ApplyLargeFormLayout frm, 0.96, 0.92, False
+        Case SFRM_OPS, SFRM_DASH, SFRM_PL
+            ApplyLargeFormLayout frm, 0.9, 0.5, False
+    End Select
+
     savedName = frm.Name
     DoCmd.Close acForm, savedName, acSaveYes
     Set frm = Nothing
@@ -614,7 +658,7 @@ End Function
 
 Public Function UiOpenReferences() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_REFERENCES
+    OpenFormSized FRM_REFERENCES
     UiOpenReferences = True
     Exit Function
 Fail:
@@ -623,7 +667,7 @@ End Function
 
 Public Function UiOpenExport() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_EXPORT
+    OpenFormSized FRM_EXPORT
     UiOpenExport = True
     Exit Function
 Fail:
@@ -638,7 +682,7 @@ End Function
 
 Public Function UiOpenFfaForm() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_FFA
+    OpenFormSized FRM_FFA
     UiOpenFfaForm = True
     Exit Function
 Fail:
@@ -647,7 +691,7 @@ End Function
 
 Public Function UiOpenProductLineForm() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_PRODUCT_LINE
+    OpenFormSized FRM_PRODUCT_LINE
     UiOpenProductLineForm = True
     Exit Function
 Fail:
@@ -656,7 +700,7 @@ End Function
 
 Public Function UiOpenEquipmentForm() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_EQUIPMENT
+    OpenFormSized FRM_EQUIPMENT
     UiOpenEquipmentForm = True
     Exit Function
 Fail:
@@ -665,7 +709,7 @@ End Function
 
 Public Function UiOpenEquipmentEntryForm() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_EQUIPMENT_ENTRY
+    OpenFormSized FRM_EQUIPMENT_ENTRY
     UiClearEquipmentEntry
     UiOpenEquipmentEntryForm = True
     Exit Function
@@ -675,7 +719,7 @@ End Function
 
 Public Function UiOpenEquipmentFfaForm() As Boolean
     On Error GoTo Fail
-    DoCmd.OpenForm FRM_EQUIPMENT_FFA
+    OpenFormSized FRM_EQUIPMENT_FFA
     UiOpenEquipmentFfaForm = True
     Exit Function
 Fail:
