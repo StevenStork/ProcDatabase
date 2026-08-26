@@ -51,7 +51,8 @@ BuildUi
 2. On Home, find parts with **Search**, **Active only**, **FFA**, or **Jump to part** (no need to scroll the full list). Set **Date**, **Home FFA**, **Notes** as needed. Forms open maximized and size to the Access workspace (`UsableWidth` / `UsableHeight`); after UI changes, re-import `modUtils` / `modUi` / `modHome` / `modApp` and run `BuildUi`.
 3. **Open Part** — confirm dashes/product lines; **Seed Ops** from route card (fills Imported Hours / Imported Ex only).
 4. Enter **Process Hours**, **Avg Ex**, and **Batch Size** manually. **Avg HPU** = (hours × ex) / batch; check **Use Import Hrs** / **Use Import Ex** to substitute Imported values in that formula.
-5. **Export** — FFA, product line, or all to `.xlsx` beside the database.
+5. On each op, choose **Made In FFA** (FFA list), then **Equipment** (equipment linked to that FFA). **Equipment Type** fills from the selected equipment.
+6. **Export** — FFA, product line, or all to `.xlsx` beside the database.
 
 ## Plan features implemented
 
@@ -64,7 +65,7 @@ BuildUi
 | Part form + ops subform | `frmPart`, `sfrmOperation` |
 | References | `frmFFA`, `frmProductLine` (+ PL Code), `frmEquipment` / `frmEquipmentFFA` / `frmEquipmentEntry` (manual; legacy `sfrmEquipmentFFA` is removed) |
 | Averages | `modAverages` (labor + yield fallbacks) |
-| Exports | `modExport` — 10 columns matching Excel export PR |
+| Exports | `modExport` — includes Equipment + Equipment Type |
 
 ## Module map
 

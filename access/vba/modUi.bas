@@ -431,8 +431,8 @@ Private Sub CreateOperationSubform()
     frm.AllowDeletions = True
 
     ' Column order: Op Sequence, Op Code, Process Hours, Avg Ex, Batch Size,
-    ' Imported Hours, Imported Ex, Use Import Hrs, Use Import Ex, Avg HPU, Made In FFA.
-    ' Only Op Code + Made In FFA are text; Avg HPU is calculated (locked).
+    ' Imported Hours, Imported Ex, Use Import Hrs, Use Import Ex, Avg HPU,
+    ' Made In FFA (dropdown), Equipment (dropdown for that FFA), Equipment Type (locked).
     leftPos = 0
     AddDetailField frm, "OpSequence", leftPos, 0, 1000, True, False
     leftPos = leftPos + 1100
@@ -462,7 +462,36 @@ Private Sub CreateOperationSubform()
     On Error GoTo 0
     AttachFieldLabel frm, ctl, FriendlyFieldCaption("AvgHPU"), leftPos, 0, 1000
     leftPos = leftPos + 1100
-    AddDetailField frm, "MadeInFFA", leftPos, 0, 1400, True, True
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "MadeInFFA", leftPos, 0, 1400, 300)
+    ctl.Name = "cboMadeInFFA"
+    ctl.ControlSource = "MadeInFFA"
+    ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = True
+    ctl.AfterUpdate = "=OpsMadeInFFAAfterUpdate()"
+    AttachFieldLabel frm, ctl, FriendlyFieldCaption("MadeInFFA"), leftPos, 0, 1400
+    leftPos = leftPos + 1500
+
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , COL_EQUIPMENT, leftPos, 0, 1800, 300)
+    ctl.Name = "cboEquipment"
+    ctl.ControlSource = COL_EQUIPMENT
+    ctl.RowSource = "SELECT DISTINCT ef.[" & COL_EQUIPMENT & "] FROM [" & TBL_EQUIPMENT_FFA & "] AS ef " & _
+        "WHERE ef.FFA = [MadeInFFA] ORDER BY ef.[" & COL_EQUIPMENT & "]"
+    ctl.RowSourceType = "Table/Query"
+    ctl.LimitToList = True
+    ctl.AfterUpdate = "=OpsEquipmentAfterUpdate()"
+    AttachFieldLabel frm, ctl, FriendlyFieldCaption(COL_EQUIPMENT), leftPos, 0, 1800
+    leftPos = leftPos + 1900
+
+    Set ctl = CreateControl(frm.Name, acTextBox, acDetail, , "EquipmentType", leftPos, 0, 1600, 300)
+    ctl.Name = "txtEquipmentType"
+    ctl.ControlSource = "EquipmentType"
+    ctl.Enabled = False
+    ctl.Locked = True
+    AttachFieldLabel frm, ctl, FriendlyFieldCaption("EquipmentType"), leftPos, 0, 1600
+
+    frm.OnCurrent = "=OpsOpsCurrent()"
 
     SaveAndRenameForm frm, SFRM_OPS
 End Sub

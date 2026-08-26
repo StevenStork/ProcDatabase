@@ -233,3 +233,51 @@ def test_linked_table_names():
         "tblOperComps",
         "tblRCCP",
     } == {"tblRouteCard", "tblAssyStnd", "tblOperComps", "tblRCCP"}
+
+
+def equipment_for_ffa(equipment_ffa: list[dict], ffa: str) -> list[str]:
+    """Equipment dropdown for Made In FFA — names linked in tblEquipmentFFA."""
+    ffa = ffa.strip()
+    names = sorted(
+        {
+            str(row["Equipment"]).strip()
+            for row in equipment_ffa
+            if str(row.get("FFA", "")).strip() == ffa and str(row.get("Equipment", "")).strip()
+        }
+    )
+    return names
+
+
+def equipment_type_for(equipment_rows: list[dict], equipment: str) -> str | None:
+    """Equipment Type column — type from tblEquipment for the selected name."""
+    equipment = equipment.strip()
+    for row in equipment_rows:
+        if str(row.get("Equipment", "")).strip() == equipment:
+            value = row.get("Equipment Type")
+            if value is None:
+                return None
+            text = str(value).strip()
+            return text or None
+    return None
+
+
+def test_ops_equipment_dropdown_filtered_by_ffa():
+    links = [
+        {"Equipment": "Press A", "FFA": "FFA1"},
+        {"Equipment": "Press B", "FFA": "FFA1"},
+        {"Equipment": "Oven", "FFA": "FFA2"},
+        {"Equipment": "Press A", "FFA": "FFA2"},
+    ]
+    assert equipment_for_ffa(links, "FFA1") == ["Press A", "Press B"]
+    assert equipment_for_ffa(links, "FFA2") == ["Oven", "Press A"]
+    assert equipment_for_ffa(links, "MISSING") == []
+
+
+def test_ops_equipment_type_from_selected_equipment():
+    rows = [
+        {"Equipment": "Press A", "Equipment Type": "Hydraulic"},
+        {"Equipment": "Oven", "Equipment Type": "Thermal"},
+    ]
+    assert equipment_type_for(rows, "Press A") == "Hydraulic"
+    assert equipment_type_for(rows, "Oven") == "Thermal"
+    assert equipment_type_for(rows, "Missing") is None

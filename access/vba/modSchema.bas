@@ -157,6 +157,7 @@ Private Sub EnsurePartTables()
             "[ImportedEx] DOUBLE, " & _
             "[ExportHours] DOUBLE, " & _
             "[ExportEx] DOUBLE, " & _
+            "[Equipment] TEXT(100), " & _
             "[EquipmentType] TEXT(100), " & _
             "[UseExportHours] YESNO, " & _
             "[UseExportEx] YESNO, " & _
@@ -181,10 +182,14 @@ Private Sub UpgradeExistingSchema()
 End Sub
 
 ' Process Hours / Avg Ex are manual inputs (not derived from Import/Export overrides).
+' Equipment is chosen from equipment linked to MadeInFFA; EquipmentType is derived.
 Public Sub EnsureOperationManualColumns()
     If Not TableExists(TBL_OPERATION) Then Exit Sub
     AddDoubleColumnIfMissing TBL_OPERATION, "ProcessHours"
     AddDoubleColumnIfMissing TBL_OPERATION, "AvgEx"
+    AddTextColumnIfMissing TBL_OPERATION, COL_EQUIPMENT, 100
+    AddTextColumnIfMissing TBL_OPERATION, "EquipmentType", 100
+    AddTextColumnIfMissing TBL_OPERATION, "MadeInFFA", 50
 End Sub
 
 ' Move legacy OwningFFAs memo into tblEquipmentFFA, then drop the memo column.
@@ -324,7 +329,7 @@ Public Sub EnsureQueries()
     ReplaceQuery QRY_EXPORT, _
         "SELECT q.BasePart AS [Part Number], q.OpSequence AS [Op Sequence], q.OpCode AS [Op Code], " & _
         "q.ProcessHours AS [Process Hours], q.AvgEx AS [Avg Ex], q.BatchSize AS [Batch Size], " & _
-        "q.AvgHPU AS [Avg HPU], q.EquipmentType AS [Equipment Type], " & _
+        "q.AvgHPU AS [Avg HPU], q.Equipment AS [Equipment], q.EquipmentType AS [Equipment Type], " & _
         "p.HomeFFA AS [Home FFA], q.MadeInFFA AS [Made In FFA] " & _
         "FROM [" & QRY_OPERATIONS & "] AS q INNER JOIN [" & TBL_PART & "] AS p ON q.BasePart = p.BasePart " & _
         "WHERE p.Active <> 0 AND EXISTS (" & _

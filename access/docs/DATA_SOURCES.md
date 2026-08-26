@@ -83,6 +83,8 @@ Unknown PL codes from RCCP are inserted as new product-line rows (name = code) o
 
 **View Equipment List** / **View Equipment FFAs** are for browsing or correcting existing rows.
 
+On the Part ops grid, **Made In FFA** is an FFA dropdown; **Equipment** lists only equipment assigned to that FFA via `tblEquipmentFFA`; **Equipment Type** is filled from `tblEquipment` for the selected equipment.
+
 ## Refresh workflow
 
 1. `RefreshLink` on each linked table (including `tblRCCP`).

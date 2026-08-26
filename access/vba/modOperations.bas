@@ -121,18 +121,68 @@ Private Sub UpsertOperation( _
     If Not existingOps.Exists(key) Then
         sql = "INSERT INTO [" & TBL_OPERATION & "] " & _
             "(BasePart, OpSequence, OpCode, ImportedHours, ImportedEx, BatchSize, " & _
-            "ExportHours, ExportEx, EquipmentType, UseExportHours, UseExportEx, MadeInFFA) VALUES (" & _
+            "ExportHours, ExportEx, Equipment, EquipmentType, UseExportHours, UseExportEx, MadeInFFA) VALUES (" & _
             SqlText(basePart) & ", " & opSeq & ", " & SqlText(opCode) & ", " & SqlNullableNumber(importedHours) & ", " & _
-            SqlNullableNumber(importedEx) & ", Null, Null, Null, Null, False, False, " & SqlNullableText(madeInFfa) & ")"
+            SqlNullableNumber(importedEx) & ", Null, Null, Null, Null, Null, False, False, " & SqlNullableText(madeInFfa) & ")"
         db.Execute sql, dbFailOnError
         existingOps.Add key, True
     Else
+        ' Clear Equipment/Type when Made In FFA changes (RHS MadeInFFA is the prior value).
         sql = "UPDATE [" & TBL_OPERATION & "] SET " & _
             "OpCode = " & SqlText(opCode) & ", " & _
             "ImportedHours = " & SqlNullableNumber(importedHours) & ", " & _
             "ImportedEx = " & SqlNullableNumber(importedEx) & ", " & _
+            "Equipment = IIf(Nz(MadeInFFA,'')=" & SqlText(Nz(madeInFfa, "")) & ", Equipment, Null), " & _
+            "EquipmentType = IIf(Nz(MadeInFFA,'')=" & SqlText(Nz(madeInFfa, "")) & ", EquipmentType, Null), " & _
             "MadeInFFA = " & SqlNullableText(madeInFfa) & " " & _
             "WHERE BasePart = " & SqlText(basePart) & " AND OpSequence = " & opSeq
         db.Execute sql, dbFailOnError
     End If
 End Sub
+
+' Cascading ops UI: Made In FFA → Equipment (for that FFA) → Equipment Type.
+Public Function OpsMadeInFFAAfterUpdate() As Boolean
+    On Error GoTo Fail
+    Dim frm As Form
+    Set frm = Screen.ActiveControl.Parent
+    frm!Equipment = Null
+    frm!EquipmentType = Null
+    On Error Resume Next
+    frm!cboEquipment.Requery
+    On Error GoTo Fail
+    OpsMadeInFFAAfterUpdate = True
+    Exit Function
+Fail:
+    OpsMadeInFFAAfterUpdate = False
+End Function
+
+Public Function OpsEquipmentAfterUpdate() As Boolean
+    On Error GoTo Fail
+    Dim frm As Form
+    Dim equipName As String
+    Dim equipType As Variant
+
+    Set frm = Screen.ActiveControl.Parent
+    equipName = Trim$(CoerceText(frm!Equipment))
+    If Len(equipName) = 0 Then
+        frm!EquipmentType = Null
+    Else
+        equipType = DLookup("[" & COL_EQUIP_TYPE & "]", TBL_EQUIPMENT, _
+            "[" & COL_EQUIPMENT & "]=" & SqlText(equipName))
+        If IsNull(equipType) Then
+            frm!EquipmentType = Null
+        Else
+            frm!EquipmentType = CoerceText(equipType)
+        End If
+    End If
+    OpsEquipmentAfterUpdate = True
+    Exit Function
+Fail:
+    OpsEquipmentAfterUpdate = False
+End Function
+
+Public Function OpsOpsCurrent() As Boolean
+    On Error Resume Next
+    Forms(FRM_PART).Controls("subOperations").Form!cboEquipment.Requery
+    OpsOpsCurrent = True
+End Function
