@@ -32,6 +32,41 @@ Fail:
 End Function
 
 Public Function HomeApplyFilter() As Boolean
+    HomeApplyFilter = HomeApplyFilterCore(True)
+End Function
+
+' Live search: filter as you type without refreshing the jump combo every keystroke
+' (combo Requery steals focus / selects all text in the search box).
+Public Function HomeSearchChanged() As Boolean
+    Dim ctl As Control
+    Dim cursorPos As Long
+
+    On Error GoTo Fail
+    If Not CurrentProject.AllForms(FRM_HOME).IsLoaded Then
+        HomeSearchChanged = False
+        Exit Function
+    End If
+
+    Set ctl = Forms(FRM_HOME)!txtSearch
+    On Error Resume Next
+    cursorPos = ctl.SelStart
+    On Error GoTo Fail
+
+    ' Do NOT assign .Value = .Text — that selects the entire search box.
+    HomeApplyFilterCore False
+
+    On Error Resume Next
+    ctl.SetFocus
+    ctl.SelStart = cursorPos
+    ctl.SelLength = 0
+    On Error GoTo 0
+    HomeSearchChanged = True
+    Exit Function
+Fail:
+    HomeSearchChanged = False
+End Function
+
+Private Function HomeApplyFilterCore(ByVal refreshJump As Boolean) As Boolean
     Dim frm As Form
     Dim listForm As Form
     Dim criteria As String
@@ -41,11 +76,11 @@ Public Function HomeApplyFilter() As Boolean
 
     On Error GoTo Fail
     If Not HomeIsReady(frm, listForm) Then
-        HomeApplyFilter = False
+        HomeApplyFilterCore = False
         Exit Function
     End If
 
-    searchText = Trim$(CoerceText(frm!txtSearch))
+    searchText = HomeCurrentSearchText(frm)
     ffaValue = Trim$(CoerceText(frm!cboFilterFfa))
     activeOnly = CBool(Nz(frm!chkActiveOnly, True))
 
@@ -71,12 +106,23 @@ Public Function HomeApplyFilter() As Boolean
         listForm.FilterOn = True
     End If
 
-    HomeRefreshJumpCombo
+    If refreshJump Then HomeRefreshJumpCombo
     HomeUpdateStatus
-    HomeApplyFilter = True
+    HomeApplyFilterCore = True
     Exit Function
 Fail:
-    HomeApplyFilter = False
+    HomeApplyFilterCore = False
+End Function
+
+' While typing, .Text has the live characters; .Value may still be the prior commit.
+Private Function HomeCurrentSearchText(ByVal frm As Form) As String
+    On Error Resume Next
+    HomeCurrentSearchText = Trim$(frm!txtSearch.Text)
+    If Err.Number <> 0 Then
+        Err.Clear
+        HomeCurrentSearchText = Trim$(CoerceText(frm!txtSearch.Value))
+    End If
+    On Error GoTo 0
 End Function
 
 Public Function HomeClearFilter() As Boolean
@@ -96,16 +142,6 @@ Public Function HomeClearFilter() As Boolean
     Exit Function
 Fail:
     HomeClearFilter = False
-End Function
-
-Public Function HomeSearchChanged() As Boolean
-    On Error Resume Next
-    If CurrentProject.AllForms(FRM_HOME).IsLoaded Then
-        ' OnChange fires before Value updates — use Text for live filtering.
-        Forms(FRM_HOME)!txtSearch.Value = Forms(FRM_HOME)!txtSearch.Text
-    End If
-    On Error GoTo 0
-    HomeSearchChanged = HomeApplyFilter()
 End Function
 
 Public Function HomeJumpToPart() As Boolean

@@ -52,29 +52,36 @@ Private Sub CreateReferenceForms()
             "Table " & TBL_PRODUCT_LINE & " is missing. Run BootstrapProcDatabase / EnsureSchema first."
     End If
 
-    ' Datasheet view only shows bound controls — empty forms look blank.
-    ' Build the replacement first, then swap names so a failed build does not leave
-    ' frmFFA deleted with nothing in its place.
+    ' Continuous single-line rows (same pattern as Equipment) — CreateForm defaults
+    ' leave a tall Detail section so one record fills the window.
     Set frm = CreateForm()
     frm.RecordSource = TBL_FFA
-    frm.Caption = "FFAs"
-    frm.DefaultView = 2
+    frm.Caption = "FFAs — Tab or ↓ for a new row"
+    frm.DefaultView = 1
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
-    AddDetailField frm, "FFA", 0, 0, 1800
-    AddDetailField frm, "Factory", 1900, 0, 3600
+    frm.RecordSelectors = True
+    frm.NavigationButtons = True
+    frm.ScrollBars = 2
+    AddDetailField frm, "FFA", 120, 30, 1800
+    AddDetailField frm, "Factory", 2040, 30, 3600
+    SetCompactDetailHeight frm
     SaveAndRenameForm frm, FRM_FFA
 
     Set frm = CreateForm()
     frm.RecordSource = TBL_PRODUCT_LINE
-    frm.Caption = "Product Lines"
-    frm.DefaultView = 2
+    frm.Caption = "Product Lines — Tab or ↓ for a new row"
+    frm.DefaultView = 1
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
-    AddDetailField frm, "ProductLine", 0, 0, 3600
-    AddDetailField frm, COL_PL_CODE, 3700, 0, 1800
+    frm.RecordSelectors = True
+    frm.NavigationButtons = True
+    frm.ScrollBars = 2
+    AddDetailField frm, "ProductLine", 120, 30, 3600
+    AddDetailField frm, COL_PL_CODE, 3840, 30, 1800
+    SetCompactDetailHeight frm
     SaveAndRenameForm frm, FRM_PRODUCT_LINE
 End Sub
 
@@ -96,12 +103,10 @@ Private Sub CreateEquipmentForm()
     frm.RecordSelectors = True
     frm.NavigationButtons = True
     frm.ScrollBars = 2
-    On Error Resume Next
-    frm.Section(acDetail).Height = 360
-    On Error GoTo 0
 
     AddDetailField frm, "Equipment", 120, 30, 3600
     AddDetailField frm, COL_EQUIP_TYPE, 3840, 30, 2400
+    SetCompactDetailHeight frm
 
     SaveAndRenameForm frm, FRM_EQUIPMENT
 End Sub
@@ -126,9 +131,6 @@ Private Sub CreateEquipmentFfaForm()
     frm.RecordSelectors = True
     frm.NavigationButtons = True
     frm.ScrollBars = 2
-    On Error Resume Next
-    frm.Section(acDetail).Height = 360
-    On Error GoTo 0
 
     Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "Equipment", 120, 30, 3600, 300)
     ctl.Name = "cboEquipment"
@@ -143,6 +145,7 @@ Private Sub CreateEquipmentFfaForm()
     ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = True
+    SetCompactDetailHeight frm
 
     SaveAndRenameForm frm, FRM_EQUIPMENT_FFA
 End Sub
@@ -243,6 +246,7 @@ Private Sub CreateHomeListSubform()
     AddHomeCombo frm, "HomeFFA", 7560, 0, 1440
     AddHomeField frm, "Factories", 9060, 0, 1800
     frm.Controls("txtFactories").Enabled = False
+    SetCompactDetailHeight frm
 
     SaveAndRenameForm frm, SFRM_HOME_LIST
     ApplyHomeDaysRagDesign SFRM_HOME_LIST
@@ -602,6 +606,7 @@ Private Sub SaveAndRenameForm(ByRef frm As Form, ByVal desiredName As String)
             ApplyLargeFormLayout frm, 0.96, 0.92, True
         Case FRM_EQUIPMENT, FRM_EQUIPMENT_FFA, FRM_FFA, FRM_PRODUCT_LINE, SFRM_HOME_LIST
             ApplyLargeFormLayout frm, 0.96, 0.92, False
+            SetCompactDetailHeight frm
         Case SFRM_OPS, SFRM_DASH, SFRM_PL
             ApplyLargeFormLayout frm, 0.9, 0.5, False
     End Select
@@ -634,6 +639,13 @@ Fail:
     End If
     On Error GoTo 0
     Err.Raise errNum, "SaveAndRenameForm." & desiredName, errDesc
+End Sub
+
+' One-line continuous-form rows (CreateForm defaults to a tall Detail section).
+Private Sub SetCompactDetailHeight(ByVal frm As Form, Optional ByVal rowTwips As Long = 360)
+    On Error Resume Next
+    frm.Section(acDetail).Height = rowTwips
+    On Error GoTo 0
 End Sub
 
 Public Function OpenSelectedPart() As Boolean
