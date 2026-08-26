@@ -70,19 +70,25 @@ End Sub
 Private Sub CreateEquipmentForm()
     Dim frm As Form
 
-    ' Datasheet so many equipment rows can be entered at once.
+    ' Continuous form: fill a row, then use the blank row below for the next.
     DeleteObjectIfExists acForm, FRM_EQUIPMENT
     DeleteObjectIfExists acForm, "sfrmEquipmentFFA"
     Set frm = CreateForm()
     frm.RecordSource = TBL_EQUIPMENT
-    frm.Caption = "Equipment"
-    frm.DefaultView = 2
+    frm.Caption = "Equipment — Tab or ↓ for a new row"
+    frm.DefaultView = 1
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
+    frm.RecordSelectors = True
+    frm.NavigationButtons = True
+    frm.ScrollBars = 2
+    On Error Resume Next
+    frm.Section(acDetail).Height = 360
+    On Error GoTo 0
 
-    AddDetailField frm, "Equipment", 0, 0, 3600
-    AddDetailField frm, COL_EQUIP_TYPE, 3700, 0, 2400
+    AddDetailField frm, "Equipment", 120, 30, 3600
+    AddDetailField frm, COL_EQUIP_TYPE, 3840, 30, 2400
 
     SaveAndRenameForm frm, FRM_EQUIPMENT
 End Sub
@@ -91,24 +97,30 @@ Private Sub CreateEquipmentFfaForm()
     Dim frm As Form
     Dim ctl As Control
 
-    ' Datasheet of equipment↔FFA links — add many assignments at once.
+    ' Continuous form: each row is one Equipment↔FFA link; blank row at bottom for next.
     DeleteObjectIfExists acForm, FRM_EQUIPMENT_FFA
     Set frm = CreateForm()
     frm.RecordSource = TBL_EQUIPMENT_FFA
-    frm.Caption = "Equipment FFAs"
-    frm.DefaultView = 2
+    frm.Caption = "Equipment FFAs — Tab or ↓ for a new row"
+    frm.DefaultView = 1
     frm.AllowAdditions = True
     frm.AllowDeletions = True
     frm.AllowEdits = True
+    frm.RecordSelectors = True
+    frm.NavigationButtons = True
+    frm.ScrollBars = 2
+    On Error Resume Next
+    frm.Section(acDetail).Height = 360
+    On Error GoTo 0
 
-    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "Equipment", 0, 0, 3600, 300)
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "Equipment", 120, 30, 3600, 300)
     ctl.Name = "cboEquipment"
     ctl.ControlSource = "Equipment"
     ctl.RowSource = "SELECT Equipment FROM [" & TBL_EQUIPMENT & "] ORDER BY Equipment"
     ctl.RowSourceType = "Table/Query"
     ctl.LimitToList = True
 
-    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "FFA", 3700, 0, 2400, 300)
+    Set ctl = CreateControl(frm.Name, acComboBox, acDetail, , "FFA", 3840, 30, 2400, 300)
     ctl.Name = "cboFFA"
     ctl.ControlSource = "FFA"
     ctl.RowSource = "SELECT FFA FROM [" & TBL_FFA & "] ORDER BY FFA"
