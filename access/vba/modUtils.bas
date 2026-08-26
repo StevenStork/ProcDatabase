@@ -199,19 +199,39 @@ Public Sub DeleteObjectIfExists(ByVal objectType As AcObjectType, ByVal objectNa
     On Error GoTo 0
 End Sub
 
-' Access workspace size in twips (falls back if UsableWidth is unavailable).
-Public Function LayoutUsableWidth(Optional ByVal frac As Double = 0.96) As Long
+' Workspace size in twips. Do NOT use Application.UsableWidth/Height —
+' many Access builds lack those members (compile: method or data member not found).
+' Prefer late-bound CallByName; otherwise a large fixed default. Maximize still
+' fills the Access window at runtime.
+
+Private Const LAYOUT_DEFAULT_WIDTH As Long = 18000   ' ~12.5"
+Private Const LAYOUT_DEFAULT_HEIGHT As Long = 11000  ' ~7.6"
+
+Private Function LayoutLateBoundTwips(ByVal propName As String) As Long
+    Dim raw As Variant
     On Error Resume Next
-    LayoutUsableWidth = CLng(Application.UsableWidth * frac)
-    If LayoutUsableWidth < 14000 Then LayoutUsableWidth = 14000
+    raw = CallByName(Application, propName, VbGet)
+    If Err.Number = 0 And IsNumeric(raw) Then
+        If CLng(raw) > 1000 Then LayoutLateBoundTwips = CLng(raw)
+    End If
+    Err.Clear
     On Error GoTo 0
 End Function
 
+Public Function LayoutUsableWidth(Optional ByVal frac As Double = 0.96) As Long
+    Dim raw As Long
+    raw = LayoutLateBoundTwips("UsableWidth")
+    If raw <= 0 Then raw = LAYOUT_DEFAULT_WIDTH
+    LayoutUsableWidth = CLng(raw * frac)
+    If LayoutUsableWidth < 14000 Then LayoutUsableWidth = 14000
+End Function
+
 Public Function LayoutUsableHeight(Optional ByVal frac As Double = 0.92) As Long
-    On Error Resume Next
-    LayoutUsableHeight = CLng(Application.UsableHeight * frac)
+    Dim raw As Long
+    raw = LayoutLateBoundTwips("UsableHeight")
+    If raw <= 0 Then raw = LAYOUT_DEFAULT_HEIGHT
+    LayoutUsableHeight = CLng(raw * frac)
     If LayoutUsableHeight < 9000 Then LayoutUsableHeight = 9000
-    On Error GoTo 0
 End Function
 
 ' Size a form in design to ~full Access workspace (twips).
@@ -235,7 +255,8 @@ Public Sub ApplyLargeFormLayout(ByVal frm As Form, _
     End If
     frm.AutoCenter = True
     frm.AutoResize = True
-    frm.FitToWindow = True
+    ' Optional property — skip silently if missing on this Access build.
+    CallByName frm, "FitToWindow", VbLet, True
     frm.MinMaxButtons = True
     frm.CloseButton = True
     frm.BorderStyle = 2 ' sizable
@@ -308,7 +329,7 @@ Public Sub OpenFormSized(ByVal formName As String, _
     If maximizeWindow Then
         DoCmd.Maximize
     Else
-        DoCmd.MoveSize 0, 0, Application.UsableWidth, Application.UsableHeight
+        DoCmd.MoveSize 0, 0, LayoutUsableWidth(1#), LayoutUsableHeight(1#)
     End If
     On Error GoTo 0
     Exit Sub
