@@ -338,10 +338,15 @@ Private Sub CreateReferencesForm()
     ctl.Caption = "Edit Product Lines"
     ctl.OnClick = "=UiOpenProductLineForm()"
 
-    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1200, 2000, 400)
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1200, 2200, 400)
     ctl.Name = "btnEquip"
     ctl.Caption = "Edit Equipment"
     ctl.OnClick = "=UiOpenEquipmentForm()"
+
+    Set ctl = CreateControl(frm.Name, acCommandButton, acDetail, , , 200, 1700, 2200, 400)
+    ctl.Name = "btnEquipFfa"
+    ctl.Caption = "Assign Equipment FFAs"
+    ctl.OnClick = "=UiOpenEquipmentFfaForm()"
 
     SaveAndRenameForm frm, FRM_REFERENCES
 End Sub
@@ -534,6 +539,15 @@ Public Function UiOpenEquipmentForm() As Boolean
     Exit Function
 Fail:
     UiOpenEquipmentForm = False
+End Function
+
+Public Function UiOpenEquipmentFfaForm() As Boolean
+    On Error GoTo Fail
+    DoCmd.OpenForm FRM_EQUIPMENT_FFA
+    UiOpenEquipmentFfaForm = True
+    Exit Function
+Fail:
+    UiOpenEquipmentFfaForm = False
 End Function
 
 Public Function UiOpenFfaTable() As Boolean

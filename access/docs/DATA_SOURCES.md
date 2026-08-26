@@ -75,11 +75,10 @@ Unknown PL codes from RCCP are inserted as new product-line rows (name = code) o
 
 ## Equipment (manual)
 
-`tblEquipment` is **not** seeded from linked data. Maintain it under References → Edit Equipment:
+`tblEquipment` is **not** seeded from linked data. Maintain it under References:
 
-- Enter an equipment **name**
-- Enter an **Equipment Type** (user-defined category)
-- In the FFA subform, add each FFA where that equipment exists (`tblEquipmentFFA`)
+1. **Edit Equipment** — datasheet: add many rows (name + Equipment Type)
+2. **Assign Equipment FFAs** — datasheet: pick Equipment + FFA for each location (many rows)
 
 Operation rows pick equipment from this list via the Equipment Type combo (equipment name).
 
