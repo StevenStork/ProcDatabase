@@ -469,11 +469,14 @@ Fail:
 End Sub
 
 Public Function IndexExists(ByVal tableName As String, ByVal indexName As String) As Boolean
+    Dim db As DAO.Database
     Dim td As DAO.TableDef
     Dim idx As DAO.Index
 
     On Error GoTo Fail
-    Set td = CurrentDb.TableDefs(tableName)
+    Set db = CurrentDb
+    db.TableDefs.Refresh
+    Set td = db.TableDefs(tableName)
     For Each idx In td.Indexes
         If StrComp(idx.Name, indexName, vbTextCompare) = 0 Then
             IndexExists = True
@@ -485,6 +488,26 @@ Public Function IndexExists(ByVal tableName As String, ByVal indexName As String
 Fail:
     IndexExists = False
 End Function
+
+' Idempotent CREATE INDEX — stale TableDefs after a prior create caused duplicate-index errors.
+Public Sub EnsureUniqueIndexIfMissing(ByVal tableName As String, ByVal indexName As String, ByVal indexSql As String)
+    If IndexExists(tableName, indexName) Then Exit Sub
+    On Error GoTo Fail
+    CurrentDb.Execute indexSql, dbFailOnError
+    Exit Sub
+Fail:
+    CurrentDb.TableDefs.Refresh
+    If IndexExists(tableName, indexName) Then
+        Err.Clear
+        Exit Sub
+    End If
+    Select Case Err.Number
+        Case 3010, 3012, 3029, 3191, 3288, 3211, 3374
+            Err.Clear
+        Case Else
+            Err.Raise Err.Number, "EnsureUniqueIndexIfMissing", Err.Description & vbCrLf & vbCrLf & indexSql
+    End Select
+End Sub
 
 Public Sub DropIndexIfExists(ByVal tableName As String, ByVal indexName As String)
     If Not IndexExists(tableName, indexName) Then Exit Sub

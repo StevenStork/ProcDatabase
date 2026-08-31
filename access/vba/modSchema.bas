@@ -192,7 +192,6 @@ Public Sub EnsureOperationManualColumns()
     AddTextColumnIfMissing TBL_OPERATION, COL_EQUIPMENT, 100
     AddTextColumnIfMissing TBL_OPERATION, "EquipmentType", 100
     AddTextColumnIfMissing TBL_OPERATION, "MadeInFFA", 50
-    MigrateOperationOpLine
 End Sub
 
 ' Op Line distinguishes multiple equipment/time rows sharing the same route-card Op Sequence.
@@ -245,9 +244,8 @@ Public Sub MigrateOperationOpLine()
     On Error GoTo 0
 
     DropIndexIfExists TBL_OPERATION, LEGACY_IDX_OPS_PART_SEQ
-    If Not IndexExists(TBL_OPERATION, IDX_OPS_PART_SEQ_LINE) Then
-        ExecuteDDL "CREATE UNIQUE INDEX " & IDX_OPS_PART_SEQ_LINE & " ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence], [" & COL_OP_LINE & "])"
-    End If
+    EnsureUniqueIndexIfMissing TBL_OPERATION, IDX_OPS_PART_SEQ_LINE, _
+        "CREATE UNIQUE INDEX " & IDX_OPS_PART_SEQ_LINE & " ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence], [" & COL_OP_LINE & "])"
 End Sub
 
 ' Move legacy OwningFFAs memo into tblEquipmentFFA, then drop the memo column.
