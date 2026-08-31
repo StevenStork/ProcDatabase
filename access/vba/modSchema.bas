@@ -149,6 +149,7 @@ Private Sub EnsurePartTables()
             "[OperationID] COUNTER CONSTRAINT PK_tblOperation PRIMARY KEY, " & _
             "[BasePart] TEXT(50), " & _
             "[OpSequence] LONG, " & _
+            "[OpLine] LONG, " & _
             "[OpCode] TEXT(50), " & _
             "[ProcessHours] DOUBLE, " & _
             "[AvgEx] DOUBLE, " & _
@@ -163,7 +164,7 @@ Private Sub EnsurePartTables()
             "[UseExportEx] YESNO, " & _
             "[MadeInFFA] TEXT(50)" & _
             ")"
-        ExecuteDDL "CREATE UNIQUE INDEX ux_ops_part_seq ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence])"
+        ExecuteDDL "CREATE UNIQUE INDEX " & IDX_OPS_PART_SEQ_LINE & " ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence], [OpLine])"
     End If
 End Sub
 
@@ -178,6 +179,7 @@ Private Sub UpgradeExistingSchema()
     EnsureEquipmentFfaTable
     EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
+    MigrateOperationOpLine
     MigrateLegacyMetaColumns
 End Sub
 
@@ -190,6 +192,62 @@ Public Sub EnsureOperationManualColumns()
     AddTextColumnIfMissing TBL_OPERATION, COL_EQUIPMENT, 100
     AddTextColumnIfMissing TBL_OPERATION, "EquipmentType", 100
     AddTextColumnIfMissing TBL_OPERATION, "MadeInFFA", 50
+    MigrateOperationOpLine
+End Sub
+
+' Op Line distinguishes multiple equipment/time rows sharing the same route-card Op Sequence.
+' Seed Ops only touches OpLine = 1; extra lines are manual.
+Public Sub MigrateOperationOpLine()
+    Dim db As DAO.Database
+    Dim rs As DAO.Recordset
+    Dim td As DAO.TableDef
+    Dim fld As DAO.Field
+    Dim prevBase As String
+    Dim prevSeq As Long
+    Dim lineNum As Long
+    Dim curBase As String
+    Dim curSeq As Long
+
+    If Not TableExists(TBL_OPERATION) Then Exit Sub
+
+    AddLongColumnIfMissing TBL_OPERATION, COL_OP_LINE
+
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset( _
+        "SELECT OperationID, BasePart, OpSequence, [" & COL_OP_LINE & "] FROM [" & TBL_OPERATION & "] " & _
+        "ORDER BY BasePart, OpSequence, OperationID", dbOpenDynaset)
+    prevBase = vbNullString
+    prevSeq = -1
+    lineNum = 0
+    Do Until rs.EOF
+        curBase = CoerceText(rs!BasePart)
+        curSeq = CLng(Nz(rs!OpSequence, 0))
+        If StrComp(curBase, prevBase, vbTextCompare) <> 0 Or curSeq <> prevSeq Then
+            lineNum = 1
+        Else
+            lineNum = lineNum + 1
+        End If
+        If Nz(rs.Fields(COL_OP_LINE).Value, 0) <> lineNum Then
+            rs.Edit
+            rs.Fields(COL_OP_LINE).Value = lineNum
+            rs.Update
+        End If
+        prevBase = curBase
+        prevSeq = curSeq
+        rs.MoveNext
+    Loop
+    rs.Close
+
+    On Error Resume Next
+    Set td = db.TableDefs(TBL_OPERATION)
+    Set fld = td.Fields(COL_OP_LINE)
+    fld.DefaultValue = "1"
+    On Error GoTo 0
+
+    DropIndexIfExists TBL_OPERATION, LEGACY_IDX_OPS_PART_SEQ
+    If Not IndexExists(TBL_OPERATION, IDX_OPS_PART_SEQ_LINE) Then
+        ExecuteDDL "CREATE UNIQUE INDEX " & IDX_OPS_PART_SEQ_LINE & " ON [" & TBL_OPERATION & "] ([BasePart], [OpSequence], [" & COL_OP_LINE & "])"
+    End If
 End Sub
 
 ' Move legacy OwningFFAs memo into tblEquipmentFFA, then drop the memo column.
@@ -305,6 +363,7 @@ Public Sub EnsureQueries()
     EnsureEquipmentFfaTable
     EnsureEquipmentTypeColumn
     MigrateEquipmentOwningFfas
+    MigrateOperationOpLine
 
     ' ProcessHours / AvgEx are stored manual fields. AvgHPU uses Import overrides when checked
     ' and the imported value is present; otherwise falls back to the manual field:
@@ -318,7 +377,8 @@ Public Sub EnsureQueries()
         "IIf(o.UseExportEx<>0 And o.ImportedEx Is Not Null, o.ImportedEx, o.AvgEx) IS NULL, Null, " & _
         "(IIf(o.UseExportHours<>0 And o.ImportedHours Is Not Null, o.ImportedHours, o.ProcessHours) * " & _
         "IIf(o.UseExportEx<>0 And o.ImportedEx Is Not Null, o.ImportedEx, o.AvgEx)) / o.BatchSize) AS AvgHPU " & _
-        "FROM [" & TBL_OPERATION & "] AS o"
+        "FROM [" & TBL_OPERATION & "] AS o " & _
+        "ORDER BY o.OpSequence, o.[" & COL_OP_LINE & "]"
 
     ReplaceQuery QRY_HOME, _
         "SELECT p.BasePart, p.Active, p.StatusDate, " & _
@@ -327,13 +387,15 @@ Public Sub EnsureQueries()
         "FROM [" & TBL_PART & "] AS p LEFT JOIN [" & TBL_FFA & "] AS f ON p.HomeFFA = f.FFA"
 
     ReplaceQuery QRY_EXPORT, _
-        "SELECT q.BasePart AS [Part Number], q.OpSequence AS [Op Sequence], q.OpCode AS [Op Code], " & _
+        "SELECT q.BasePart AS [Part Number], q.OpSequence AS [Op Sequence], q.[" & COL_OP_LINE & "] AS [Op Line], " & _
+        "q.OpCode AS [Op Code], " & _
         "q.ProcessHours AS [Process Hours], q.AvgEx AS [Avg Ex], q.BatchSize AS [Batch Size], " & _
         "q.AvgHPU AS [Avg HPU], q.Equipment AS [Equipment], q.EquipmentType AS [Equipment Type], " & _
         "p.HomeFFA AS [Home FFA], q.MadeInFFA AS [Made In FFA] " & _
         "FROM [" & QRY_OPERATIONS & "] AS q INNER JOIN [" & TBL_PART & "] AS p ON q.BasePart = p.BasePart " & _
         "WHERE p.Active <> 0 AND EXISTS (" & _
-        "SELECT 1 FROM [" & TBL_PART_DASH & "] AS d WHERE d.BasePart = p.BasePart AND d.Active <> 0)"
+        "SELECT 1 FROM [" & TBL_PART_DASH & "] AS d WHERE d.BasePart = p.BasePart AND d.Active <> 0) " & _
+        "ORDER BY q.OpSequence, q.[" & COL_OP_LINE & "]"
 
     EnsureFilteredSourceQueries
 End Sub

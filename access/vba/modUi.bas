@@ -430,12 +430,14 @@ Private Sub CreateOperationSubform()
     frm.AllowAdditions = True
     frm.AllowDeletions = True
 
-    ' Column order: Op Sequence, Op Code, Process Hours, Avg Ex, Batch Size,
+    ' Column order: Op Sequence, Op Line, Op Code, Process Hours, Avg Ex, Batch Size,
     ' Imported Hours, Imported Ex, Use Import Hrs, Use Import Ex, Avg HPU,
     ' Made In FFA (dropdown), Equipment (dropdown for that FFA), Equipment Type (locked).
     leftPos = 0
     AddDetailField frm, "OpSequence", leftPos, 0, 1000, True, False
     leftPos = leftPos + 1100
+    AddDetailField frm, COL_OP_LINE, leftPos, 0, 800, True, False
+    leftPos = leftPos + 900
     AddDetailField frm, "OpCode", leftPos, 0, 1100, True, True
     leftPos = leftPos + 1200
     AddDetailField frm, "ProcessHours", leftPos, 0, 1200, True, False, "0.00"
@@ -492,6 +494,9 @@ Private Sub CreateOperationSubform()
     AttachFieldLabel frm, ctl, FriendlyFieldCaption("EquipmentType"), leftPos, 0, 1600
 
     frm.OnCurrent = "=OpsOpsCurrent()"
+    frm.BeforeInsert = "=OpsBeforeInsert()"
+    frm.OrderBy = "OpSequence, " & COL_OP_LINE
+    frm.OrderByOn = True
 
     SaveAndRenameForm frm, SFRM_OPS
 End Sub
@@ -655,6 +660,7 @@ End Function
 Private Function FriendlyFieldCaption(ByVal fieldName As String) As String
     Select Case fieldName
         Case "OpSequence": FriendlyFieldCaption = "Op Sequence"
+        Case COL_OP_LINE: FriendlyFieldCaption = "Op Line"
         Case "OpCode": FriendlyFieldCaption = "Op Code"
         Case "ImportedHours": FriendlyFieldCaption = "Imported Hours"
         Case "ImportedEx": FriendlyFieldCaption = "Imported Ex"

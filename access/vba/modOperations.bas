@@ -93,10 +93,10 @@ Private Function LoadExistingOpMap(ByVal db As DAO.Database, ByVal basePart As S
     Set map = CreateObject("Scripting.Dictionary")
     map.CompareMode = vbTextCompare
     Set rs = db.OpenRecordset( _
-        "SELECT OperationID, OpSequence FROM [" & TBL_OPERATION & "] WHERE BasePart = " & SqlText(basePart), _
+        "SELECT OperationID, OpSequence, [" & COL_OP_LINE & "] FROM [" & TBL_OPERATION & "] WHERE BasePart = " & SqlText(basePart), _
         dbOpenSnapshot)
     Do Until rs.EOF
-        key = CStr(CLng(rs!OpSequence))
+        key = CStr(CLng(rs!OpSequence)) & "|" & CStr(Nz(rs.Fields(COL_OP_LINE).Value, 1))
         If Not map.Exists(key) Then map.Add key, CLng(rs!OperationID)
         rs.MoveNext
     Loop
@@ -117,17 +117,17 @@ Private Sub UpsertOperation( _
     Dim key As String
     Dim sql As String
 
-    key = CStr(opSeq)
+    key = CStr(opSeq) & "|1"
     If Not existingOps.Exists(key) Then
         sql = "INSERT INTO [" & TBL_OPERATION & "] " & _
-            "(BasePart, OpSequence, OpCode, ImportedHours, ImportedEx, BatchSize, " & _
+            "(BasePart, OpSequence, [" & COL_OP_LINE & "], OpCode, ImportedHours, ImportedEx, BatchSize, " & _
             "ExportHours, ExportEx, Equipment, EquipmentType, UseExportHours, UseExportEx, MadeInFFA) VALUES (" & _
-            SqlText(basePart) & ", " & opSeq & ", " & SqlText(opCode) & ", " & SqlNullableNumber(importedHours) & ", " & _
+            SqlText(basePart) & ", " & opSeq & ", 1, " & SqlText(opCode) & ", " & SqlNullableNumber(importedHours) & ", " & _
             SqlNullableNumber(importedEx) & ", Null, Null, Null, Null, Null, False, False, " & SqlNullableText(madeInFfa) & ")"
         db.Execute sql, dbFailOnError
         existingOps.Add key, True
     Else
-        ' Clear Equipment/Type when Made In FFA changes (RHS MadeInFFA is the prior value).
+        ' Seed only updates OpLine = 1. Additional lines (2, 3, …) are manual.
         sql = "UPDATE [" & TBL_OPERATION & "] SET " & _
             "OpCode = " & SqlText(opCode) & ", " & _
             "ImportedHours = " & SqlNullableNumber(importedHours) & ", " & _
@@ -135,10 +135,18 @@ Private Sub UpsertOperation( _
             "Equipment = IIf(Nz(MadeInFFA,'')=" & SqlText(Nz(madeInFfa, "")) & ", Equipment, Null), " & _
             "EquipmentType = IIf(Nz(MadeInFFA,'')=" & SqlText(Nz(madeInFfa, "")) & ", EquipmentType, Null), " & _
             "MadeInFFA = " & SqlNullableText(madeInFfa) & " " & _
-            "WHERE BasePart = " & SqlText(basePart) & " AND OpSequence = " & opSeq
+            "WHERE BasePart = " & SqlText(basePart) & " AND OpSequence = " & opSeq & " AND [" & COL_OP_LINE & "] = 1"
         db.Execute sql, dbFailOnError
     End If
 End Sub
+
+Public Function OpsBeforeInsert() As Boolean
+    On Error Resume Next
+    With Forms(FRM_PART).Controls("subOperations").Form
+        If IsNull(!OpLine) Or Nz(!OpLine, 0) = 0 Then !OpLine = 1
+    End With
+    OpsBeforeInsert = True
+End Function
 
 ' Cascading ops UI: Made In FFA → Equipment (for that FFA) → Equipment Type.
 Public Function OpsMadeInFFAAfterUpdate() As Boolean

@@ -2,7 +2,7 @@ Attribute VB_Name = "modConstants"
 Option Compare Database
 Option Explicit
 
-Public Const SCHEMA_VERSION As String = "10"
+Public Const SCHEMA_VERSION As String = "11"
 
 ' Linked tables (user-created; SQL lives in same-folder dataQueries.xlsm).
 Public Const TBL_ROUTE_CARD As String = "tblRouteCard"
@@ -37,6 +37,9 @@ Public Const COL_FACTORY As String = "Factory"
 Public Const COL_USE_FLAG As String = "UseFlag"
 Public Const COL_EQUIPMENT As String = "Equipment"
 Public Const COL_OP_SEQUENCE As String = "OpSequence"
+Public Const COL_OP_LINE As String = "OpLine"
+Public Const IDX_OPS_PART_SEQ_LINE As String = "ux_ops_part_seq_line"
+Public Const LEGACY_IDX_OPS_PART_SEQ As String = "ux_ops_part_seq"
 Public Const COL_OP_CODE As String = "OpCode"
 
 Public Const META_SCHEMA_VERSION As String = "SchemaVersion"

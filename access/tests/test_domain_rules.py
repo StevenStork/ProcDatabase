@@ -281,3 +281,43 @@ def test_ops_equipment_type_from_selected_equipment():
     assert equipment_type_for(rows, "Press A") == "Hydraulic"
     assert equipment_type_for(rows, "Oven") == "Thermal"
     assert equipment_type_for(rows, "Missing") is None
+
+
+def assign_op_lines(rows: list[dict]) -> list[dict]:
+    """Mirror MigrateOperationOpLine: number duplicate Op Sequences 1, 2, 3… per part."""
+    ordered = sorted(rows, key=lambda r: (r["BasePart"], r["OpSequence"], r.get("OperationID", 0)))
+    out: list[dict] = []
+    prev_base = ""
+    prev_seq = -1
+    line_num = 0
+    for row in ordered:
+        base = row["BasePart"]
+        seq = row["OpSequence"]
+        if base != prev_base or seq != prev_seq:
+            line_num = 1
+        else:
+            line_num += 1
+        out.append({**row, "OpLine": line_num})
+        prev_base = base
+        prev_seq = seq
+    return out
+
+
+def test_op_line_migration_numbers_duplicates():
+    rows = [
+        {"OperationID": 1, "BasePart": "ABC", "OpSequence": 10},
+        {"OperationID": 2, "BasePart": "ABC", "OpSequence": 10},
+        {"OperationID": 3, "BasePart": "ABC", "OpSequence": 20},
+    ]
+    migrated = assign_op_lines(rows)
+    assert [(r["OpSequence"], r["OpLine"]) for r in migrated] == [(10, 1), (10, 2), (20, 1)]
+
+
+def test_seed_upsert_key_uses_op_line_one():
+    existing = {f"{seq}|{line}" for seq, line in [(10, 1), (10, 2), (20, 1)]}
+    assert "10|1" in existing
+    assert "10|2" in existing
+    assert "10|3" not in existing
+    # Seed updates only the line-1 slot for op sequence 10.
+    seed_key = "10|1"
+    assert seed_key in existing

@@ -455,6 +455,50 @@ Fail:
     End If
 End Sub
 
+Public Sub AddLongColumnIfMissing(ByVal tableName As String, ByVal fieldName As String)
+    If FieldExists(tableName, fieldName) Then Exit Sub
+    On Error GoTo Fail
+    CurrentDb.Execute "ALTER TABLE [" & tableName & "] ADD COLUMN [" & fieldName & "] LONG", dbFailOnError
+    Exit Sub
+Fail:
+    If Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3380 Or Err.Number = 3211 Then
+        Err.Clear
+    Else
+        Err.Raise Err.Number, "AddLongColumnIfMissing", Err.Description
+    End If
+End Sub
+
+Public Function IndexExists(ByVal tableName As String, ByVal indexName As String) As Boolean
+    Dim td As DAO.TableDef
+    Dim idx As DAO.Index
+
+    On Error GoTo Fail
+    Set td = CurrentDb.TableDefs(tableName)
+    For Each idx In td.Indexes
+        If StrComp(idx.Name, indexName, vbTextCompare) = 0 Then
+            IndexExists = True
+            Exit Function
+        End If
+    Next idx
+    IndexExists = False
+    Exit Function
+Fail:
+    IndexExists = False
+End Function
+
+Public Sub DropIndexIfExists(ByVal tableName As String, ByVal indexName As String)
+    If Not IndexExists(tableName, indexName) Then Exit Sub
+    On Error GoTo Fail
+    CurrentDb.Execute "DROP INDEX [" & indexName & "] ON [" & tableName & "]", dbFailOnError
+    Exit Sub
+Fail:
+    If Err.Number = 3010 Or Err.Number = 3012 Or Err.Number = 3029 Or Err.Number = 3191 Or Err.Number = 3288 Or Err.Number = 3211 Then
+        Err.Clear
+    Else
+        Err.Raise Err.Number, "DropIndexIfExists", Err.Description
+    End If
+End Sub
+
 Public Sub DropColumnIfExists(ByVal tableName As String, ByVal fieldName As String)
     If Not FieldExists(tableName, fieldName) Then Exit Sub
     On Error GoTo Fail

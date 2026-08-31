@@ -85,6 +85,8 @@ Unknown PL codes from RCCP are inserted as new product-line rows (name = code) o
 
 On the Part ops grid, **Made In FFA** is an FFA dropdown; **Equipment** lists only equipment assigned to that FFA via `tblEquipmentFFA`; **Equipment Type** is filled from `tblEquipment` for the selected equipment.
 
+**Op Line** distinguishes multiple rows that share the same route-card **Op Sequence** (for example different equipment with different hours). Seed Ops creates/updates **Op Line = 1** only; add lines `2`, `3`, … manually for additional equipment.
+
 ## Refresh workflow
 
 1. `RefreshLink` on each linked table (including `tblRCCP`).
