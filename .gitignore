@@ -1,0 +1,7 @@
+access/ProcDatabase.accdb
+access/*.laccdb
+access/*.accdb
+__pycache__/
+*.pyc
+.pytest_cache/
+access/samples/sample_data.json

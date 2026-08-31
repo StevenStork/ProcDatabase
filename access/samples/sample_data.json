@@ -1,0 +1,75 @@
+{
+  "tblAssyStnd": [
+    {
+      "ASSEMBLY NO": "ABC123-001",
+      "OPER SEQ": 10,
+      "OPER CODE": "WELD",
+      "ASSEMBLY DESCRIPTION": "Widget assembly",
+      "OPER DESCRIPTION": "Weld station",
+      "RUN TIME (HOURS)": 1.5,
+      "FFA": "F1",
+      "ORG CODE": "ORG1"
+    },
+    {
+      "ASSEMBLY NO": "ABC123-002",
+      "OPER SEQ": 20,
+      "OPER CODE": "PAINT",
+      "ASSEMBLY DESCRIPTION": "Widget assembly",
+      "OPER DESCRIPTION": "Paint booth",
+      "RUN TIME (HOURS)": 0.75,
+      "FFA": "F2",
+      "ORG CODE": "ORG1"
+    }
+  ],
+  "tblRouteCard": [
+    {
+      "ASSEMBLY NO": "ABC123-001",
+      "OPER SEQ": 10,
+      "OPER CODE": "WELD",
+      "ASSEMBLY DESCRIPTION": "Widget assembly",
+      "OPER DESCRIPTION": "Weld station",
+      "FFA": "F1",
+      "ORG CODE": "ORG1"
+    }
+  ],
+  "tblOperComps": [
+    {
+      "ASSEMBLY NO": "ABC123-001",
+      "S/N": "SN001",
+      "OPER SEQ": 10,
+      "OPER CODE": "WELD",
+      "OPER DESCRIPTION": "Weld station",
+      "LABOR HPS (HOURS)": 2.0,
+      "QTY": 1,
+      "PROJECT": "P1",
+      "PROGRAM FAMILY": "PF1",
+      "FFA": "F1",
+      "ORG CODE": "ORG1"
+    }
+  ],
+  "tblProcTmYld": [
+    {
+      "Assembly No": "ABC123-001",
+      "OPER SEQ": 10,
+      "Avg 180 Day Ex": 8.0,
+      "Avg 90 Day Ex": 5.0
+    }
+  ],
+  "parts": [
+    {
+      "BasePart": "ABC123",
+      "Active": true,
+      "Dash": "001",
+      "DashActive": true
+    },
+    {
+      "BasePart": "ABC123",
+      "Active": true,
+      "Dash": "002",
+      "DashActive": false
+    }
+  ],
+  "activeAssemblyFilter": [
+    "ABC123-001"
+  ]
+}

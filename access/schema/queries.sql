@@ -1,0 +1,7 @@
+-- qryOperations: stored ProcessHours / AvgEx; AvgHPU with Use Import overrides
+--   (falls back to ProcessHours/AvgEx when imported value is null)
+-- qryHomeParts: Days since StatusDate, factory lookup
+-- qryExportOps: export columns incl. Op Line, Equipment + Equipment Type; ordered by Op Sequence, Op Line
+-- qryRouteCardActive: tblRouteCard INNER JOIN tblActiveAssemblyFilter
+-- qryAssyStndActive: tblAssyStnd INNER JOIN tblActiveAssemblyFilter
+-- qryOperCompsActive: tblOperComps INNER JOIN tblActiveAssemblyFilter
