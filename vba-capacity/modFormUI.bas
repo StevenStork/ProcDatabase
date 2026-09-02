@@ -14,18 +14,6 @@ Public Sub ConfigureFormSize(ByVal frm As Object, ByVal widthPoints As Single, B
     frm.Height = heightPoints
 End Sub
 
-Public Function FormButtonRowTop(ByVal contentBottom As Single) As Single
-    FormButtonRowTop = contentBottom + 16
-End Function
-
-Public Function FormButtonLeft(ByVal buttonIndex As Long, Optional ByVal startLeft As Single = FORM_MARGIN) As Single
-    FormButtonLeft = startLeft + (buttonIndex * (FORM_BUTTON_WIDTH + FORM_BUTTON_GAP))
-End Function
-
-Public Function FormCloseButtonLeft(ByVal formWidth As Single) As Single
-    FormCloseButtonLeft = formWidth - FORM_MARGIN - FORM_BUTTON_WIDTH
-End Function
-
 Public Function AddLabel( _
     ByVal frm As Object, _
     ByVal caption As String, _
