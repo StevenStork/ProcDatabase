@@ -60,7 +60,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 ## Setup steps
 
 1. Create a new workbook and save as **`FactoryCapacity.xlsm`**.
-2. Import or paste all standard modules and the class module.
+2. Import or paste all standard modules and the three class modules.
 3. Create five blank UserForms, rename each, paste the matching form code.
 4. Paste `ThisWorkbook.txt` into ThisWorkbook.
 5. Run **`BootstrapCapacityTables`** (Alt+F8) once to create sheets and tables.
