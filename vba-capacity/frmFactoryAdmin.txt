@@ -1,0 +1,199 @@
+' Paste this entire file into the code window for UserForm named frmFactoryAdmin.
+
+Option Explicit
+
+Private Const FORM_WIDTH As Single = 500
+Private Const FORM_HEIGHT As Single = 345
+Private Const FORM_MARGIN As Single = 12
+Private Const BTN_WIDTH As Single = 76
+Private Const BTN_GAP As Single = 8
+Private Const BTN_TOP As Single = 268
+Private Const BTN_0 As Single = 12
+Private Const BTN_1 As Single = 96
+Private Const BTN_2 As Single = 180
+Private Const BTN_CLOSE As Single = 412
+Private Const LIST_TOP As Single = 28
+Private Const LIST_HEIGHT As Single = 225
+Private Const EDIT_LEFT As Single = 215
+
+Private mHandlers As Collection
+Private mEditingCode As String
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Manage Factories"
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
+
+    Set mHandlers = CreateControlHandlers()
+    BuildControls
+    LoadRecordList
+    ClearEditor
+End Sub
+
+Private Sub BuildControls()
+    AddLabel Me, "Factories", FORM_MARGIN, 8, 120
+    AddListBox Me, "lstRecords", FORM_MARGIN, LIST_TOP, 185, LIST_HEIGHT
+
+    AddLabel Me, "Factory Code", EDIT_LEFT, 28, 100
+    AddTextBox Me, "txtCode", EDIT_LEFT, 44, 260
+
+    AddLabel Me, "Factory Name", EDIT_LEFT, 76, 100
+    AddTextBox Me, "txtName", EDIT_LEFT, 92, 260
+
+    AddCheckBox Me, "chkActive", "Active", EDIT_LEFT, 128
+
+    AddLabel Me, "Notes", EDIT_LEFT, 152, 100
+    AddTextBox Me, "txtNotes", EDIT_LEFT, 168, 260, 70
+
+    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+
+    WireControlEvent mHandlers, GetControl(Me, "lstRecords"), Me, "RecordsClick", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdNew"), Me, "NewRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdSave"), Me, "SaveRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdDelete"), Me, "DeleteRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
+End Sub
+
+Public Sub HandleFormEvent(ByVal eventName As String)
+    Select Case eventName
+        Case "RecordsClick": LoadSelectedRecord
+        Case "NewRecord": ClearEditor
+        Case "SaveRecord": SaveCurrentRecord
+        Case "DeleteRecord": DeleteCurrentRecord
+        Case "CloseForm": Unload Me
+    End Select
+End Sub
+
+Private Sub LoadRecordList()
+    Dim tbl As ListObject
+    Dim items As Variant
+
+    Set tbl = FindTable(FACTORIES_TABLE_NAME)
+    items = ListAllDisplayItems(tbl, COL_FACTORY_CODE, COL_FACTORY_NAME, False)
+    BindListBoxFromArray GetControl(Me, "lstRecords"), items
+End Sub
+
+Private Sub LoadSelectedRecord()
+    Dim tbl As ListObject
+    Dim codeValue As String
+    Dim listRowIndex As Long
+
+    codeValue = SelectedListCode(GetControl(Me, "lstRecords"))
+    If Len(codeValue) = 0 Then Exit Sub
+
+    Set tbl = FindTable(FACTORIES_TABLE_NAME)
+    listRowIndex = FindListRowByKey(tbl, COL_FACTORY_CODE, codeValue)
+    If listRowIndex = 0 Then Exit Sub
+
+    mEditingCode = codeValue
+    GetControl(Me, "txtCode").Text = codeValue
+    GetControl(Me, "txtCode").Enabled = False
+    GetControl(Me, "txtName").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_NAME)))
+    GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
+    GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
+End Sub
+
+Private Sub ClearEditor()
+    mEditingCode = vbNullString
+    GetControl(Me, "txtCode").Enabled = True
+    GetControl(Me, "txtCode").Text = vbNullString
+    GetControl(Me, "txtName").Text = vbNullString
+    GetControl(Me, "chkActive").Value = True
+    GetControl(Me, "txtNotes").Text = vbNullString
+    GetControl(Me, "lstRecords").ListIndex = -1
+End Sub
+
+Private Sub SaveCurrentRecord()
+    Dim tbl As ListObject
+    Dim fieldValues As Object
+    Dim codeValue As String
+    Dim excludeRow As Long
+
+    codeValue = NormalizeCode(GetControl(Me, "txtCode").Text)
+    If Not ValidateRequiredCode(codeValue, "Factory Code") Then Exit Sub
+
+    Set tbl = FindTable(FACTORIES_TABLE_NAME)
+    If tbl Is Nothing Then
+        MsgBox "Factories table was not found. Run BootstrapCapacityTables first.", vbExclamation
+        Exit Sub
+    End If
+
+    excludeRow = 0
+    If Len(mEditingCode) > 0 Then
+        excludeRow = FindListRowByKey(tbl, COL_FACTORY_CODE, mEditingCode)
+    End If
+
+    If Not ValidateUniqueKey(tbl, COL_FACTORY_CODE, codeValue, excludeRow) Then Exit Sub
+
+    Set fieldValues = NewFieldValuesDictionary()
+    fieldValues(COL_FACTORY_CODE) = codeValue
+    fieldValues(COL_FACTORY_NAME) = Trim$(GetControl(Me, "txtName").Text)
+    fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
+    fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    UpsertRow tbl, COL_FACTORY_CODE, codeValue, fieldValues
+    mEditingCode = codeValue
+    GetControl(Me, "txtCode").Enabled = False
+    LoadRecordList
+    SelectListItemByCode GetControl(Me, "lstRecords"), codeValue
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub DeleteCurrentRecord()
+    Dim tbl As ListObject
+    Dim codeValue As String
+    Dim junctionTbl As ListObject
+
+    codeValue = NormalizeCode(GetControl(Me, "txtCode").Text)
+    If Len(codeValue) = 0 Then
+        MsgBox "Select a factory to delete.", vbExclamation
+        Exit Sub
+    End If
+
+    If MsgBox("Delete factory '" & codeValue & "'?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    If Not junctionTbl Is Nothing Then
+        If JunctionTableHasFactory(junctionTbl, codeValue) Then
+            MsgBox "Remove factory-equipment assignments before deleting this factory.", vbExclamation
+            Exit Sub
+        End If
+    End If
+
+    Set tbl = FindTable(FACTORIES_TABLE_NAME)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteRowByKey tbl, COL_FACTORY_CODE, codeValue
+    ClearEditor
+    LoadRecordList
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Function JunctionTableHasFactory(ByVal junctionTbl As ListObject, ByVal factoryCode As String) As Boolean
+    Dim filterValues As Variant
+    Dim rowIndex As Long
+
+    JunctionTableHasFactory = False
+    If junctionTbl.DataBodyRange Is Nothing Then Exit Function
+
+    filterValues = junctionTbl.ListColumns(COL_FACTORY_CODE).DataBodyRange.Value2
+    If Not IsArray(filterValues) Then
+        JunctionTableHasFactory = ValuesMatchCode(filterValues, factoryCode)
+        Exit Function
+    End If
+
+    For rowIndex = 1 To UBound(filterValues, 1)
+        If ValuesMatchCode(filterValues(rowIndex, 1), factoryCode) Then
+            JunctionTableHasFactory = True
+            Exit Function
+        End If
+    Next rowIndex
+End Function
