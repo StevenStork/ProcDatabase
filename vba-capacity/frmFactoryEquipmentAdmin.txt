@@ -1,14 +1,19 @@
 ' Paste this entire file into the code window for UserForm named frmFactoryEquipmentAdmin.
-' Create a blank UserForm in the VBA IDE, set (Name) = frmFactoryEquipmentAdmin, then paste.
 
 Option Explicit
+
+Private Const FORM_WIDTH As Single = 520
+Private Const FORM_HEIGHT As Single = 330
+Private Const LEFT_PANEL_WIDTH As Single = 230
+Private Const RIGHT_PANEL_LEFT As Single = 270
+Private Const LIST_HEIGHT As Single = 210
+Private Const BUTTON_TOP As Single = 268
 
 Private mHandlers As Collection
 
 Private Sub UserForm_Initialize()
     Me.Caption = "Assign Equipment to Factories"
-    Me.Width = 500
-    Me.Height = 340
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
 
     Set mHandlers = CreateControlHandlers()
     BuildControls
@@ -17,30 +22,27 @@ Private Sub UserForm_Initialize()
 End Sub
 
 Private Sub BuildControls()
-    AddLabel Me, "Factory", 12, 8, 80
-    AddComboBox Me, "cboFactory", 12, 24, 220
+    AddLabel Me, "Factory", FORM_MARGIN, 8, 80
+    AddComboBox Me, "cboFactory", FORM_MARGIN, 24, LEFT_PANEL_WIDTH
 
-    AddLabel Me, "Equipment", 12, 56, 80
-    AddComboBox Me, "cboEquipment", 12, 72, 220
+    AddLabel Me, "Equipment", FORM_MARGIN, 56, 80
+    AddComboBox Me, "cboEquipment", FORM_MARGIN, 72, LEFT_PANEL_WIDTH
 
-    AddLabel Me, "Assigned Equipment", 250, 8, 140
-    AddListBox Me, "lstAssigned", 250, 24, 220, 180
+    AddLabel Me, "Notes", FORM_MARGIN, 104, 80
+    AddTextBox Me, "txtNotes", FORM_MARGIN, 120, LEFT_PANEL_WIDTH, 60
 
-    AddCheckBox Me, "chkActive", "Active", 12, 108
-    AddLabel Me, "Notes", 12, 132, 80
-    AddTextBox Me, "txtNotes", 12, 148, 220, 56
+    AddLabel Me, "Assigned Equipment", RIGHT_PANEL_LEFT, 8, 160
+    AddListBox Me, "lstAssigned", RIGHT_PANEL_LEFT, 24, 225, LIST_HEIGHT
 
-    AddCommandButton Me, "cmdAdd", "Add", 12, 214, 70
-    AddCommandButton Me, "cmdRemove", "Remove", 88, 214, 70
-    AddCommandButton Me, "cmdToggleActive", "Toggle Active", 164, 214, 90
-    AddCommandButton Me, "cmdRefresh", "Refresh", 12, 244, 70
-    AddCommandButton Me, "cmdClose", "Close", 390, 244, 80
+    AddCommandButton Me, "cmdAdd", "Add", FormButtonLeft(0), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdRemove", "Remove", FormButtonLeft(1), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdRefresh", "Refresh", FormButtonLeft(2), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(FORM_WIDTH), BUTTON_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "cboFactory"), Me, "FactoryChanged", "Change"
     WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignmentSelected", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdAdd"), Me, "AddAssignment", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdRemove"), Me, "RemoveAssignment", "Click"
-    WireControlEvent mHandlers, GetControl(Me, "cmdToggleActive"), Me, "ToggleActive", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdRefresh"), Me, "RefreshAll", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
 End Sub
@@ -51,7 +53,6 @@ Public Sub HandleFormEvent(ByVal eventName As String)
         Case "AssignmentSelected": LoadSelectedAssignment
         Case "AddAssignment": SaveAssignment
         Case "RemoveAssignment": RemoveSelectedAssignment
-        Case "ToggleActive": ToggleSelectedActive
         Case "RefreshAll": RefreshCombos: LoadAssignments
         Case "CloseForm": Unload Me
     End Select
@@ -101,13 +102,11 @@ Private Sub LoadSelectedAssignment()
     If listRowIndex = 0 Then Exit Sub
 
     SelectComboByCode GetControl(Me, "cboEquipment"), equipmentCode
-    GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(junctionTbl, listRowIndex, COL_ACTIVE))
     GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(junctionTbl, listRowIndex, COL_NOTES)))
 End Sub
 
 Private Sub ClearAssignmentEditor()
     GetControl(Me, "cboEquipment").ListIndex = -1
-    GetControl(Me, "chkActive").Value = True
     GetControl(Me, "txtNotes").Text = vbNullString
     GetControl(Me, "lstAssigned").ListIndex = -1
 End Sub
@@ -137,7 +136,6 @@ Private Sub SaveAssignment()
     Set fieldValues = NewFieldValuesDictionary()
     fieldValues(COL_FACTORY_CODE) = factoryCode
     fieldValues(COL_EQUIPMENT_CODE) = equipmentCode
-    fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
     fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
 
     On Error GoTo CleanUp
@@ -171,36 +169,6 @@ Private Sub RemoveSelectedAssignment()
     DeleteJunctionRow junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode
     ClearAssignmentEditor
     LoadAssignments
-
-CleanUp:
-    OptimizeExcel False
-End Sub
-
-Private Sub ToggleSelectedActive()
-    Dim junctionTbl As ListObject
-    Dim factoryCode As String
-    Dim equipmentCode As String
-    Dim listRowIndex As Long
-    Dim currentActive As Boolean
-
-    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
-    equipmentCode = SelectedListCode(GetControl(Me, "lstAssigned"))
-
-    If Len(factoryCode) = 0 Or Len(equipmentCode) = 0 Then
-        MsgBox "Select an assignment to toggle.", vbExclamation
-        Exit Sub
-    End If
-
-    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
-    listRowIndex = FindJunctionListRow(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode)
-    If listRowIndex = 0 Then Exit Sub
-
-    currentActive = IsActiveFlag(GetCellValueByListRow(junctionTbl, listRowIndex, COL_ACTIVE))
-
-    On Error GoTo CleanUp
-    OptimizeExcel True
-    SetCellValueByListRow junctionTbl, listRowIndex, COL_ACTIVE, ActiveFlagToCellValue(Not currentActive)
-    GetControl(Me, "chkActive").Value = Not currentActive
 
 CleanUp:
     OptimizeExcel False

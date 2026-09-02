@@ -1,14 +1,20 @@
 ' Paste this entire file into the code window for UserForm named frmEquipmentProcessAdmin.
-' Create a blank UserForm in the VBA IDE, set (Name) = frmEquipmentProcessAdmin, then paste.
 
 Option Explicit
+
+Private Const FORM_WIDTH As Single = 560
+Private Const FORM_HEIGHT As Single = 390
+Private Const LIST_TOP As Single = 72
+Private Const LIST_HEIGHT As Single = 185
+Private Const LEFT_LIST_WIDTH As Single = 250
+Private Const RIGHT_LIST_LEFT As Single = 278
+Private Const BUTTON_TOP As Single = 322
 
 Private mHandlers As Collection
 
 Private Sub UserForm_Initialize()
     Me.Caption = "Assign Process Types to Equipment"
-    Me.Width = 520
-    Me.Height = 360
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
 
     Set mHandlers = CreateControlHandlers()
     BuildControls
@@ -18,24 +24,24 @@ Private Sub UserForm_Initialize()
 End Sub
 
 Private Sub BuildControls()
-    AddLabel Me, "Equipment", 12, 8, 80
-    AddComboBox Me, "cboEquipment", 12, 24, 240
+    AddLabel Me, "Equipment", FORM_MARGIN, 8, 80
+    AddComboBox Me, "cboEquipment", FORM_MARGIN, 24, 320
 
-    AddLabel Me, "Assigned Processes", 270, 8, 120
-    AddListBox Me, "lstAssigned", 270, 24, 220, 160
+    AddLabel Me, "Available Process Types", FORM_MARGIN, 56, 160
+    AddListBox Me, "lstAvailable", FORM_MARGIN, LIST_TOP, LEFT_LIST_WIDTH, LIST_HEIGHT, True
 
-    AddLabel Me, "Available Process Types", 12, 56, 140
-    AddListBox Me, "lstAvailable", 12, 72, 240, 160, True
+    AddLabel Me, "Assigned Processes", RIGHT_LIST_LEFT, 56, 160
+    AddListBox Me, "lstAssigned", RIGHT_LIST_LEFT, LIST_TOP, LEFT_LIST_WIDTH, LIST_HEIGHT
 
-    AddCheckBox Me, "chkActive", "Active", 12, 240
-    AddLabel Me, "Notes", 12, 264, 80
-    AddTextBox Me, "txtNotes", 12, 280, 240, 40
+    AddCheckBox Me, "chkActive", "Active", FORM_MARGIN, 268
+    AddLabel Me, "Notes", 100, 268, 40
+    AddTextBox Me, "txtNotes", 100, 284, 430, 24
 
-    AddCommandButton Me, "cmdAddSelected", "Add Selected", 12, 326, 90
-    AddCommandButton Me, "cmdRemove", "Remove", 108, 326, 70
-    AddCommandButton Me, "cmdToggleActive", "Toggle Active", 184, 326, 90
-    AddCommandButton Me, "cmdRefresh", "Refresh", 280, 326, 70
-    AddCommandButton Me, "cmdClose", "Close", 410, 326, 80
+    AddCommandButton Me, "cmdAddSelected", "Add Selected", FormButtonLeft(0), BUTTON_TOP, 88
+    AddCommandButton Me, "cmdRemove", "Remove", FormButtonLeft(1), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdToggleActive", "Toggle Active", 188, BUTTON_TOP, 88
+    AddCommandButton Me, "cmdRefresh", "Refresh", 284, BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(FORM_WIDTH), BUTTON_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "cboEquipment"), Me, "EquipmentChanged", "Change"
     WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignedSelected", "Click"

@@ -1,15 +1,20 @@
 ' Paste this entire file into the code window for UserForm named frmFactoryAdmin.
-' Create a blank UserForm in the VBA IDE, set (Name) = frmFactoryAdmin, then paste.
 
 Option Explicit
+
+Private Const FORM_WIDTH As Single = 500
+Private Const FORM_HEIGHT As Single = 345
+Private Const LIST_TOP As Single = 28
+Private Const LIST_HEIGHT As Single = 225
+Private Const EDIT_LEFT As Single = 215
+Private Const BUTTON_TOP As Single = 268
 
 Private mHandlers As Collection
 Private mEditingCode As String
 
 Private Sub UserForm_Initialize()
     Me.Caption = "Manage Factories"
-    Me.Width = 420
-    Me.Height = 300
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
 
     Set mHandlers = CreateControlHandlers()
     BuildControls
@@ -18,24 +23,24 @@ Private Sub UserForm_Initialize()
 End Sub
 
 Private Sub BuildControls()
-    AddLabel Me, "Factories", 12, 8, 120
-    AddListBox Me, "lstRecords", 12, 24, 160, 180
+    AddLabel Me, "Factories", FORM_MARGIN, 8, 120
+    AddListBox Me, "lstRecords", FORM_MARGIN, LIST_TOP, 185, LIST_HEIGHT
 
-    AddLabel Me, "Factory Code", 188, 24, 90
-    AddTextBox Me, "txtCode", 188, 40, 200
+    AddLabel Me, "Factory Code", EDIT_LEFT, 28, 100
+    AddTextBox Me, "txtCode", EDIT_LEFT, 44, 260
 
-    AddLabel Me, "Factory Name", 188, 68, 90
-    AddTextBox Me, "txtName", 188, 84, 200
+    AddLabel Me, "Factory Name", EDIT_LEFT, 76, 100
+    AddTextBox Me, "txtName", EDIT_LEFT, 92, 260
 
-    AddCheckBox Me, "chkActive", "Active", 188, 112
+    AddCheckBox Me, "chkActive", "Active", EDIT_LEFT, 128
 
-    AddLabel Me, "Notes", 188, 136, 90
-    AddTextBox Me, "txtNotes", 188, 152, 200, 52
+    AddLabel Me, "Notes", EDIT_LEFT, 152, 100
+    AddTextBox Me, "txtNotes", EDIT_LEFT, 168, 260, 70
 
-    AddCommandButton Me, "cmdNew", "New", 12, 214, 70
-    AddCommandButton Me, "cmdSave", "Save", 88, 214, 70
-    AddCommandButton Me, "cmdDelete", "Delete", 164, 214, 70
-    AddCommandButton Me, "cmdClose", "Close", 318, 214, 70
+    AddCommandButton Me, "cmdNew", "New", FormButtonLeft(0), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", FormButtonLeft(1), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", FormButtonLeft(2), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(FORM_WIDTH), BUTTON_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "lstRecords"), Me, "RecordsClick", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdNew"), Me, "NewRecord", "Click"

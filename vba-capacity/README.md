@@ -27,15 +27,20 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | `modFormUI.bas` | modFormUI |
 | `modFormLauncher.bas` | modFormLauncher |
 
-### Class modules
+### Class module (required)
 
 | File | Class name |
 |---|---|
-| `clsCommandButtonHandler.cls` | clsCommandButtonHandler |
-| `clsListBoxHandler.cls` | clsListBoxHandler |
-| `clsComboBoxHandler.cls` | clsComboBoxHandler |
+| `clsFormControlHandler.cls` | clsFormControlHandler |
 
-Required for programmatic UserForm controls. Each handler wires only the events that control type supports (avoids run-time error 459).
+Required for programmatic UserForm button/list/combo events (avoids run-time error 459).
+
+**How to add it (pick one method):**
+
+- **Import (recommended):** VBA Editor → File → Import File → select `clsFormControlHandler.cls`
+- **Paste:** Insert → Class Module, set `(Name)` = `clsFormControlHandler` in the Properties window, then paste everything from `Option Explicit` downward (do not paste the `VERSION` / `Attribute` header lines at the top of the `.cls` file)
+
+If `(Name)` is anything else (e.g. `Class1`), you will get **Compile error: Type not defined** on `clsFormControlHandler`.
 
 ### UserForms (manual shell + paste code)
 
@@ -60,7 +65,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 ## Setup steps
 
 1. Create a new workbook and save as **`FactoryCapacity.xlsm`**.
-2. Import or paste all standard modules and the three class modules.
+2. Import or paste all standard modules and **`clsFormControlHandler`** (see class module instructions above).
 3. Create five blank UserForms, rename each, paste the matching form code.
 4. Paste `ThisWorkbook.txt` into ThisWorkbook.
 5. Run **`BootstrapCapacityTables`** (Alt+F8) once to create sheets and tables.

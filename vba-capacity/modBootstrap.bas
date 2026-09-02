@@ -23,16 +23,18 @@ Public Sub BootstrapCapacityTables()
         COL_FACTORY_CODE, COL_FACTORY_NAME, COL_ACTIVE, COL_NOTES)
 
     EnsureTable EQUIPMENT_SHEET_NAME, EQUIPMENT_TABLE_NAME, Array( _
-        COL_EQUIPMENT_CODE, COL_EQUIPMENT_NAME, COL_EQUIPMENT_TYPE, COL_ACTIVE, COL_NOTES)
+        COL_EQUIPMENT_CODE, COL_EQUIPMENT_NAME, COL_ACTIVE, COL_NOTES)
 
     EnsureTable PROCESS_TYPES_SHEET_NAME, PROCESS_TYPES_TABLE_NAME, Array( _
         COL_PROCESS_TYPE_CODE, COL_PROCESS_TYPE_NAME, COL_ACTIVE, COL_NOTES)
 
     EnsureTable FACTORY_EQUIPMENT_SHEET_NAME, FACTORY_EQUIPMENT_TABLE_NAME, Array( _
-        COL_FACTORY_CODE, COL_EQUIPMENT_CODE, COL_ACTIVE, COL_NOTES)
+        COL_FACTORY_CODE, COL_EQUIPMENT_CODE, COL_NOTES)
 
     EnsureTable EQUIPMENT_PROCESSES_SHEET_NAME, EQUIPMENT_PROCESSES_TABLE_NAME, Array( _
         COL_EQUIPMENT_CODE, COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES)
+
+    CompactAllCapacityTables
 
     FormatAdminSheet
 
@@ -75,7 +77,7 @@ Private Sub EnsureTable(ByVal sheetName As String, ByVal tableName As String, By
     On Error GoTo 0
 
     If tbl Is Nothing Then
-        Set tableRange = ws.Range(ws.Cells(TABLE_HEADER_ROW, 1), ws.Cells(TABLE_FIRST_DATA_ROW, lastCol))
+        Set tableRange = ws.Range(ws.Cells(TABLE_HEADER_ROW, 1), ws.Cells(TABLE_HEADER_ROW, lastCol))
         Set tbl = ws.ListObjects.Add(xlSrcRange, tableRange, , xlYes)
         tbl.Name = tableName
     Else
@@ -126,3 +128,11 @@ Private Function FindWorksheetByName(ByVal sheetName As String) As Worksheet
     Set FindWorksheetByName = ThisWorkbook.Worksheets(sheetName)
     On Error GoTo 0
 End Function
+
+Private Sub CompactAllCapacityTables()
+    DeleteEmptyTableRows FindTable(FACTORIES_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(EQUIPMENT_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(PROCESS_TYPES_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+End Sub

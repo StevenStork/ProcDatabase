@@ -67,10 +67,12 @@ Public Function FindListRowByKey( _
 
     rowCount = UBound(keyValues, 1)
     For rowIndex = 1 To rowCount
+        If Len(NormalizeCode(keyValues(rowIndex, 1))) = 0 Then GoTo ContinueKeyRow
         If ValuesMatchCode(keyValues(rowIndex, 1), keyValue) Then
             FindListRowByKey = tbl.ListRows(rowIndex).Index
             Exit Function
         End If
+ContinueKeyRow:
     Next rowIndex
 End Function
 
@@ -151,13 +153,11 @@ Public Sub UpsertRow( _
     ByVal fieldValues As Object)
 
     Dim listRowIndex As Long
-    Dim lr As ListRow
     Dim colName As Variant
 
     listRowIndex = FindListRowByKey(tbl, keyColumnName, keyValue)
     If listRowIndex = 0 Then
-        Set lr = tbl.ListRows.Add
-        listRowIndex = lr.Index
+        listRowIndex = GetOrCreateListRowIndex(tbl)
     End If
 
     For Each colName In fieldValues.Keys
@@ -206,7 +206,7 @@ Public Sub UpsertJunctionRow( _
 
     listRowIndex = FindJunctionListRow(tbl, key1ColumnName, key1Value, key2ColumnName, key2Value)
     If listRowIndex = 0 Then
-        listRowIndex = tbl.ListRows.Add.Index
+        listRowIndex = GetOrCreateListRowIndex(tbl)
     End If
 
     For Each colName In fieldValues.Keys
@@ -249,6 +249,10 @@ Public Function ListAllDisplayItems( _
     End If
 
     If Not IsArray(keyValues) Then
+        If Len(NormalizeCode(keyValues)) = 0 Then
+            ListAllDisplayItems = items
+            Exit Function
+        End If
         If Not activeOnly Or IsActiveFlag(activeValues) Then
             displayText = BuildDisplayItem(keyValues, displayValues)
             AppendDisplayItem items, itemCount, displayText
@@ -259,6 +263,7 @@ Public Function ListAllDisplayItems( _
 
     rowCount = UBound(keyValues, 1)
     For rowIndex = 1 To rowCount
+        If Len(NormalizeCode(keyValues(rowIndex, 1))) = 0 Then GoTo ContinueRow
         If activeOnly Then
             If Not IsActiveFlag(activeValues(rowIndex, 1)) Then GoTo ContinueRow
         End If
@@ -425,4 +430,51 @@ End Sub
 Public Function NewFieldValuesDictionary() As Object
     Set NewFieldValuesDictionary = CreateObject("Scripting.Dictionary")
     NewFieldValuesDictionary.CompareMode = vbTextCompare
+End Function
+
+Public Function GetOrCreateListRowIndex(ByVal tbl As ListObject) As Long
+    If tbl Is Nothing Then Exit Function
+
+    If tbl.DataBodyRange Is Nothing Then
+        GetOrCreateListRowIndex = tbl.ListRows.Add.Index
+        Exit Function
+    End If
+
+    If tbl.ListRows.Count = 1 And IsListRowEmpty(tbl, 1) Then
+        GetOrCreateListRowIndex = tbl.ListRows(1).Index
+        Exit Function
+    End If
+
+    GetOrCreateListRowIndex = tbl.ListRows.Add.Index
+End Function
+
+Public Sub DeleteEmptyTableRows(ByVal tbl As ListObject)
+    Dim rowIndex As Long
+
+    If tbl Is Nothing Then Exit Sub
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = tbl.ListRows.Count To 1 Step -1
+        If IsListRowEmpty(tbl, rowIndex) Then
+            tbl.ListRows(rowIndex).Delete
+        End If
+    Next rowIndex
+End Sub
+
+Public Function IsListRowEmpty(ByVal tbl As ListObject, ByVal listRowIndex As Long) As Boolean
+    Dim lr As ListRow
+    Dim colIndex As Long
+    Dim cellValue As Variant
+
+    Set lr = tbl.ListRows(listRowIndex)
+
+    For colIndex = 1 To tbl.ListColumns.Count
+        cellValue = lr.Range.Cells(1, colIndex).Value2
+        If Len(Trim$(CStr(Nz(cellValue)))) > 0 Then
+            IsListRowEmpty = False
+            Exit Function
+        End If
+    Next colIndex
+
+    IsListRowEmpty = True
 End Function
