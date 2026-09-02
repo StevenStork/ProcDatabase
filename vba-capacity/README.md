@@ -19,9 +19,23 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 
 | Sheet | Table | Purpose |
 |---|---|---|
-| **PartEditor** | `BasePartsTbl` | View all base parts; each part has one `FactoryCode` |
+| **Parts** | `BasePartsTbl` | Master index of all base parts |
+| **PartEditor** | — | Load/edit workspace for one part at a time |
 | PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part |
 | PartOperations | `PartOperationsTbl` | Operations (`OperSeq`) per base part |
+| PartEditorCache | — | Hidden cache for sheet editor save diff (auto-created) |
+
+### Linked source queries (connection-only)
+
+Power Query connections — load as **connection only** when possible. Table names match connection names:
+
+| Connection / table | Purpose |
+|---|---|
+| `tblRouteCard` | Route card operations |
+| `tblAssyStnd` | Assembly standards (fallback process hours) |
+| `tblOperComps` | Operation completions (primary process hours) |
+| `tblTimeYield` | Process time / yield (`Avg 180 Day Ex`, `Avg 90 Day Ex`) |
+| `tblRCCP` | Active assembly master (for future refresh pipeline) |
 
 ```mermaid
 erDiagram
@@ -32,6 +46,9 @@ erDiagram
     EquipmentTbl ||--o{ FactoryEquipmentTbl : assigned
     EquipmentTbl ||--o{ EquipmentProcessTbl : supports
     ProcessTypesTbl ||--o{ EquipmentProcessTbl : assigned
+    tblOperComps --> PartEditor : avg_hours
+    tblAssyStnd --> PartEditor : avg_hours_fallback
+    tblTimeYield --> PartEditor : avg_ex
 ```
 
 ## VBA modules to add
@@ -48,6 +65,8 @@ erDiagram
 | `modFormUI.bas` | modFormUI |
 | `modFormLauncher.bas` | modFormLauncher |
 | `modPartIO.bas` | modPartIO |
+| `modAverages.bas` | modAverages |
+| `modPartSheetEditor.bas` | modPartSheetEditor |
 
 ### Class module
 
@@ -55,7 +74,7 @@ erDiagram
 |---|---|
 | `clsFormControlHandler.cls` | clsFormControlHandler |
 
-### UserForms
+### UserForms (optional — sheet editor is primary)
 
 | UserForm name | Paste file | Purpose |
 |---|---|---|
@@ -64,7 +83,7 @@ erDiagram
 | `frmProcessTypeAdmin` | `frmProcessTypeAdmin.txt` | Process types |
 | `frmFactoryEquipmentAdmin` | `frmFactoryEquipmentAdmin.txt` | Factory-equipment links |
 | `frmEquipmentProcessAdmin` | `frmEquipmentProcessAdmin.txt` | Equipment-process links |
-| `frmPartEditor` | `frmPartEditor.txt` | **Main part editor** |
+| `frmPartEditor` | `frmPartEditor.txt` | Legacy popup part editor |
 | `frmPartOperationsAdmin` | `frmPartOperationsAdmin.txt` | Operations per part |
 
 Paste each `.txt` file into a blank UserForm with the matching `(Name)`.
@@ -76,11 +95,11 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 ## Setup steps
 
 1. Save the workbook as **`FactoryCapacity.xlsm`**.
-2. Import/paste all standard modules, `modPartIO`, and `clsFormControlHandler`.
-3. Create seven blank UserForms and paste the matching form code.
-4. Paste `ThisWorkbook.txt`.
+2. Import/paste all standard modules, class module, and UserForms (optional).
+3. Paste `ThisWorkbook.txt`.
+4. Add Power Query connections (`tblRouteCard`, `tblOperComps`, `tblRCCP`, `tblTimeYield`, `tblAssyStnd`) as connection-only.
 5. Run **`BootstrapCapacityTables`** once.
-6. Wire **Admin** and **PartEditor** buttons:
+6. Wire **Admin**, **Parts**, and **PartEditor** buttons:
 
 | Button caption | Macro |
 |---|---|
@@ -89,23 +108,36 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Manage Process Types | `ShowProcessTypeAdmin` |
 | Assign Equipment to Factories | `ShowFactoryEquipmentAdmin` |
 | Assign Processes to Equipment | `ShowEquipmentProcessAdmin` |
-| Edit Parts | `ShowPartEditor` |
-| Edit Selected Part (PartEditor sheet) | `EditSelectedPartFromSheet` |
-| Part Operations | `ShowPartOperationsAdmin` |
+| Open Part Editor sheet | `ShowPartEditor` |
+| Load Part (PartEditor C3) | `LoadPartToEditor` |
+| Save Part (PartEditor) | `SavePartFromEditor` |
+| Clear Part Editor | `ClearPartEditor` |
+| Open Part from Parts index | `OpenPartEditorFromPartsIndex` |
+| Part Operations (form) | `ShowPartOperationsAdmin` |
 | Rebuild Tables | `BootstrapCapacityTables` |
 
-## Part number workflow
+## Part editor workflow (sheet-based)
 
-1. Add factories (`ShowFactoryAdmin`).
-2. Open **`ShowPartEditor`** (or select a row on **PartEditor** and run **`EditSelectedPartFromSheet`**).
-3. Create a base part, pick its factory, and add dash conditions in the same form.
-4. Use **Operations** to maintain `OperSeq` rows in `PartOperationsTbl`.
+1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
+2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
+3. Run **`LoadPartToEditor`** — master fields, dash conditions, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex** populate inline per `OperSeq` from linked tables (when loaded).
+4. Edit cells directly (factory, active, status date, notes, dash rows, operation rows).
+5. Run **`SavePartFromEditor`** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
+
+Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
+
+### Average calculations (`modAverages`)
+
+| Column | Source | Logic |
+|---|---|---|
+| **Avg Process Hours** | `tblOperComps` → `tblAssyStnd` | Average non-zero `LABOR HPS (HOURS)` for base part + `OPER SEQ`; fallback to average non-zero `RUN TIME (HOURS)` |
+| **Avg Ex** | `tblTimeYield` | Average non-zero `Avg 180 Day Ex`; fallback to `Avg 90 Day Ex` |
+
+Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base part before `-`.
 
 ## Notes
 
-- **One sheet per part is not used.** All parts live in tables; **PartEditor** is the single view/edit hub.
-- Each base part has exactly one factory via `FactoryCode` on `BasePartsTbl`.
-- Assembly numbers for external queries: `BuildActiveAssemblyNumberList()` in `modPartIO` joins active base parts with active dash conditions.
-- First data row is **row 4** (headers on row 3).
-- `Active` flags accept `True`/`False`, `1`/`0`, or `yes`/`no`.
-- Re-run **`BootstrapCapacityTables`** to add missing columns (e.g. `FactoryCode`) to existing workbooks. Delete obsolete FFA/product-line sheets and UserForms manually if upgrading from an older bootstrap.
+- **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
+- Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented.
+- Re-run **`BootstrapCapacityTables`** to migrate `BasePartsTbl` from PartEditor to Parts (legacy table renamed automatically).
+- First data row is **row 4** on index sheets (headers on row 3).

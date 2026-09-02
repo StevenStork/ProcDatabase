@@ -34,11 +34,14 @@ Public Sub BootstrapCapacityTables()
     EnsureTable EQUIPMENT_PROCESSES_SHEET_NAME, EQUIPMENT_PROCESSES_TABLE_NAME, Array( _
         COL_EQUIPMENT_CODE, COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES)
 
+    EnsureSheet PARTS_SHEET_NAME, "Parts Index"
     EnsureSheet PART_EDITOR_SHEET_NAME, "Part Number Editor"
     EnsureSheet PART_DASH_CONDITIONS_SHEET_NAME, "Part Dash Conditions"
     EnsureSheet PART_OPERATIONS_SHEET_NAME, "Part Operations"
 
-    EnsureTable PART_EDITOR_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
+    MigrateBasePartsTableToPartsSheet
+
+    EnsureTable PARTS_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_STATUS_DATE, COL_NOTES)
 
     EnsureTable PART_DASH_CONDITIONS_SHEET_NAME, PART_DASH_CONDITIONS_TABLE_NAME, Array( _
@@ -47,9 +50,11 @@ Public Sub BootstrapCapacityTables()
     EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OPERATION_NAME, COL_ACTIVE, COL_NOTES)
 
+    EnsureCacheSheet
     CompactAllCapacityTables
 
     FormatAdminSheet
+    FormatPartsSheet
     FormatPartEditorSheet
 
 CleanUp:
@@ -68,6 +73,48 @@ Private Sub EnsureSheet(ByVal sheetName As String, ByVal titleText As String)
     ws.Range("A1").Value = titleText
     ws.Range("A1").Font.Bold = True
     ws.Range("A1").Font.Size = 14
+End Sub
+
+Private Sub MigrateBasePartsTableToPartsSheet()
+    Dim editorWs As Worksheet
+    Dim partsWs As Worksheet
+    Dim tbl As ListObject
+    Dim existingPartsTbl As ListObject
+
+    Set editorWs = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
+    If editorWs Is Nothing Then Exit Sub
+
+    On Error Resume Next
+    Set tbl = editorWs.ListObjects(BASE_PARTS_TABLE_NAME)
+    On Error GoTo 0
+
+    If tbl Is Nothing Then Exit Sub
+
+    Set partsWs = FindWorksheetByName(PARTS_SHEET_NAME)
+    If partsWs Is Nothing Then Exit Sub
+
+    Set existingPartsTbl = FindTable(BASE_PARTS_TABLE_NAME)
+    If Not existingPartsTbl Is Nothing Then
+        If existingPartsTbl.Parent.Name = PARTS_SHEET_NAME Then
+            tbl.Delete
+            Exit Sub
+        End If
+    End If
+
+    tbl.Name = BASE_PARTS_TABLE_NAME & "_Legacy"
+End Sub
+
+Private Sub EnsureCacheSheet()
+    Dim ws As Worksheet
+
+    Set ws = FindWorksheetByName(PART_EDITOR_CACHE_SHEET_NAME)
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        ws.Name = PART_EDITOR_CACHE_SHEET_NAME
+    End If
+
+    ws.Visible = xlSheetVeryHidden
+    ws.Cells(CACHE_BASE_PART_CELL).Value = vbNullString
 End Sub
 
 Private Sub EnsureTable(ByVal sheetName As String, ByVal tableName As String, ByVal headers As Variant)
@@ -99,11 +146,14 @@ Private Sub EnsureTable(ByVal sheetName As String, ByVal tableName As String, By
     End If
 
     ws.Rows(TABLE_HEADER_ROW).Font.Bold = True
-    ws.Activate
-    ws.Rows(TABLE_HEADER_ROW).Select
-    ActiveWindow.FreezePanes = False
-    ws.Rows(TABLE_HEADER_ROW + 1).Select
-    ActiveWindow.FreezePanes = True
+
+    If sheetName = PARTS_SHEET_NAME Or sheetName = FACTORIES_SHEET_NAME Then
+        ws.Activate
+        ws.Rows(TABLE_HEADER_ROW).Select
+        ActiveWindow.FreezePanes = False
+        ws.Rows(TABLE_HEADER_ROW + 1).Select
+        ActiveWindow.FreezePanes = True
+    End If
 End Sub
 
 Private Sub EnsureTableHeaders(ByVal tbl As ListObject, ByVal headers As Variant)
@@ -133,22 +183,72 @@ Private Sub FormatAdminSheet()
     ws.Range("A6").Value = "ShowProcessTypeAdmin"
     ws.Range("A7").Value = "ShowFactoryEquipmentAdmin"
     ws.Range("A8").Value = "ShowEquipmentProcessAdmin"
-    ws.Range("A9").Value = "ShowPartEditor"
-    ws.Range("A10").Value = "EditSelectedPartFromSheet"
-    ws.Range("A11").Value = "ShowPartOperationsAdmin"
-    ws.Range("A12").Value = "BootstrapCapacityTables"
-    ws.Columns("A").ColumnWidth = 34
+    ws.Range("A9").Value = "LoadPartToEditor"
+    ws.Range("A10").Value = "SavePartFromEditor"
+    ws.Range("A11").Value = "ClearPartEditor"
+    ws.Range("A12").Value = "OpenPartEditorFromPartsIndex"
+    ws.Range("A13").Value = "ShowPartEditor"
+    ws.Range("A14").Value = "ShowPartOperationsAdmin"
+    ws.Range("A15").Value = "BootstrapCapacityTables"
+    ws.Columns("A").ColumnWidth = 36
+End Sub
+
+Private Sub FormatPartsSheet()
+    Dim ws As Worksheet
+
+    Set ws = FindWorksheetByName(PARTS_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    ws.Range("A2").Value = "All base parts are listed in the table below. Select a row and run Open Part Editor, or go to PartEditor and enter a part number."
+    ws.Range("A2").WrapText = True
+    ws.Rows("2").RowHeight = 30
 End Sub
 
 Private Sub FormatPartEditorSheet()
     Dim ws As Worksheet
+    Dim avgHeaderRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then Exit Sub
 
-    ws.Range("A2").Value = "All base parts are listed in the table below. Each part has one factory. Use Edit Selected Part to manage dash conditions and operations."
+    ws.Range("A2").Value = "Enter a base part or full assembly number, then run Load Part. Edit fields below and run Save Part."
     ws.Range("A2").WrapText = True
-    ws.Rows("2").RowHeight = 30
+    ws.Rows("2").RowHeight = 28
+
+    ws.Cells(PE_INPUT_ROW, PE_LABEL_COL).Value = "Part Number"
+    ws.Cells(PE_BASE_PART_ROW, PE_LABEL_COL).Value = "Base Part"
+    ws.Cells(PE_ROW_FACTORY, PE_LABEL_COL).Value = "Factory"
+    ws.Cells(PE_ROW_ACTIVE, PE_LABEL_COL).Value = "Active"
+    ws.Cells(PE_ROW_STATUS_DATE, PE_LABEL_COL).Value = "Status Date"
+    ws.Cells(PE_ROW_NOTES, PE_LABEL_COL).Value = "Notes"
+
+    ws.Cells(PE_DASH_HEADER_ROW, PE_LABEL_COL).Value = "Dash Conditions"
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH).Value = COL_DASH_CONDITION
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_ACTIVE).Value = COL_ACTIVE
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES).Value = COL_NOTES
+    ws.Range(ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH), ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES)).Font.Bold = True
+
+    ws.Cells(PE_OPS_HEADER_ROW, PE_LABEL_COL).Value = "Operations"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = COL_OPER_SEQ
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = COL_OPERATION_NAME
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = COL_ACTIVE
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = COL_NOTES
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_HOURS).Value = COL_AVG_PROCESS_HOURS
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = COL_AVG_EX
+    ws.Range(ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ), ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX)).Font.Bold = True
+
+    Set avgHeaderRange = ws.Range(ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_AVG_HOURS), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX))
+    avgHeaderRange.Interior.Color = RGB(242, 242, 242)
+    avgHeaderRange.Locked = True
+
+    ws.Columns("B").ColumnWidth = 16
+    ws.Columns("C").ColumnWidth = 14
+    ws.Columns("D").ColumnWidth = 22
+    ws.Columns("E").ColumnWidth = 8
+    ws.Columns("F").ColumnWidth = 18
+    ws.Columns("G").ColumnWidth = 16
+    ws.Columns("H").ColumnWidth = 10
 End Sub
 
 Private Function FindWorksheetByName(ByVal sheetName As String) As Worksheet

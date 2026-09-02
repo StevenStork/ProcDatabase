@@ -26,35 +26,42 @@ Public Sub ShowEquipmentProcessAdmin()
 End Sub
 
 Public Sub ShowPartEditor()
-    frmPartEditor.Show
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets(PART_EDITOR_SHEET_NAME)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        BootstrapCapacityTables
+        Set ws = ThisWorkbook.Worksheets(PART_EDITOR_SHEET_NAME)
+    End If
+
+    ws.Activate
+    ws.Cells(PE_INPUT_ROW, PE_VALUE_COL).Select
+End Sub
+
+Public Sub LoadPartToEditor()
+    modPartSheetEditor.LoadPartToEditor
+End Sub
+
+Public Sub SavePartFromEditor()
+    modPartSheetEditor.SavePartFromEditor
+End Sub
+
+Public Sub ClearPartEditor()
+    modPartSheetEditor.ClearPartEditor
+End Sub
+
+Public Sub OpenPartEditorFromPartsIndex()
+    modPartSheetEditor.OpenPartEditorFromPartsIndex
 End Sub
 
 Public Sub ShowPartOperationsAdmin()
     frmPartOperationsAdmin.Show
 End Sub
 
+' Legacy alias for Parts index row selection.
 Public Sub EditSelectedPartFromSheet()
-    Dim ws As Worksheet
-    Dim selectedCode As String
-    Dim tbl As ListObject
-
-    On Error GoTo Fail
-    Set ws = ThisWorkbook.Worksheets(PART_EDITOR_SHEET_NAME)
-    If TypeName(Selection) <> "Range" Then GoTo Fail
-    If Selection.ListObject Is Nothing Then GoTo Fail
-
-    Set tbl = Selection.ListObject
-    If tbl.Name <> BASE_PARTS_TABLE_NAME Then GoTo Fail
-    If tbl.DataBodyRange Is Nothing Then GoTo Fail
-    If Intersect(Selection, tbl.DataBodyRange) Is Nothing Then GoTo Fail
-
-    selectedCode = NormalizeCode(Selection.Cells(1, 1).Value2)
-    If Len(selectedCode) = 0 Then GoTo Fail
-
-    frmPartEditor.PreselectBasePart selectedCode
-    frmPartEditor.Show
-    Exit Sub
-
-Fail:
-    ShowPartEditor
+    OpenPartEditorFromPartsIndex
 End Sub
