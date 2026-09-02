@@ -29,3 +29,8 @@ Public Const COL_PROCESS_TYPE_CODE As String = "ProcessTypeCode"
 Public Const COL_PROCESS_TYPE_NAME As String = "ProcessTypeName"
 Public Const COL_ACTIVE As String = "Active"
 Public Const COL_NOTES As String = "Notes"
+
+Public Const FORM_MARGIN As Single = 12
+Public Const FORM_BUTTON_HEIGHT As Single = 26
+Public Const FORM_BUTTON_WIDTH As Single = 76
+Public Const FORM_BUTTON_GAP As Single = 8

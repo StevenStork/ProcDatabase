@@ -9,11 +9,6 @@ Public Function CreateControlHandlers() As Collection
     Set CreateControlHandlers = New Collection
 End Function
 
-Public Const FORM_MARGIN As Single = 12
-Public Const FORM_BUTTON_HEIGHT As Single = 26
-Public Const FORM_BUTTON_WIDTH As Single = 76
-Public Const FORM_BUTTON_GAP As Single = 8
-
 Public Sub ConfigureFormSize(ByVal frm As Object, ByVal widthPoints As Single, ByVal heightPoints As Single)
     frm.Width = widthPoints
     frm.Height = heightPoints
@@ -29,9 +24,6 @@ End Function
 
 Public Function FormCloseButtonLeft(ByVal formWidth As Single) As Single
     FormCloseButtonLeft = formWidth - FORM_MARGIN - FORM_BUTTON_WIDTH
-End Function
-
-    Set CreateControlHandlers = New Collection
 End Function
 
 Public Function AddLabel( _

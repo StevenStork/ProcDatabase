@@ -10,7 +10,7 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | Factories | `FactoriesTbl` | Factory master |
 | Equipment | `EquipmentTbl` | Equipment master |
 | ProcessTypes | `ProcessTypesTbl` | Process type master |
-| FactoryEquipment | `FactoryEquipmentTbl` | Equipment at each factory |
+| FactoryEquipment | `FactoryEquipmentTbl` | Equipment at each factory (`FactoryCode`, `EquipmentCode`, `Notes`) |
 | EquipmentProcesses | `EquipmentProcessTbl` | Process types per equipment |
 
 ## VBA modules to add
@@ -68,7 +68,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 2. Import or paste all standard modules and **`clsFormControlHandler`** (see class module instructions above).
 3. Create five blank UserForms, rename each, paste the matching form code.
 4. Paste `ThisWorkbook.txt` into ThisWorkbook.
-5. Run **`BootstrapCapacityTables`** (Alt+F8) once to create sheets and tables.
+5. Run **`BootstrapCapacityTables`** (Alt+F8) once to create sheets and tables. Re-run after updating the VBA to remove any blank placeholder rows in row 4.
 6. On the **Admin** sheet, add Form Control buttons and assign macros:
 
 | Button caption | Macro |
@@ -90,5 +90,8 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 ## Notes
 
 - All forms build their controls in `UserForm_Initialize`; no `.frm`/`.frx` import is required.
+- First data row is **row 4** (headers on row 3). New records write into row 4 instead of leaving it blank.
+- `FactoryEquipment` has no `Active` column — remove assignments with the **Remove** button instead.
+- `Equipment` has no `EquipmentType` column — use **EquipmentProcesses** for process capabilities.
 - Master-table deletes are blocked while junction rows still reference the record.
 - `Active` flags accept `True`/`False`, `1`/`0`, or `yes`/`no` when reading existing data.

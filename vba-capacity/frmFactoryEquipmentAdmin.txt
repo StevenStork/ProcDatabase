@@ -4,6 +4,9 @@ Option Explicit
 
 Private Const FORM_WIDTH As Single = 520
 Private Const FORM_HEIGHT As Single = 330
+Private Const FORM_MARGIN As Single = 12
+Private Const FORM_BUTTON_WIDTH As Single = 76
+Private Const FORM_BUTTON_GAP As Single = 8
 Private Const LEFT_PANEL_WIDTH As Single = 230
 Private Const RIGHT_PANEL_LEFT As Single = 270
 Private Const LIST_HEIGHT As Single = 210
@@ -37,7 +40,7 @@ Private Sub BuildControls()
     AddCommandButton Me, "cmdAdd", "Add", FormButtonLeft(0), BUTTON_TOP, FORM_BUTTON_WIDTH
     AddCommandButton Me, "cmdRemove", "Remove", FormButtonLeft(1), BUTTON_TOP, FORM_BUTTON_WIDTH
     AddCommandButton Me, "cmdRefresh", "Refresh", FormButtonLeft(2), BUTTON_TOP, FORM_BUTTON_WIDTH
-    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(FORM_WIDTH), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(), BUTTON_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "cboFactory"), Me, "FactoryChanged", "Change"
     WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignmentSelected", "Click"

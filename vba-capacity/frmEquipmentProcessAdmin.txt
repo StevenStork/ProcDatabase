@@ -4,6 +4,9 @@ Option Explicit
 
 Private Const FORM_WIDTH As Single = 560
 Private Const FORM_HEIGHT As Single = 390
+Private Const FORM_MARGIN As Single = 12
+Private Const FORM_BUTTON_WIDTH As Single = 76
+Private Const FORM_BUTTON_GAP As Single = 8
 Private Const LIST_TOP As Single = 72
 Private Const LIST_HEIGHT As Single = 185
 Private Const LEFT_LIST_WIDTH As Single = 250
@@ -41,7 +44,7 @@ Private Sub BuildControls()
     AddCommandButton Me, "cmdRemove", "Remove", FormButtonLeft(1), BUTTON_TOP, FORM_BUTTON_WIDTH
     AddCommandButton Me, "cmdToggleActive", "Toggle Active", 188, BUTTON_TOP, 88
     AddCommandButton Me, "cmdRefresh", "Refresh", 284, BUTTON_TOP, FORM_BUTTON_WIDTH
-    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(FORM_WIDTH), BUTTON_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", FormCloseButtonLeft(), BUTTON_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "cboEquipment"), Me, "EquipmentChanged", "Change"
     WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignedSelected", "Click"
@@ -245,4 +248,12 @@ Private Function IsArrayAllocated(ByVal arr As Variant) As Boolean
     On Error Resume Next
     IsArrayAllocated = IsArray(arr) And (UBound(arr) >= LBound(arr))
     On Error GoTo 0
+End Function
+
+Private Function FormButtonLeft(ByVal buttonIndex As Long) As Single
+    FormButtonLeft = FORM_MARGIN + buttonIndex * (FORM_BUTTON_WIDTH + FORM_BUTTON_GAP)
+End Function
+
+Private Function FormCloseButtonLeft() As Single
+    FormCloseButtonLeft = FORM_WIDTH - FORM_MARGIN - FORM_BUTTON_WIDTH
 End Function
