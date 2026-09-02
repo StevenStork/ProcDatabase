@@ -29,14 +29,6 @@ Public Sub ShowPartEditor()
     frmPartEditor.Show
 End Sub
 
-Public Sub ShowFFAAdmin()
-    frmFFAAdmin.Show
-End Sub
-
-Public Sub ShowProductLineAdmin()
-    frmProductLineAdmin.Show
-End Sub
-
 Public Sub ShowPartOperationsAdmin()
     frmPartOperationsAdmin.Show
 End Sub

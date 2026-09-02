@@ -19,23 +19,19 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 
 | Sheet | Table | Purpose |
 |---|---|---|
-| **PartEditor** | `BasePartsTbl` | View all base parts; launch editor |
-| FFAs | `FFAsTbl` | FFA master linked to `FactoryCode` |
-| ProductLines | `ProductLinesTbl` | Product line master |
+| **PartEditor** | `BasePartsTbl` | View all base parts; each part has one `FactoryCode` |
 | PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part |
-| PartFFAs | `PartFFAsTbl` | FFAs assigned to each base part |
-| PartProductLines | `PartProductLinesTbl` | Product lines per base part |
 | PartOperations | `PartOperationsTbl` | Operations (`OperSeq`) per base part |
 
 ```mermaid
 erDiagram
+    FactoriesTbl ||--o{ BasePartsTbl : builds_at
     BasePartsTbl ||--o{ PartDashConditionsTbl : has
-    BasePartsTbl ||--o{ PartFFAsTbl : uses
-    BasePartsTbl ||--o{ PartProductLinesTbl : uses
     BasePartsTbl ||--o{ PartOperationsTbl : defines
-    FFAsTbl ||--o{ PartFFAsTbl : assigned
-    FFAsTbl }o--|| FactoriesTbl : located_in
-    ProductLinesTbl ||--o{ PartProductLinesTbl : assigned
+    FactoriesTbl ||--o{ FactoryEquipmentTbl : has
+    EquipmentTbl ||--o{ FactoryEquipmentTbl : assigned
+    EquipmentTbl ||--o{ EquipmentProcessTbl : supports
+    ProcessTypesTbl ||--o{ EquipmentProcessTbl : assigned
 ```
 
 ## VBA modules to add
@@ -68,8 +64,6 @@ erDiagram
 | `frmProcessTypeAdmin` | `frmProcessTypeAdmin.txt` | Process types |
 | `frmFactoryEquipmentAdmin` | `frmFactoryEquipmentAdmin.txt` | Factory-equipment links |
 | `frmEquipmentProcessAdmin` | `frmEquipmentProcessAdmin.txt` | Equipment-process links |
-| `frmFFAAdmin` | `frmFFAAdmin.txt` | FFA master |
-| `frmProductLineAdmin` | `frmProductLineAdmin.txt` | Product line master |
 | `frmPartEditor` | `frmPartEditor.txt` | **Main part editor** |
 | `frmPartOperationsAdmin` | `frmPartOperationsAdmin.txt` | Operations per part |
 
@@ -83,7 +77,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 1. Save the workbook as **`FactoryCapacity.xlsm`**.
 2. Import/paste all standard modules, `modPartIO`, and `clsFormControlHandler`.
-3. Create nine blank UserForms and paste the matching form code.
+3. Create seven blank UserForms and paste the matching form code.
 4. Paste `ThisWorkbook.txt`.
 5. Run **`BootstrapCapacityTables`** once.
 6. Wire **Admin** and **PartEditor** buttons:
@@ -95,8 +89,6 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Manage Process Types | `ShowProcessTypeAdmin` |
 | Assign Equipment to Factories | `ShowFactoryEquipmentAdmin` |
 | Assign Processes to Equipment | `ShowEquipmentProcessAdmin` |
-| Manage FFAs | `ShowFFAAdmin` |
-| Manage Product Lines | `ShowProductLineAdmin` |
 | Edit Parts | `ShowPartEditor` |
 | Edit Selected Part (PartEditor sheet) | `EditSelectedPartFromSheet` |
 | Part Operations | `ShowPartOperationsAdmin` |
@@ -104,17 +96,16 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 ## Part number workflow
 
-1. Add factories, then FFAs (`ShowFFAAdmin`) with a factory on each FFA row.
-2. Add product lines if needed (`ShowProductLineAdmin`).
-3. Open **`ShowPartEditor`** (or select a row on **PartEditor** and run **`EditSelectedPartFromSheet`**).
-4. Create a base part, add dash conditions, FFAs, and product lines in the same form.
-5. Use **Operations** to maintain `OperSeq` rows in `PartOperationsTbl`.
-
-Factories for a part are derived from its active FFAs (shown read-only in the editor).
+1. Add factories (`ShowFactoryAdmin`).
+2. Open **`ShowPartEditor`** (or select a row on **PartEditor** and run **`EditSelectedPartFromSheet`**).
+3. Create a base part, pick its factory, and add dash conditions in the same form.
+4. Use **Operations** to maintain `OperSeq` rows in `PartOperationsTbl`.
 
 ## Notes
 
 - **One sheet per part is not used.** All parts live in tables; **PartEditor** is the single view/edit hub.
+- Each base part has exactly one factory via `FactoryCode` on `BasePartsTbl`.
 - Assembly numbers for external queries: `BuildActiveAssemblyNumberList()` in `modPartIO` joins active base parts with active dash conditions.
 - First data row is **row 4** (headers on row 3).
 - `Active` flags accept `True`/`False`, `1`/`0`, or `yes`/`no`.
+- Re-run **`BootstrapCapacityTables`** to add missing columns (e.g. `FactoryCode`) to existing workbooks. Delete obsolete FFA/product-line sheets and UserForms manually if upgrading from an older bootstrap.

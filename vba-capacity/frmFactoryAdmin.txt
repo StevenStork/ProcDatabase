@@ -166,6 +166,11 @@ Private Sub DeleteCurrentRecord()
         End If
     End If
 
+    If BasePartsReferenceFactory(codeValue) Then
+        MsgBox "Reassign or delete base parts that use this factory before deleting it.", vbExclamation
+        Exit Sub
+    End If
+
     Set tbl = FindTable(FACTORIES_TABLE_NAME)
     On Error GoTo CleanUp
     OptimizeExcel True

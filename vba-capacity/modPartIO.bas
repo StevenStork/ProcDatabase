@@ -7,9 +7,11 @@ Option Explicit
 
 Public Function BasePartHasAssignments(ByVal basePartCode As String) As Boolean
     BasePartHasAssignments = JunctionTableHasValue(FindTable(PART_DASH_CONDITIONS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode) _
-        Or JunctionTableHasValue(FindTable(PART_FFAS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode) _
-        Or JunctionTableHasValue(FindTable(PART_PRODUCT_LINES_TABLE_NAME), COL_BASE_PART_CODE, basePartCode) _
         Or JunctionTableHasValue(FindTable(PART_OPERATIONS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode)
+End Function
+
+Public Function BasePartsReferenceFactory(ByVal factoryCode As String) As Boolean
+    BasePartsReferenceFactory = JunctionTableHasValue(FindTable(BASE_PARTS_TABLE_NAME), COL_FACTORY_CODE, factoryCode)
 End Function
 
 Public Function ListPartAssignmentCodes( _
@@ -18,49 +20,6 @@ Public Function ListPartAssignmentCodes( _
     ByVal displayColumnName As String) As Variant
 
     ListPartAssignmentCodes = ListJunctionDisplayItems(tbl, COL_BASE_PART_CODE, basePartCode, displayColumnName)
-End Function
-
-Public Function PartFactoriesDisplay(ByVal basePartCode As String) As String
-    Dim partFFAsTbl As ListObject
-    Dim ffaTbl As ListObject
-    Dim ffaCodes As Variant
-    Dim ffaIndex As Long
-    Dim ffaCode As String
-    Dim factoryCode As String
-    Dim factoryNames As Object
-    Dim displayParts As String
-
-    Set factoryNames = CreateObject("Scripting.Dictionary")
-    factoryNames.CompareMode = vbTextCompare
-
-    Set partFFAsTbl = FindTable(PART_FFAS_TABLE_NAME)
-    Set ffaTbl = FindTable(FFAS_TABLE_NAME)
-    If partFFAsTbl Is Nothing Or ffaTbl Is Nothing Then Exit Function
-
-    ffaCodes = ListPartAssignmentCodes(partFFAsTbl, basePartCode, COL_FFA_CODE)
-    If Not IsArrayAllocated(ffaCodes) Then Exit Function
-
-    For ffaIndex = LBound(ffaCodes) To UBound(ffaCodes)
-        ffaCode = ExtractCodeFromDisplayItem(CStr(ffaCodes(ffaIndex)))
-        If Len(ffaCode) = 0 Then GoTo ContinueFfa
-
-        factoryCode = LookupDisplayName(ffaTbl, COL_FFA_CODE, ffaCode, COL_FACTORY_CODE)
-        If Len(factoryCode) = 0 Then GoTo ContinueFfa
-        If factoryNames.Exists(factoryCode) Then GoTo ContinueFfa
-
-        factoryNames.Add factoryCode, factoryCode
-
-ContinueFfa:
-    Next ffaIndex
-
-    Dim factoryKey As Variant
-
-    For Each factoryKey In factoryNames.Keys
-        If Len(displayParts) > 0 Then displayParts = displayParts & ", "
-        displayParts = displayParts & CStr(factoryKey)
-    Next factoryKey
-
-    PartFactoriesDisplay = displayParts
 End Function
 
 Public Function SplitAssemblyNo(ByVal assemblyNo As String, ByRef basePartCode As String, ByRef dashCondition As String)
@@ -82,16 +41,12 @@ Public Function BuildActiveAssemblyNumberList() As String
     Dim basePartsTbl As ListObject
     Dim dashTbl As ListObject
     Dim basePartCodes As Variant
-    Dim dashCodes As Variant
     Dim rowIndex As Long
     Dim rowCount As Long
     Dim basePartCode As String
     Dim assemblyList As Object
-    Dim assemblyNo As String
-    Dim dashRowIndex As Long
-    Dim dashRowCount As Long
-    Dim dashCondition As String
     Dim result As String
+    Dim assemblyKey As Variant
 
     Set assemblyList = CreateObject("Scripting.Dictionary")
     assemblyList.CompareMode = vbTextCompare
@@ -116,8 +71,6 @@ Public Function BuildActiveAssemblyNumberList() As String
 
 ContinueBasePart:
     Next rowIndex
-
-    Dim assemblyKey As Variant
 
     For Each assemblyKey In assemblyList.Keys
         If Len(result) > 0 Then result = result & ", "
@@ -167,7 +120,11 @@ Private Function ArrayBasePartSingle(ByVal basePartsTbl As ListObject) As Varian
     ArrayBasePartSingle = values
 End Function
 
-Private Function JunctionTableHasValue(ByVal junctionTbl As ListObject, ByVal filterColumnName As String, ByVal filterValue As String) As Boolean
+Public Function JunctionTableHasValue( _
+    ByVal junctionTbl As ListObject, _
+    ByVal filterColumnName As String, _
+    ByVal filterValue As String) As Boolean
+
     Dim filterValues As Variant
     Dim rowIndex As Long
 
