@@ -1,0 +1,5 @@
+' Paste into the ThisWorkbook code module.
+
+Private Sub Workbook_Open()
+    BootstrapCapacityTables
+End Sub

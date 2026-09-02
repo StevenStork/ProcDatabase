@@ -1,0 +1,207 @@
+' Paste this entire file into the code window for UserForm named frmFactoryEquipmentAdmin.
+' Create a blank UserForm in the VBA IDE, set (Name) = frmFactoryEquipmentAdmin, then paste.
+
+Option Explicit
+
+Private mHandlers As Collection
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Assign Equipment to Factories"
+    Me.Width = 500
+    Me.Height = 340
+
+    Set mHandlers = CreateControlHandlers()
+    BuildControls
+    RefreshCombos
+    LoadAssignments
+End Sub
+
+Private Sub BuildControls()
+    AddLabel Me, "Factory", 12, 8, 80
+    AddComboBox Me, "cboFactory", 12, 24, 220
+
+    AddLabel Me, "Equipment", 12, 56, 80
+    AddComboBox Me, "cboEquipment", 12, 72, 220
+
+    AddLabel Me, "Assigned Equipment", 250, 8, 140
+    AddListBox Me, "lstAssigned", 250, 24, 220, 180
+
+    AddCheckBox Me, "chkActive", "Active", 12, 108
+    AddLabel Me, "Notes", 12, 132, 80
+    AddTextBox Me, "txtNotes", 12, 148, 220, 56
+
+    AddCommandButton Me, "cmdAdd", "Add", 12, 214, 70
+    AddCommandButton Me, "cmdRemove", "Remove", 88, 214, 70
+    AddCommandButton Me, "cmdToggleActive", "Toggle Active", 164, 214, 90
+    AddCommandButton Me, "cmdRefresh", "Refresh", 12, 244, 70
+    AddCommandButton Me, "cmdClose", "Close", 390, 244, 80
+
+    WireControlEvent mHandlers, GetControl(Me, "cboFactory"), Me, "FactoryChanged", "Change"
+    WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignmentSelected", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdAdd"), Me, "AddAssignment", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRemove"), Me, "RemoveAssignment", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdToggleActive"), Me, "ToggleActive", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRefresh"), Me, "RefreshAll", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
+End Sub
+
+Public Sub HandleFormEvent(ByVal eventName As String)
+    Select Case eventName
+        Case "FactoryChanged": LoadAssignments
+        Case "AssignmentSelected": LoadSelectedAssignment
+        Case "AddAssignment": SaveAssignment
+        Case "RemoveAssignment": RemoveSelectedAssignment
+        Case "ToggleActive": ToggleSelectedActive
+        Case "RefreshAll": RefreshCombos: LoadAssignments
+        Case "CloseForm": Unload Me
+    End Select
+End Sub
+
+Private Sub RefreshCombos()
+    Dim factoryTbl As ListObject
+    Dim equipmentTbl As ListObject
+
+    Set factoryTbl = FindTable(FACTORIES_TABLE_NAME)
+    Set equipmentTbl = FindTable(EQUIPMENT_TABLE_NAME)
+
+    BindComboBoxFromTable GetControl(Me, "cboFactory"), factoryTbl, COL_FACTORY_CODE, COL_FACTORY_NAME, True
+    BindComboBoxFromTable GetControl(Me, "cboEquipment"), equipmentTbl, COL_EQUIPMENT_CODE, COL_EQUIPMENT_NAME, True
+End Sub
+
+Private Sub LoadAssignments()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim items As Variant
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+
+    If Len(factoryCode) = 0 Then
+        BindListBoxFromArray GetControl(Me, "lstAssigned"), Empty
+        Exit Sub
+    End If
+
+    items = ListJunctionDisplayItems(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE)
+    BindListBoxFromArray GetControl(Me, "lstAssigned"), items
+    ClearAssignmentEditor
+End Sub
+
+Private Sub LoadSelectedAssignment()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim equipmentCode As String
+    Dim listRowIndex As Long
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+    If Len(factoryCode) = 0 Or Len(equipmentCode) = 0 Then Exit Sub
+
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    listRowIndex = FindJunctionListRow(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode)
+    If listRowIndex = 0 Then Exit Sub
+
+    SelectComboByCode GetControl(Me, "cboEquipment"), equipmentCode
+    GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(junctionTbl, listRowIndex, COL_ACTIVE))
+    GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(junctionTbl, listRowIndex, COL_NOTES)))
+End Sub
+
+Private Sub ClearAssignmentEditor()
+    GetControl(Me, "cboEquipment").ListIndex = -1
+    GetControl(Me, "chkActive").Value = True
+    GetControl(Me, "txtNotes").Text = vbNullString
+    GetControl(Me, "lstAssigned").ListIndex = -1
+End Sub
+
+Private Sub SaveAssignment()
+    Dim junctionTbl As ListObject
+    Dim factoryTbl As ListObject
+    Dim equipmentTbl As ListObject
+    Dim fieldValues As Object
+    Dim factoryCode As String
+    Dim equipmentCode As String
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+
+    If Not ValidateRequiredCode(factoryCode, "Factory") Then Exit Sub
+    If Not ValidateRequiredCode(equipmentCode, "Equipment") Then Exit Sub
+
+    Set factoryTbl = FindTable(FACTORIES_TABLE_NAME)
+    Set equipmentTbl = FindTable(EQUIPMENT_TABLE_NAME)
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+
+    If Not ValidateForeignKeyExists(factoryTbl, COL_FACTORY_CODE, factoryCode, "Factory") Then Exit Sub
+    If Not ValidateForeignKeyExists(equipmentTbl, COL_EQUIPMENT_CODE, equipmentCode, "Equipment") Then Exit Sub
+    If Not ValidateJunctionUnique(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode, 0) Then Exit Sub
+
+    Set fieldValues = NewFieldValuesDictionary()
+    fieldValues(COL_FACTORY_CODE) = factoryCode
+    fieldValues(COL_EQUIPMENT_CODE) = equipmentCode
+    fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
+    fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    UpsertJunctionRow junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode, fieldValues
+    LoadAssignments
+    SelectListItemByCode GetControl(Me, "lstAssigned"), equipmentCode
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub RemoveSelectedAssignment()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim equipmentCode As String
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+
+    If Len(factoryCode) = 0 Or Len(equipmentCode) = 0 Then
+        MsgBox "Select an assigned equipment row to remove.", vbExclamation
+        Exit Sub
+    End If
+
+    If MsgBox("Remove equipment '" & equipmentCode & "' from factory '" & factoryCode & "'?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteJunctionRow junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode
+    ClearAssignmentEditor
+    LoadAssignments
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub ToggleSelectedActive()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim equipmentCode As String
+    Dim listRowIndex As Long
+    Dim currentActive As Boolean
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+
+    If Len(factoryCode) = 0 Or Len(equipmentCode) = 0 Then
+        MsgBox "Select an assignment to toggle.", vbExclamation
+        Exit Sub
+    End If
+
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    listRowIndex = FindJunctionListRow(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode)
+    If listRowIndex = 0 Then Exit Sub
+
+    currentActive = IsActiveFlag(GetCellValueByListRow(junctionTbl, listRowIndex, COL_ACTIVE))
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    SetCellValueByListRow junctionTbl, listRowIndex, COL_ACTIVE, ActiveFlagToCellValue(Not currentActive)
+    GetControl(Me, "chkActive").Value = Not currentActive
+
+CleanUp:
+    OptimizeExcel False
+End Sub
