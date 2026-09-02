@@ -34,9 +34,39 @@ Public Sub BootstrapCapacityTables()
     EnsureTable EQUIPMENT_PROCESSES_SHEET_NAME, EQUIPMENT_PROCESSES_TABLE_NAME, Array( _
         COL_EQUIPMENT_CODE, COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES)
 
+    EnsureSheet PART_EDITOR_SHEET_NAME, "Part Number Editor"
+    EnsureSheet FFAS_SHEET_NAME, "FFAs"
+    EnsureSheet PRODUCT_LINES_SHEET_NAME, "Product Lines"
+    EnsureSheet PART_DASH_CONDITIONS_SHEET_NAME, "Part Dash Conditions"
+    EnsureSheet PART_FFAS_SHEET_NAME, "Part FFAs"
+    EnsureSheet PART_PRODUCT_LINES_SHEET_NAME, "Part Product Lines"
+    EnsureSheet PART_OPERATIONS_SHEET_NAME, "Part Operations"
+
+    EnsureTable PART_EDITOR_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
+        COL_BASE_PART_CODE, COL_ACTIVE, COL_STATUS_DATE, COL_NOTES)
+
+    EnsureTable FFAS_SHEET_NAME, FFAS_TABLE_NAME, Array( _
+        COL_FFA_CODE, COL_FFA_NAME, COL_FACTORY_CODE, COL_ACTIVE, COL_NOTES)
+
+    EnsureTable PRODUCT_LINES_SHEET_NAME, PRODUCT_LINES_TABLE_NAME, Array( _
+        COL_PRODUCT_LINE_CODE, COL_PRODUCT_LINE_NAME, COL_ACTIVE, COL_NOTES)
+
+    EnsureTable PART_DASH_CONDITIONS_SHEET_NAME, PART_DASH_CONDITIONS_TABLE_NAME, Array( _
+        COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_ACTIVE, COL_NOTES)
+
+    EnsureTable PART_FFAS_SHEET_NAME, PART_FFAS_TABLE_NAME, Array( _
+        COL_BASE_PART_CODE, COL_FFA_CODE, COL_ACTIVE)
+
+    EnsureTable PART_PRODUCT_LINES_SHEET_NAME, PART_PRODUCT_LINES_TABLE_NAME, Array( _
+        COL_BASE_PART_CODE, COL_PRODUCT_LINE_CODE, COL_ACTIVE)
+
+    EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
+        COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OPERATION_NAME, COL_ACTIVE, COL_NOTES)
+
     CompactAllCapacityTables
 
     FormatAdminSheet
+    FormatPartEditorSheet
 
 CleanUp:
     OptimizeExcel False
@@ -117,8 +147,23 @@ Private Sub FormatAdminSheet()
     ws.Range("A6").Value = "ShowProcessTypeAdmin"
     ws.Range("A7").Value = "ShowFactoryEquipmentAdmin"
     ws.Range("A8").Value = "ShowEquipmentProcessAdmin"
-    ws.Range("A9").Value = "BootstrapCapacityTables"
+    ws.Range("A9").Value = "ShowPartEditor"
+    ws.Range("A10").Value = "ShowFFAAdmin"
+    ws.Range("A11").Value = "ShowProductLineAdmin"
+    ws.Range("A12").Value = "ShowPartOperationsAdmin"
+    ws.Range("A13").Value = "BootstrapCapacityTables"
     ws.Columns("A").ColumnWidth = 34
+End Sub
+
+Private Sub FormatPartEditorSheet()
+    Dim ws As Worksheet
+
+    Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    ws.Range("A2").Value = "All base parts are listed in the table below. Use Edit Selected Part to manage dash conditions, FFAs, product lines, and operations."
+    ws.Range("A2").WrapText = True
+    ws.Rows("2").RowHeight = 30
 End Sub
 
 Private Function FindWorksheetByName(ByVal sheetName As String) As Worksheet
@@ -135,4 +180,11 @@ Private Sub CompactAllCapacityTables()
     DeleteEmptyTableRows FindTable(PROCESS_TYPES_TABLE_NAME)
     DeleteEmptyTableRows FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
     DeleteEmptyTableRows FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(BASE_PARTS_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(FFAS_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(PRODUCT_LINES_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(PART_DASH_CONDITIONS_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(PART_FFAS_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(PART_PRODUCT_LINES_TABLE_NAME)
+    DeleteEmptyTableRows FindTable(PART_OPERATIONS_TABLE_NAME)
 End Sub

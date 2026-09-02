@@ -1,8 +1,10 @@
 # Factory Capacity Database (VBA)
 
-Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipment, and process-type master data plus many-to-many assignment tables for a future capacity model.
+Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipment, process-type, and part-number master data in related tables for a future capacity model.
 
 ## Workbook sheets
+
+### Capacity master data
 
 | Sheet | Table | Purpose |
 |---|---|---|
@@ -10,12 +12,35 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | Factories | `FactoriesTbl` | Factory master |
 | Equipment | `EquipmentTbl` | Equipment master |
 | ProcessTypes | `ProcessTypesTbl` | Process type master |
-| FactoryEquipment | `FactoryEquipmentTbl` | Equipment at each factory (`FactoryCode`, `EquipmentCode`, `Notes`) |
+| FactoryEquipment | `FactoryEquipmentTbl` | Equipment at each factory |
 | EquipmentProcesses | `EquipmentProcessTbl` | Process types per equipment |
+
+### Part numbers (relational — no sheet per part)
+
+| Sheet | Table | Purpose |
+|---|---|---|
+| **PartEditor** | `BasePartsTbl` | View all base parts; launch editor |
+| FFAs | `FFAsTbl` | FFA master linked to `FactoryCode` |
+| ProductLines | `ProductLinesTbl` | Product line master |
+| PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part |
+| PartFFAs | `PartFFAsTbl` | FFAs assigned to each base part |
+| PartProductLines | `PartProductLinesTbl` | Product lines per base part |
+| PartOperations | `PartOperationsTbl` | Operations (`OperSeq`) per base part |
+
+```mermaid
+erDiagram
+    BasePartsTbl ||--o{ PartDashConditionsTbl : has
+    BasePartsTbl ||--o{ PartFFAsTbl : uses
+    BasePartsTbl ||--o{ PartProductLinesTbl : uses
+    BasePartsTbl ||--o{ PartOperationsTbl : defines
+    FFAsTbl ||--o{ PartFFAsTbl : assigned
+    FFAsTbl }o--|| FactoriesTbl : located_in
+    ProductLinesTbl ||--o{ PartProductLinesTbl : assigned
+```
 
 ## VBA modules to add
 
-### Standard modules (Import or paste into Module objects)
+### Standard modules
 
 | File | Module name |
 |---|---|
@@ -26,37 +51,29 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | `modExcelOptimize.bas` | modExcelOptimize |
 | `modFormUI.bas` | modFormUI |
 | `modFormLauncher.bas` | modFormLauncher |
+| `modPartIO.bas` | modPartIO |
 
-### Class module (required)
+### Class module
 
 | File | Class name |
 |---|---|
 | `clsFormControlHandler.cls` | clsFormControlHandler |
 
-Required for programmatic UserForm button/list/combo events (avoids run-time error 459).
+### UserForms
 
-**How to add it (pick one method):**
+| UserForm name | Paste file | Purpose |
+|---|---|---|
+| `frmFactoryAdmin` | `frmFactoryAdmin.txt` | Factories |
+| `frmEquipmentAdmin` | `frmEquipmentAdmin.txt` | Equipment |
+| `frmProcessTypeAdmin` | `frmProcessTypeAdmin.txt` | Process types |
+| `frmFactoryEquipmentAdmin` | `frmFactoryEquipmentAdmin.txt` | Factory-equipment links |
+| `frmEquipmentProcessAdmin` | `frmEquipmentProcessAdmin.txt` | Equipment-process links |
+| `frmFFAAdmin` | `frmFFAAdmin.txt` | FFA master |
+| `frmProductLineAdmin` | `frmProductLineAdmin.txt` | Product line master |
+| `frmPartEditor` | `frmPartEditor.txt` | **Main part editor** |
+| `frmPartOperationsAdmin` | `frmPartOperationsAdmin.txt` | Operations per part |
 
-- **Import (recommended):** VBA Editor → File → Import File → select `clsFormControlHandler.cls`
-- **Paste:** Insert → Class Module, set `(Name)` = `clsFormControlHandler` in the Properties window, then paste everything from `Option Explicit` downward (do not paste the `VERSION` / `Attribute` header lines at the top of the `.cls` file)
-
-If `(Name)` is anything else (e.g. `Class1`), you will get **Compile error: Type not defined** on `clsFormControlHandler`.
-
-### UserForms (manual shell + paste code)
-
-For each form below:
-
-1. VBA Editor → Insert → UserForm
-2. Set the `(Name)` property in the Properties window
-3. Paste the matching `.txt` file into the UserForm code window
-
-| UserForm name | Paste file |
-|---|---|
-| `frmFactoryAdmin` | `frmFactoryAdmin.txt` |
-| `frmEquipmentAdmin` | `frmEquipmentAdmin.txt` |
-| `frmProcessTypeAdmin` | `frmProcessTypeAdmin.txt` |
-| `frmFactoryEquipmentAdmin` | `frmFactoryEquipmentAdmin.txt` |
-| `frmEquipmentProcessAdmin` | `frmEquipmentProcessAdmin.txt` |
+Paste each `.txt` file into a blank UserForm with the matching `(Name)`.
 
 ### ThisWorkbook
 
@@ -64,12 +81,12 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 ## Setup steps
 
-1. Create a new workbook and save as **`FactoryCapacity.xlsm`**.
-2. Import or paste all standard modules and **`clsFormControlHandler`** (see class module instructions above).
-3. Create five blank UserForms, rename each, paste the matching form code.
-4. Paste `ThisWorkbook.txt` into ThisWorkbook.
-5. Run **`BootstrapCapacityTables`** (Alt+F8) once to create sheets and tables. Re-run after updating the VBA to remove any blank placeholder rows in row 4.
-6. On the **Admin** sheet, add Form Control buttons and assign macros:
+1. Save the workbook as **`FactoryCapacity.xlsm`**.
+2. Import/paste all standard modules, `modPartIO`, and `clsFormControlHandler`.
+3. Create nine blank UserForms and paste the matching form code.
+4. Paste `ThisWorkbook.txt`.
+5. Run **`BootstrapCapacityTables`** once.
+6. Wire **Admin** and **PartEditor** buttons:
 
 | Button caption | Macro |
 |---|---|
@@ -78,20 +95,26 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Manage Process Types | `ShowProcessTypeAdmin` |
 | Assign Equipment to Factories | `ShowFactoryEquipmentAdmin` |
 | Assign Processes to Equipment | `ShowEquipmentProcessAdmin` |
-| Rebuild Tables (dev) | `BootstrapCapacityTables` |
+| Manage FFAs | `ShowFFAAdmin` |
+| Manage Product Lines | `ShowProductLineAdmin` |
+| Edit Parts | `ShowPartEditor` |
+| Edit Selected Part (PartEditor sheet) | `EditSelectedPartFromSheet` |
+| Part Operations | `ShowPartOperationsAdmin` |
+| Rebuild Tables | `BootstrapCapacityTables` |
 
-## Smoke test
+## Part number workflow
 
-1. Add two factories, three equipment records, and four process types via the master forms.
-2. Assign equipment to both factories using **Assign Equipment to Factories**.
-3. Assign multiple process types to one equipment record using **Assign Processes to Equipment**.
-4. Confirm rows appear in the `FactoryEquipment` and `EquipmentProcesses` sheets.
+1. Add factories, then FFAs (`ShowFFAAdmin`) with a factory on each FFA row.
+2. Add product lines if needed (`ShowProductLineAdmin`).
+3. Open **`ShowPartEditor`** (or select a row on **PartEditor** and run **`EditSelectedPartFromSheet`**).
+4. Create a base part, add dash conditions, FFAs, and product lines in the same form.
+5. Use **Operations** to maintain `OperSeq` rows in `PartOperationsTbl`.
+
+Factories for a part are derived from its active FFAs (shown read-only in the editor).
 
 ## Notes
 
-- All forms build their controls in `UserForm_Initialize`; no `.frm`/`.frx` import is required.
-- First data row is **row 4** (headers on row 3). New records write into row 4 instead of leaving it blank.
-- `FactoryEquipment` has no `Active` column — remove assignments with the **Remove** button instead.
-- `Equipment` has no `EquipmentType` column — use **EquipmentProcesses** for process capabilities.
-- Master-table deletes are blocked while junction rows still reference the record.
-- `Active` flags accept `True`/`False`, `1`/`0`, or `yes`/`no` when reading existing data.
+- **One sheet per part is not used.** All parts live in tables; **PartEditor** is the single view/edit hub.
+- Assembly numbers for external queries: `BuildActiveAssemblyNumberList()` in `modPartIO` joins active base parts with active dash conditions.
+- First data row is **row 4** (headers on row 3).
+- `Active` flags accept `True`/`False`, `1`/`0`, or `yes`/`no`.
