@@ -27,13 +27,15 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | `modFormUI.bas` | modFormUI |
 | `modFormLauncher.bas` | modFormLauncher |
 
-### Class module
+### Class modules
 
 | File | Class name |
 |---|---|
-| `clsFormEventHandler.cls` | clsFormEventHandler |
+| `clsCommandButtonHandler.cls` | clsCommandButtonHandler |
+| `clsListBoxHandler.cls` | clsListBoxHandler |
+| `clsComboBoxHandler.cls` | clsComboBoxHandler |
 
-Required for programmatic UserForm controls (runtime button/list events).
+Required for programmatic UserForm controls. Each handler wires only the events that control type supports (avoids run-time error 459).
 
 ### UserForms (manual shell + paste code)
 

@@ -138,11 +138,40 @@ Public Sub WireControlEvent( _
     ByVal eventName As String, _
     ByVal eventKind As String)
 
-    Dim handler As clsFormEventHandler
+    Dim controlType As String
 
-    Set handler = New clsFormEventHandler
-    handler.Init ctl, callback, eventName, eventKind
-    handlers.Add handler
+    controlType = TypeName(ctl)
+
+    Select Case LCase$(eventKind)
+        Case "click"
+            If controlType = "CommandButton" Then
+                Dim btnHandler As clsCommandButtonHandler
+                Set btnHandler = New clsCommandButtonHandler
+                btnHandler.Init ctl, callback, eventName
+                handlers.Add btnHandler
+            ElseIf controlType = "ListBox" Then
+                Dim lstHandler As clsListBoxHandler
+                Set lstHandler = New clsListBoxHandler
+                lstHandler.Init ctl, callback, eventName
+                handlers.Add lstHandler
+            Else
+                Err.Raise vbObjectError + 514, "WireControlEvent", _
+                    "Control type '" & controlType & "' does not support Click."
+            End If
+        Case "change"
+            If controlType = "ComboBox" Then
+                Dim cboHandler As clsComboBoxHandler
+                Set cboHandler = New clsComboBoxHandler
+                cboHandler.Init ctl, callback, eventName
+                handlers.Add cboHandler
+            Else
+                Err.Raise vbObjectError + 515, "WireControlEvent", _
+                    "Control type '" & controlType & "' does not support Change."
+            End If
+        Case Else
+            Err.Raise vbObjectError + 516, "WireControlEvent", _
+                "Unsupported event kind '" & eventKind & "'."
+    End Select
 End Sub
 
 Public Function GetControl(ByVal frm As Object, ByVal controlName As String) As Object
