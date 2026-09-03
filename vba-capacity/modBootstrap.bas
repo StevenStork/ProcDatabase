@@ -189,7 +189,9 @@ Private Sub FormatAdminSheet()
     ws.Range("A12").Value = "OpenPartEditorFromPartsIndex"
     ws.Range("A13").Value = "ShowPartEditor"
     ws.Range("A14").Value = "ShowPartOperationsAdmin"
-    ws.Range("A15").Value = "BootstrapCapacityTables"
+    ws.Range("A15").Value = "RefreshRCCP"
+    ws.Range("A16").Value = "RefreshAllLinkedData"
+    ws.Range("A17").Value = "BootstrapCapacityTables"
     ws.Columns("A").ColumnWidth = 36
 End Sub
 

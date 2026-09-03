@@ -1,0 +1,45 @@
+' Replace the #"Filtered FFAs" step in the tblRCCP Power Query with this code.
+' Filters RCCP rows where [FFA] matches a FactoryCode in the workbook FactoriesTbl.
+'
+' Prerequisites:
+'   - FactoriesTbl exists on the Factories sheet (created by BootstrapCapacityTables).
+'   - tblRCCP query is in the same workbook.
+'   - In Power Query: File > Options > Privacy > "Always ignore Privacy Level settings"
+'     (or allow combining database + workbook sources for this file).
+'
+' Replace this hard-coded step:
+'   #"Filtered FFAs" = Table.SelectRows(dbo_RCCP_DETAIL_OUTPUT, each ([FFA] = "EA" or [FFA] = "EB")),
+'
+' With:
+
+#"Filtered FFAs" =
+    let
+        FactoryTable = Excel.CurrentWorkbook(){[Name = "FactoriesTbl"]}[Content],
+        ActiveFactories = Table.SelectRows(
+            FactoryTable,
+            each [FactoryCode] <> null
+                and Text.Trim(Text.From([FactoryCode])) <> ""
+                and (
+                    [Active] = true
+                    or Character.ToUpper(Text.From([Active])) = "TRUE"
+                    or [Active] = 1
+                    or Text.From([Active]) = "1"
+                )
+        ),
+        FactoryCodes = ActiveFactories[FactoryCode]
+    in
+    Table.SelectRows(
+        dbo_RCCP_DETAIL_OUTPUT,
+        each List.Contains(FactoryCodes, [FFA])
+    ),
+
+' Notes:
+' - Only Active factories from FactoriesTbl are included. To use all factory codes
+'   regardless of Active, replace ActiveFactories with:
+'       NonBlankFactories = Table.SelectRows(
+'           FactoryTable,
+'           each [FactoryCode] <> null and Text.Trim(Text.From([FactoryCode])) <> ""
+'       ),
+'       FactoryCodes = NonBlankFactories[FactoryCode]
+' - FFA values in RCCP must match FactoryCode text exactly (case-sensitive).
+' - After pasting, run RefreshRCCP or Data > Refresh All to reload tblRCCP.

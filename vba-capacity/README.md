@@ -113,6 +113,8 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Save Part (PartEditor) | `SavePartFromEditor` |
 | Clear Part Editor | `ClearPartEditor` |
 | Open Part from Parts index | `OpenPartEditorFromPartsIndex` |
+| Refresh RCCP | `RefreshRCCP` |
+| Refresh all linked data | `RefreshAllLinkedData` |
 | Part Operations (form) | `ShowPartOperationsAdmin` |
 | Rebuild Tables | `BootstrapCapacityTables` |
 
@@ -134,6 +136,12 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 | **Avg Ex** | `tblTimeYield` | Average non-zero `Avg 180 Day Ex`; fallback to `Avg 90 Day Ex` |
 
 Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base part before `-`.
+
+## RCCP refresh (`tblRCCP`)
+
+The **#"Filtered FFAs"** step in the `tblRCCP` Power Query must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`pqRCCP-FilteredFFAs.txt`](pqRCCP-FilteredFFAs.txt) into the query editor (Advanced Editor or replace that step only).
+
+Then run **`RefreshRCCP`** from Admin. The query filters `[FFA]` to active `FactoryCode` values in `FactoriesTbl`. No VBA rewrites the M code on each refresh — update factories in the table and refresh.
 
 ## Notes
 

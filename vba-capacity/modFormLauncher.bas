@@ -57,6 +57,14 @@ Public Sub OpenPartEditorFromPartsIndex()
     modPartSheetEditor.OpenPartEditorFromPartsIndex
 End Sub
 
+Public Sub RefreshRCCP()
+    modLinkedData.RefreshRCCP
+End Sub
+
+Public Sub RefreshAllLinkedData()
+    modLinkedData.RefreshAllLinkedData
+End Sub
+
 Public Sub ShowPartOperationsAdmin()
     frmPartOperationsAdmin.Show
 End Sub

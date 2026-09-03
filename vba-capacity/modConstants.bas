@@ -35,6 +35,8 @@ Public Const LINKED_RCCP_TABLE As String = "tblRCCP"
 Public Const LINKED_TIME_YIELD_TABLE As String = "tblTimeYield"
 Public Const LINKED_ASSY_STND_TABLE As String = "tblAssyStnd"
 
+Public Const COL_FFA As String = "FFA"
+
 Public Const TABLE_HEADER_ROW As Long = 3
 Public Const TABLE_FIRST_DATA_ROW As Long = 4
 
