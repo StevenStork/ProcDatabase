@@ -139,7 +139,7 @@ Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base
 
 ## RCCP refresh (`tblRCCP`)
 
-The **#"Filtered FFAs"** step in the `tblRCCP` Power Query must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`pqRCCP-FilteredFFAs.txt`](pqRCCP-FilteredFFAs.txt) into the query editor (Advanced Editor or replace that step only).
+The **#"Filtered FFAs"** step in the `tblRCCP` Power Query must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`PowerQuery/pqRCCP-FilteredFFAs.txt`](../PowerQuery/pqRCCP-FilteredFFAs.txt) into the query editor (Advanced Editor or replace that step only).
 
 Then run **`RefreshRCCP`** from Admin. The query filters `[FFA]` to active `FactoryCode` values in `FactoriesTbl`. No VBA rewrites the M code on each refresh — update factories in the table and refresh.
 
