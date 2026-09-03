@@ -65,6 +65,10 @@ Public Sub RefreshOperComps()
     modLinkedData.RefreshOperComps
 End Sub
 
+Public Sub RefreshAssyStnd()
+    modLinkedData.RefreshAssyStnd
+End Sub
+
 Public Sub RefreshAllLinkedData()
     modLinkedData.RefreshAllLinkedData
 End Sub

@@ -2,14 +2,17 @@ Attribute VB_Name = "modLinkedData"
 Option Explicit
 
 '==============================================================================
-' Refresh linked Power Query connections (tblRCCP, tblOperComps, etc.).
+' Refresh linked Power Query connections (tblRCCP, tblOperComps, tblAssyStnd).
 '
 ' tblRCCP FFA filter is driven inside Power Query by FactoriesTbl — see
 ' PowerQuery/pqRCCP-FilteredFFAs.txt for the #"Filtered FFAs" M step.
 '
-' tblOperComps: VBA updates @ffa in the Source SQL only when the active factory
-' code list from FactoriesTbl has changed (same list RCCP uses). Refresh alone
-' does not rewrite the query, so Power Query permission prompts stay rare.
+' tblOperComps / tblAssyStnd: VBA updates @ffa in the Source SQL only when the
+' active factory code list from FactoriesTbl has changed. Refresh alone does
+' not rewrite the query, so Power Query permission prompts stay rare.
+'
+' tblAssyStnd also filters ASSEMBLY NO in Power Query via #"Filter Assemblies"
+' against tblRCCP — see PowerQuery/pqAssyStnd-FilterAssemblies.txt.
 '==============================================================================
 
 Private Const PARAM_FFA As String = "@ffa"
@@ -37,6 +40,22 @@ Fail:
 End Sub
 
 Public Sub RefreshOperComps()
+    RefreshQueryWithFfaParameter LINKED_OPER_COMPS_TABLE, "tblOperComps"
+End Sub
+
+Public Sub RefreshAssyStnd()
+    RefreshQueryWithFfaParameter LINKED_ASSY_STND_TABLE, "tblAssyStnd"
+End Sub
+
+' Combined refresh button (extend as more queries are wired).
+' RCCP first so tblAssyStnd #"Filter Assemblies" sees current assemblies.
+Public Sub RefreshAllLinkedData()
+    RefreshRCCP
+    RefreshOperComps
+    RefreshAssyStnd
+End Sub
+
+Private Sub RefreshQueryWithFfaParameter(ByVal queryName As String, ByVal displayName As String)
     Dim ffaList As String
     Dim currentFfa As String
     Dim ffaCount As Long
@@ -46,38 +65,32 @@ Public Sub RefreshOperComps()
     ffaCount = CountCommaSeparatedItems(ffaList)
 
     If ffaCount = 0 Then
-        MsgBox "Add at least one active FactoryCode to FactoriesTbl before refreshing tblOperComps.", vbExclamation
+        MsgBox "Add at least one active FactoryCode to FactoriesTbl before refreshing " & displayName & ".", vbExclamation
         Exit Sub
     End If
 
     On Error GoTo Fail
     OptimizeExcel True
 
-    currentFfa = GetQuotedParameterValue(LINKED_OPER_COMPS_TABLE, PARAM_FFA)
+    currentFfa = GetQuotedParameterValue(queryName, PARAM_FFA)
     If Not FfaListsMatch(currentFfa, ffaList) Then
-        UpdateQueryQuotedParameter LINKED_OPER_COMPS_TABLE, PARAM_FFA, ffaList
+        UpdateQueryQuotedParameter queryName, PARAM_FFA, ffaList
         formulaUpdated = True
     End If
 
-    RefreshLinkedQuery LINKED_OPER_COMPS_TABLE
+    RefreshLinkedQuery queryName
     OptimizeExcel False
 
     If formulaUpdated Then
-        MsgBox "tblOperComps @ffa updated to '" & ffaList & "' and refreshed.", vbInformation
+        MsgBox displayName & " @ffa updated to '" & ffaList & "' and refreshed.", vbInformation
     Else
-        MsgBox "tblOperComps refreshed ( @ffa unchanged: '" & ffaList & "' ).", vbInformation
+        MsgBox displayName & " refreshed ( @ffa unchanged: '" & ffaList & "' ).", vbInformation
     End If
     Exit Sub
 
 Fail:
     OptimizeExcel False
-    MsgBox "Could not refresh tblOperComps: " & Err.Description, vbExclamation
-End Sub
-
-' Combined refresh button (extend as more queries are wired).
-Public Sub RefreshAllLinkedData()
-    RefreshRCCP
-    RefreshOperComps
+    MsgBox "Could not refresh " & displayName & ": " & Err.Description, vbExclamation
 End Sub
 
 Public Function CountActiveFactoryCodes() As Long

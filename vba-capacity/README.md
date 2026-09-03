@@ -115,6 +115,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Open Part from Parts index | `OpenPartEditorFromPartsIndex` |
 | Refresh RCCP | `RefreshRCCP` |
 | Refresh Oper Completions | `RefreshOperComps` |
+| Refresh Assembly Standards | `RefreshAssyStnd` |
 | Refresh all linked data | `RefreshAllLinkedData` |
 | Part Operations (form) | `ShowPartOperationsAdmin` |
 | Rebuild Tables | `BootstrapCapacityTables` |
@@ -154,9 +155,16 @@ No full M rewrite required. Keep an `@ffa = '...'` parameter in the Source SQL. 
 
 `tblOperComps` may stay connection-only. Unchanged `@ffa` avoids Power Query permission prompts on every refresh.
 
+### Assembly Standards (`tblAssyStnd`)
+
+1. **`@ffa`** — same VBA update-on-change pattern as OperComps. See [`PowerQuery/pqAssyStnd-FFA.txt`](../PowerQuery/pqAssyStnd-FFA.txt).
+2. **`#"Filter Assemblies"`** — after Source, keep only rows whose `ASSEMBLY NO` appears in `tblRCCP`. Paste from [`PowerQuery/pqAssyStnd-FilterAssemblies.txt`](../PowerQuery/pqAssyStnd-FilterAssemblies.txt). Requires `tblRCCP` as a workbook ListObject.
+
+Run **`RefreshAssyStnd`** (or use combined refresh after RCCP).
+
 ### Combined
 
-**`RefreshAllLinkedData`** currently runs RCCP then OperComps. More queries will be added here later.
+**`RefreshAllLinkedData`** currently runs RCCP → OperComps → AssyStnd. More queries will be added here later.
 
 ## Notes
 
