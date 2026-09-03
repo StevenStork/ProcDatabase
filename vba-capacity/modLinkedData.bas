@@ -5,7 +5,7 @@ Option Explicit
 ' Refresh linked Power Query connections (tblRCCP, etc.).
 '
 ' tblRCCP FFA filter is driven inside Power Query by FactoriesTbl — see
-' pqRCCP-FilteredFFAs.txt for the #"Filtered FFAs" M step to paste into the query.
+' PowerQuery/pqRCCP-FilteredFFAs.txt for the #"Filtered FFAs" M step to paste into the query.
 ' VBA only validates factory codes exist, then refreshes the connection.
 '==============================================================================
 
