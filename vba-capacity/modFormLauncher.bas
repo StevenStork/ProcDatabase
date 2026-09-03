@@ -69,6 +69,10 @@ Public Sub RefreshAssyStnd()
     modLinkedData.RefreshAssyStnd
 End Sub
 
+Public Sub RefreshRouteCard()
+    modLinkedData.RefreshRouteCard
+End Sub
+
 Public Sub RefreshAllLinkedData()
     modLinkedData.RefreshAllLinkedData
 End Sub

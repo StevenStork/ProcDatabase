@@ -192,8 +192,9 @@ Private Sub FormatAdminSheet()
     ws.Range("A15").Value = "RefreshRCCP"
     ws.Range("A16").Value = "RefreshOperComps"
     ws.Range("A17").Value = "RefreshAssyStnd"
-    ws.Range("A18").Value = "RefreshAllLinkedData"
-    ws.Range("A19").Value = "BootstrapCapacityTables"
+    ws.Range("A18").Value = "RefreshRouteCard"
+    ws.Range("A19").Value = "RefreshAllLinkedData"
+    ws.Range("A20").Value = "BootstrapCapacityTables"
     ws.Columns("A").ColumnWidth = 36
 End Sub
 

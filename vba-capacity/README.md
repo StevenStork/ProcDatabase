@@ -116,6 +116,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Refresh RCCP | `RefreshRCCP` |
 | Refresh Oper Completions | `RefreshOperComps` |
 | Refresh Assembly Standards | `RefreshAssyStnd` |
+| Refresh Route Card | `RefreshRouteCard` |
 | Refresh all linked data | `RefreshAllLinkedData` |
 | Part Operations (form) | `ShowPartOperationsAdmin` |
 | Rebuild Tables | `BootstrapCapacityTables` |
@@ -162,9 +163,18 @@ No full M rewrite required. Keep an `@ffa = '...'` parameter in the Source SQL. 
 
 Run **`RefreshAssyStnd`** (or use combined refresh after RCCP).
 
+### Route Card (`tblRouteCard`)
+
+Same pattern as Assembly Standards:
+
+1. **`@ffa`** — update-on-change from FactoriesTbl. See [`PowerQuery/pqRouteCard-FFA.txt`](../PowerQuery/pqRouteCard-FFA.txt).
+2. **`#"Filter Assemblies"`** — after Source, filter to `tblRCCP` assemblies. Paste from [`PowerQuery/pqRouteCard-FilterAssemblies.txt`](../PowerQuery/pqRouteCard-FilterAssemblies.txt).
+
+Run **`RefreshRouteCard`**.
+
 ### Combined
 
-**`RefreshAllLinkedData`** currently runs RCCP → OperComps → AssyStnd. More queries will be added here later.
+**`RefreshAllLinkedData`** currently runs RCCP → OperComps → AssyStnd → RouteCard. More queries will be added here later.
 
 ## Notes
 

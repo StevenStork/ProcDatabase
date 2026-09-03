@@ -2,17 +2,19 @@ Attribute VB_Name = "modLinkedData"
 Option Explicit
 
 '==============================================================================
-' Refresh linked Power Query connections (tblRCCP, tblOperComps, tblAssyStnd).
+' Refresh linked Power Query connections (tblRCCP, tblOperComps, tblAssyStnd,
+' tblRouteCard).
 '
 ' tblRCCP FFA filter is driven inside Power Query by FactoriesTbl — see
 ' PowerQuery/pqRCCP-FilteredFFAs.txt for the #"Filtered FFAs" M step.
 '
-' tblOperComps / tblAssyStnd: VBA updates @ffa in the Source SQL only when the
-' active factory code list from FactoriesTbl has changed. Refresh alone does
-' not rewrite the query, so Power Query permission prompts stay rare.
+' tblOperComps / tblAssyStnd / tblRouteCard: VBA updates @ffa in the Source SQL
+' only when the active factory code list from FactoriesTbl has changed. Refresh
+' alone does not rewrite the query, so Power Query permission prompts stay rare.
 '
-' tblAssyStnd also filters ASSEMBLY NO in Power Query via #"Filter Assemblies"
-' against tblRCCP — see PowerQuery/pqAssyStnd-FilterAssemblies.txt.
+' tblAssyStnd / tblRouteCard also filter ASSEMBLY NO in Power Query via
+' #"Filter Assemblies" against tblRCCP — see PowerQuery/pqAssyStnd-FilterAssemblies.txt
+' and PowerQuery/pqRouteCard-FilterAssemblies.txt.
 '==============================================================================
 
 Private Const PARAM_FFA As String = "@ffa"
@@ -47,12 +49,17 @@ Public Sub RefreshAssyStnd()
     RefreshQueryWithFfaParameter LINKED_ASSY_STND_TABLE, "tblAssyStnd"
 End Sub
 
+Public Sub RefreshRouteCard()
+    RefreshQueryWithFfaParameter LINKED_ROUTE_CARD_TABLE, "tblRouteCard"
+End Sub
+
 ' Combined refresh button (extend as more queries are wired).
-' RCCP first so tblAssyStnd #"Filter Assemblies" sees current assemblies.
+' RCCP first so #"Filter Assemblies" steps see current assemblies.
 Public Sub RefreshAllLinkedData()
     RefreshRCCP
     RefreshOperComps
     RefreshAssyStnd
+    RefreshRouteCard
 End Sub
 
 Private Sub RefreshQueryWithFfaParameter(ByVal queryName As String, ByVal displayName As String)
