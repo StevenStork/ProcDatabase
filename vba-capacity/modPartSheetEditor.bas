@@ -173,6 +173,7 @@ Private Sub LoadDashRows(ByVal ws As Worksheet, ByVal basePartCode As String)
     Dim rowCount As Long
     Dim sheetRow As Long
     Dim loadedCount As Long
+    Dim dashCell As Range
 
     Set tbl = FindTable(PART_DASH_CONDITIONS_TABLE_NAME)
     If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
@@ -188,7 +189,12 @@ Private Sub LoadDashRows(ByVal ws As Worksheet, ByVal basePartCode As String)
         If Not ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then GoTo ContinueDash
         If loadedCount >= PE_DASH_MAX_ROWS Then Exit For
 
-        ws.Cells(sheetRow, PE_COL_DASH).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_DASH_CONDITION)))
+        Set dashCell = ws.Cells(sheetRow, PE_COL_DASH)
+        dashCell.NumberFormat = "@"
+        dashCell.Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_DASH_CONDITION)))
+        If TableHasColumn(tbl, COL_SEPARATOR) Then
+            ws.Cells(sheetRow, PE_COL_SEPARATOR).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_SEPARATOR)))
+        End If
         ws.Cells(sheetRow, PE_COL_DASH_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
         ws.Cells(sheetRow, PE_COL_DASH_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
 
@@ -249,6 +255,8 @@ Private Sub SyncDashAssignments(ByVal basePartCode As String, ByVal ws As Worksh
     Dim dashKey As Variant
     Dim rowData As Variant
     Dim fieldValues As Object
+    Dim dashCell As Range
+    Dim listRowIndex As Long
 
     Set tbl = FindTable(PART_DASH_CONDITIONS_TABLE_NAME)
     If tbl Is Nothing Then Exit Sub
@@ -267,10 +275,18 @@ Private Sub SyncDashAssignments(ByVal basePartCode As String, ByVal ws As Worksh
         Set fieldValues = NewFieldValuesDictionary()
         fieldValues(COL_BASE_PART_CODE) = basePartCode
         fieldValues(COL_DASH_CONDITION) = CStr(dashKey)
-        fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(rowData(1)))
-        fieldValues(COL_NOTES) = CStr(rowData(2))
+        fieldValues(COL_SEPARATOR) = CStr(rowData(1))
+        fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(rowData(2)))
+        fieldValues(COL_NOTES) = CStr(rowData(3))
 
         UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_DASH_CONDITION, CStr(dashKey), fieldValues
+
+        listRowIndex = FindJunctionListRow(tbl, COL_BASE_PART_CODE, basePartCode, COL_DASH_CONDITION, CStr(dashKey))
+        If listRowIndex > 0 Then
+            Set dashCell = tbl.ListRows(listRowIndex).Range.Cells(1, TableColumnIndex(tbl, COL_DASH_CONDITION))
+            dashCell.NumberFormat = "@"
+            dashCell.Value = CStr(dashKey)
+        End If
     Next dashKey
 End Sub
 
@@ -326,16 +342,19 @@ Private Sub WriteEditorCache(ByVal basePartCode As String)
     wsCache.Range(CACHE_BASE_PART_CELL).Value = basePartCode
 
     wsCache.Cells(CACHE_DASH_START_ROW - 1, 1).Value = COL_DASH_CONDITION
-    wsCache.Cells(CACHE_DASH_START_ROW - 1, 2).Value = COL_ACTIVE
-    wsCache.Cells(CACHE_DASH_START_ROW - 1, 3).Value = COL_NOTES
+    wsCache.Cells(CACHE_DASH_START_ROW - 1, 2).Value = COL_SEPARATOR
+    wsCache.Cells(CACHE_DASH_START_ROW - 1, 3).Value = COL_ACTIVE
+    wsCache.Cells(CACHE_DASH_START_ROW - 1, 4).Value = COL_NOTES
 
     Set dashRows = ReadSheetDashRows(wsEditor)
     sheetRow = CACHE_DASH_START_ROW
     For Each dashKey In dashRows.Keys
         rowData = dashRows(dashKey)
+        wsCache.Cells(sheetRow, 1).NumberFormat = "@"
         wsCache.Cells(sheetRow, 1).Value = CStr(dashKey)
         wsCache.Cells(sheetRow, 2).Value = rowData(1)
         wsCache.Cells(sheetRow, 3).Value = rowData(2)
+        wsCache.Cells(sheetRow, 4).Value = rowData(3)
         sheetRow = sheetRow + 1
     Next dashKey
 
@@ -366,7 +385,7 @@ Private Sub ClearEditorCache()
 End Sub
 
 Private Function ReadCachedDashRows() As Object
-    Set ReadCachedDashRows = ReadCacheSection(CACHE_DASH_START_ROW, 1, 3)
+    Set ReadCachedDashRows = ReadCacheSection(CACHE_DASH_START_ROW, 1, 4)
 End Function
 
 Private Function ReadCachedOperationRows() As Object
@@ -390,8 +409,12 @@ Private Function ReadCacheSection(ByVal startRow As Long, ByVal keyCol As Long, 
     End If
 
     rowIndex = startRow
-    Do While Len(Trim$(CStr(wsCache.Cells(rowIndex, keyCol).Value2))) > 0
-        keyValue = NormalizeCode(CStr(wsCache.Cells(rowIndex, keyCol).Value2))
+    Do While Len(Trim$(CStr(wsCache.Cells(rowIndex, keyCol).Value2))) > 0 Or Len(Trim$(wsCache.Cells(rowIndex, keyCol).Text)) > 0
+        If Len(Trim$(wsCache.Cells(rowIndex, keyCol).Text)) > 0 Then
+            keyValue = Trim$(wsCache.Cells(rowIndex, keyCol).Text)
+        Else
+            keyValue = NormalizeCode(CStr(wsCache.Cells(rowIndex, keyCol).Value2))
+        End If
         If Len(keyValue) > 0 Then
             ReDim rowData(0 To valueColCount - 1)
             If valueColCount >= 2 Then rowData(1) = wsCache.Cells(rowIndex, keyCol + 1).Value2
@@ -410,18 +433,29 @@ Private Function ReadSheetDashRows(ByVal ws As Worksheet) As Object
     Dim rows As Object
     Dim rowIndex As Long
     Dim dashCode As String
+    Dim separator As String
     Dim rowData As Variant
+    Dim dashCell As Range
 
     Set rows = CreateObject("Scripting.Dictionary")
-    rows.CompareMode = vbTextCompare
+    rows.CompareMode = vbBinaryCompare
 
     For rowIndex = PE_DASH_DATA_START_ROW To PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1
-        dashCode = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_DASH).Value2))
+        Set dashCell = ws.Cells(rowIndex, PE_COL_DASH)
+        If Len(Trim$(dashCell.Text)) > 0 Then
+            dashCode = CStr(dashCell.Text)
+        Else
+            dashCode = Trim$(CStr(dashCell.Value2))
+        End If
         If Len(dashCode) = 0 Then GoTo ContinueDash
 
-        ReDim rowData(0 To 2)
-        rowData(1) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_DASH_ACTIVE).Value2)
-        rowData(2) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_DASH_NOTES).Value2))
+        separator = Trim$(CStr(ws.Cells(rowIndex, PE_COL_SEPARATOR).Value2))
+        If Len(separator) = 0 Then separator = "-"
+
+        ReDim rowData(0 To 3)
+        rowData(1) = separator
+        rowData(2) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_DASH_ACTIVE).Value2)
+        rowData(3) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_DASH_NOTES).Value2))
         rows(dashCode) = rowData
 
 ContinueDash:
@@ -460,6 +494,8 @@ Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
     ws.Range(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), ws.Cells(PE_ROW_NOTES, PE_VALUE_COL)).ClearContents
     ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_NOTES)).ClearContents
+    ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
+        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
     ws.Range(ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX)).ClearContents
 End Sub

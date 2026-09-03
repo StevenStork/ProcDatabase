@@ -21,6 +21,7 @@ Private Const PARAM_FFA As String = "@ffa"
 
 Public Sub RefreshRCCP()
     Dim factoryCount As Long
+    Dim syncSummary As String
 
     factoryCount = CountActiveFactoryCodes()
     If factoryCount = 0 Then
@@ -31,9 +32,11 @@ Public Sub RefreshRCCP()
     On Error GoTo Fail
     OptimizeExcel True
     RefreshLinkedQuery LINKED_RCCP_TABLE
+    syncSummary = SyncPartDashConditionsFromRCCP()
     OptimizeExcel False
 
-    MsgBox "tblRCCP refreshed using " & factoryCount & " active factory code(s) from FactoriesTbl.", vbInformation
+    MsgBox "tblRCCP refreshed using " & factoryCount & " active factory code(s) from FactoriesTbl." & _
+        vbCrLf & syncSummary, vbInformation
     Exit Sub
 
 Fail:

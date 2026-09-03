@@ -45,7 +45,7 @@ Public Sub BootstrapCapacityTables()
         COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_STATUS_DATE, COL_NOTES)
 
     EnsureTable PART_DASH_CONDITIONS_SHEET_NAME, PART_DASH_CONDITIONS_TABLE_NAME, Array( _
-        COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_ACTIVE, COL_NOTES)
+        COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_SEPARATOR, COL_ACTIVE, COL_NOTES)
 
     EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OPERATION_NAME, COL_ACTIVE, COL_NOTES)
@@ -229,6 +229,7 @@ Private Sub FormatPartEditorSheet()
 
     ws.Cells(PE_DASH_HEADER_ROW, PE_LABEL_COL).Value = "Dash Conditions"
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH).Value = COL_DASH_CONDITION
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_SEPARATOR).Value = COL_SEPARATOR
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_ACTIVE).Value = COL_ACTIVE
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES).Value = COL_NOTES
     ws.Range(ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH), ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES)).Font.Bold = True
@@ -249,11 +250,28 @@ Private Sub FormatPartEditorSheet()
 
     ws.Columns("B").ColumnWidth = 16
     ws.Columns("C").ColumnWidth = 14
-    ws.Columns("D").ColumnWidth = 22
+    ws.Columns("D").ColumnWidth = 12
     ws.Columns("E").ColumnWidth = 8
     ws.Columns("F").ColumnWidth = 18
     ws.Columns("G").ColumnWidth = 16
     ws.Columns("H").ColumnWidth = 10
+
+    FormatDashConditionTextColumn
+End Sub
+
+Private Sub FormatDashConditionTextColumn()
+    Dim tbl As ListObject
+    Dim col As ListColumn
+
+    Set tbl = FindTable(PART_DASH_CONDITIONS_TABLE_NAME)
+    If tbl Is Nothing Then Exit Sub
+    If Not TableHasColumn(tbl, COL_DASH_CONDITION) Then Exit Sub
+
+    Set col = tbl.ListColumns(COL_DASH_CONDITION)
+    col.Range.NumberFormat = "@"
+    If Not col.DataBodyRange Is Nothing Then
+        col.DataBodyRange.NumberFormat = "@"
+    End If
 End Sub
 
 Private Function FindWorksheetByName(ByVal sheetName As String) As Worksheet

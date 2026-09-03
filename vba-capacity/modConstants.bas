@@ -52,11 +52,13 @@ Public Const COL_NOTES As String = "Notes"
 Public Const COL_BASE_PART_CODE As String = "BasePartCode"
 Public Const COL_STATUS_DATE As String = "StatusDate"
 Public Const COL_DASH_CONDITION As String = "DashCondition"
+Public Const COL_SEPARATOR As String = "Separator"
 Public Const COL_OPER_SEQ As String = "OperSeq"
 Public Const COL_OPERATION_NAME As String = "OperationName"
 
 ' Linked source column headers.
 Public Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
+Public Const COL_RCCP_BASE_PN As String = "Base PN: Text"
 Public Const COL_OPER_SEQ_SOURCE As String = "OPER SEQ"
 Public Const COL_LABOR_HPS As String = "LABOR HPS (HOURS)"
 Public Const COL_RUN_TIME As String = "RUN TIME (HOURS)"
@@ -92,8 +94,9 @@ Public Const PE_COL_AVG_HOURS As Long = 7
 Public Const PE_COL_AVG_EX As Long = 8
 
 Public Const PE_COL_DASH As Long = 3
-Public Const PE_COL_DASH_ACTIVE As Long = 4
-Public Const PE_COL_DASH_NOTES As Long = 5
+Public Const PE_COL_SEPARATOR As Long = 4
+Public Const PE_COL_DASH_ACTIVE As Long = 5
+Public Const PE_COL_DASH_NOTES As Long = 6
 
 ' PartEditorCache hidden sheet layout.
 Public Const CACHE_BASE_PART_CELL As String = "A1"

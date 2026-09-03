@@ -21,7 +21,7 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 |---|---|---|
 | **Parts** | `BasePartsTbl` | Master index of all base parts |
 | **PartEditor** | — | Load/edit workspace for one part at a time |
-| PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part |
+| PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part (`Separator`, `Active`) |
 | PartOperations | `PartOperationsTbl` | Operations (`OperSeq`) per base part |
 | PartEditorCache | — | Hidden cache for sheet editor save diff (auto-created) |
 
@@ -147,6 +147,13 @@ Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base
 The **#"Filtered FFAs"** step must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`PowerQuery/pqRCCP-FilteredFFAs.txt`](../PowerQuery/pqRCCP-FilteredFFAs.txt).
 
 Run **`RefreshRCCP`**. The query filters `[FFA]` to active `FactoryCode` values. No VBA rewrites that filter on each refresh.
+
+After the query refresh, VBA syncs **`PartDashConditionsTbl`**:
+
+- Assemblies in `tblRCCP` that are missing from the dash table are **added** as Active (with `Separator` and leading zeros preserved in `DashCondition`).
+- Dash rows present in the table but **not** in `tblRCCP` are marked **Inactive** (not deleted).
+
+Parsing supports `BASE-DASH` and letter separators such as `BASEA01` (`Separator` = `A`, `DashCondition` = `01`). Uses `Base PN: Text` from RCCP when present.
 
 **Important:** load `tblRCCP` to a sheet as a ListObject (hidden is fine). Connection-only alone cannot supply assembly numbers to the next step.
 
