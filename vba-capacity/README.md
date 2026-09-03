@@ -114,6 +114,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Clear Part Editor | `ClearPartEditor` |
 | Open Part from Parts index | `OpenPartEditorFromPartsIndex` |
 | Refresh RCCP | `RefreshRCCP` |
+| Refresh Oper Completions | `RefreshOperComps` |
 | Refresh all linked data | `RefreshAllLinkedData` |
 | Part Operations (form) | `ShowPartOperationsAdmin` |
 | Rebuild Tables | `BootstrapCapacityTables` |
@@ -137,11 +138,25 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 
 Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base part before `-`.
 
-## RCCP refresh (`tblRCCP`)
+## Linked query refresh
 
-The **#"Filtered FFAs"** step in the `tblRCCP` Power Query must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`PowerQuery/pqRCCP-FilteredFFAs.txt`](../PowerQuery/pqRCCP-FilteredFFAs.txt) into the query editor (Advanced Editor or replace that step only).
+### RCCP (`tblRCCP`)
 
-Then run **`RefreshRCCP`** from Admin. The query filters `[FFA]` to active `FactoryCode` values in `FactoriesTbl`. No VBA rewrites the M code on each refresh — update factories in the table and refresh.
+The **#"Filtered FFAs"** step must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`PowerQuery/pqRCCP-FilteredFFAs.txt`](../PowerQuery/pqRCCP-FilteredFFAs.txt).
+
+Run **`RefreshRCCP`**. The query filters `[FFA]` to active `FactoryCode` values. No VBA rewrites that filter on each refresh.
+
+**Important:** load `tblRCCP` to a sheet as a ListObject (hidden is fine). Connection-only alone cannot supply assembly numbers to the next step.
+
+### Oper Completions (`tblOperComps`)
+
+No M rewrite required. **`RefreshOperComps`** finds `@assembly_number_list = '...'` in the existing Source SQL string, replaces only that quoted value with distinct `ASSEMBLY NO` values from `tblRCCP`, then refreshes. See [`PowerQuery/pqOperComps-AssemblyList.txt`](../PowerQuery/pqOperComps-AssemblyList.txt).
+
+`tblOperComps` itself may stay connection-only.
+
+### Combined
+
+**`RefreshAllLinkedData`** currently runs RCCP then OperComps. More queries will be added here later.
 
 ## Notes
 

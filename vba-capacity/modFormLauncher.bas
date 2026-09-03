@@ -61,6 +61,10 @@ Public Sub RefreshRCCP()
     modLinkedData.RefreshRCCP
 End Sub
 
+Public Sub RefreshOperComps()
+    modLinkedData.RefreshOperComps
+End Sub
+
 Public Sub RefreshAllLinkedData()
     modLinkedData.RefreshAllLinkedData
 End Sub

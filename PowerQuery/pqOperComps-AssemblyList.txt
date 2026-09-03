@@ -1,0 +1,25 @@
+' tblOperComps — no Power Query M rewrite is required for assembly filtering.
+'
+' RefreshOperComps (VBA) finds this parameter inside the existing Source SQL string:
+'
+'   @assembly_number_list = '8545784-3',
+'
+' and replaces only the quoted value with a comma-separated list of distinct
+' ASSEMBLY NO values from tblRCCP, for example:
+'
+'   @assembly_number_list = '8545784-3, 8545784-4, 9000123-1',
+'
+' The rest of the M code / SQL stays as-is. Leave @assembly_number = '%' unless
+' your stored procedure requires something else.
+'
+' Prerequisites:
+'   1. Refresh tblRCCP first (RefreshRCCP).
+'   2. tblRCCP must be loaded to a sheet as a ListObject (hidden sheet is fine)
+'      so VBA can read ASSEMBLY NO. Connection-only alone is not enough for the
+'      source list.
+'   3. tblOperComps may remain connection-only.
+'   4. The Source step must keep the literal parameter name @assembly_number_list
+'      with a single-quoted value so VBA can find and replace it.
+'
+' Admin button macro: RefreshOperComps
+' Combined later via: RefreshAllLinkedData
