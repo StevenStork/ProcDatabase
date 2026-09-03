@@ -7,12 +7,12 @@ Option Explicit
 ' tblRCCP FFA filter is driven inside Power Query by FactoriesTbl — see
 ' PowerQuery/pqRCCP-FilteredFFAs.txt for the #"Filtered FFAs" M step.
 '
-' tblOperComps: VBA rewrites only @assembly_number_list in the existing M Source
-' SQL string using ASSEMBLY NO values from tblRCCP, then refreshes. The rest of
-' the Power Query is left unchanged.
+' tblOperComps: VBA updates @ffa in the Source SQL only when the active factory
+' code list from FactoriesTbl has changed (same list RCCP uses). Refresh alone
+' does not rewrite the query, so Power Query permission prompts stay rare.
 '==============================================================================
 
-Private Const PARAM_ASSEMBLY_NUMBER_LIST As String = "@assembly_number_list"
+Private Const PARAM_FFA As String = "@ffa"
 
 Public Sub RefreshRCCP()
     Dim factoryCount As Long
@@ -37,26 +37,36 @@ Fail:
 End Sub
 
 Public Sub RefreshOperComps()
-    Dim assemblyList As String
-    Dim assemblyCount As Long
+    Dim ffaList As String
+    Dim currentFfa As String
+    Dim ffaCount As Long
+    Dim formulaUpdated As Boolean
 
-    assemblyList = BuildAssemblyNumberListFromRCCP()
-    assemblyCount = CountCommaSeparatedItems(assemblyList)
+    ffaList = BuildActiveFactoryCodeList()
+    ffaCount = CountCommaSeparatedItems(ffaList)
 
-    If assemblyCount = 0 Then
-        MsgBox "No ASSEMBLY NO values found in tblRCCP." & vbCrLf & _
-            "Refresh RCCP first and ensure tblRCCP is loaded to a sheet (ListObject), not connection-only.", _
-            vbExclamation
+    If ffaCount = 0 Then
+        MsgBox "Add at least one active FactoryCode to FactoriesTbl before refreshing tblOperComps.", vbExclamation
         Exit Sub
     End If
 
     On Error GoTo Fail
     OptimizeExcel True
-    UpdateQueryQuotedParameter LINKED_OPER_COMPS_TABLE, PARAM_ASSEMBLY_NUMBER_LIST, assemblyList
+
+    currentFfa = GetQuotedParameterValue(LINKED_OPER_COMPS_TABLE, PARAM_FFA)
+    If Not FfaListsMatch(currentFfa, ffaList) Then
+        UpdateQueryQuotedParameter LINKED_OPER_COMPS_TABLE, PARAM_FFA, ffaList
+        formulaUpdated = True
+    End If
+
     RefreshLinkedQuery LINKED_OPER_COMPS_TABLE
     OptimizeExcel False
 
-    MsgBox "tblOperComps refreshed with " & assemblyCount & " assembly number(s) from tblRCCP.", vbInformation
+    If formulaUpdated Then
+        MsgBox "tblOperComps @ffa updated to '" & ffaList & "' and refreshed.", vbInformation
+    Else
+        MsgBox "tblOperComps refreshed ( @ffa unchanged: '" & ffaList & "' ).", vbInformation
+    End If
     Exit Sub
 
 Fail:
@@ -235,6 +245,102 @@ Public Sub UpdateQueryQuotedParameter( _
     commandText = ReplaceQuotedParameterValue(commandText, parameterName, parameterValue, queryOrConnectionName)
     SetConnectionCommandText conn, commandText
 End Sub
+
+Public Function GetQuotedParameterValue( _
+    ByVal queryOrConnectionName As String, _
+    ByVal parameterName As String) As String
+
+    Dim queryObj As Object
+    Dim formulaText As String
+    Dim conn As WorkbookConnection
+    Dim commandText As String
+    Dim parameterPos As Long
+    Dim equalsPos As Long
+    Dim openingQuotePos As Long
+    Dim closingQuotePos As Long
+
+    On Error Resume Next
+    Set queryObj = ThisWorkbook.Queries(queryOrConnectionName)
+    On Error GoTo 0
+
+    If Not queryObj Is Nothing Then
+        formulaText = CStr(queryObj.Formula)
+    Else
+        Set conn = GetWorkbookConnection(queryOrConnectionName)
+        If conn Is Nothing Then
+            Err.Raise vbObjectError + 532, "GetQuotedParameterValue", _
+                "Query or connection '" & queryOrConnectionName & "' was not found."
+        End If
+        formulaText = GetConnectionCommandText(conn)
+    End If
+
+    parameterPos = FindParameterPosition(formulaText, parameterName)
+    If parameterPos = 0 Then
+        Err.Raise vbObjectError + 516, "GetQuotedParameterValue", _
+            "Parameter '" & parameterName & "' was not found in " & queryOrConnectionName & "."
+    End If
+
+    equalsPos = InStr(parameterPos, formulaText, "=")
+    openingQuotePos = InStr(equalsPos, formulaText, "'")
+    closingQuotePos = InStr(openingQuotePos + 1, formulaText, "'")
+
+    If equalsPos = 0 Or openingQuotePos = 0 Or closingQuotePos = 0 Then
+        Err.Raise vbObjectError + 517, "GetQuotedParameterValue", _
+            "Could not read quoted value for '" & parameterName & "' in " & queryOrConnectionName & "."
+    End If
+
+    GetQuotedParameterValue = Mid$(formulaText, openingQuotePos + 1, closingQuotePos - openingQuotePos - 1)
+End Function
+
+Private Function FfaListsMatch(ByVal leftList As String, ByVal rightList As String) As Boolean
+    FfaListsMatch = (StrComp(CanonicalizeCodeList(leftList), CanonicalizeCodeList(rightList), vbTextCompare) = 0)
+End Function
+
+Private Function CanonicalizeCodeList(ByVal csvText As String) As String
+    Dim parts As Variant
+    Dim i As Long
+    Dim j As Long
+    Dim tempValue As String
+    Dim codes() As String
+    Dim codeCount As Long
+    Dim result As String
+
+    If Len(Trim$(csvText)) = 0 Then Exit Function
+
+    parts = Split(csvText, ",")
+    ReDim codes(0 To UBound(parts) - LBound(parts))
+    codeCount = 0
+
+    For i = LBound(parts) To UBound(parts)
+        tempValue = NormalizeCode(parts(i))
+        If Len(tempValue) = 0 Then GoTo ContinuePart
+        codes(codeCount) = tempValue
+        codeCount = codeCount + 1
+
+ContinuePart:
+    Next i
+
+    If codeCount = 0 Then Exit Function
+
+    ReDim Preserve codes(0 To codeCount - 1)
+
+    For i = 0 To codeCount - 2
+        For j = i + 1 To codeCount - 1
+            If StrComp(codes(i), codes(j), vbTextCompare) > 0 Then
+                tempValue = codes(i)
+                codes(i) = codes(j)
+                codes(j) = tempValue
+            End If
+        Next j
+    Next i
+
+    For i = 0 To codeCount - 1
+        If Len(result) > 0 Then result = result & ", "
+        result = result & codes(i)
+    Next i
+
+    CanonicalizeCodeList = result
+End Function
 
 Private Function ReplaceQuotedParameterValue( _
     ByVal commandText As String, _

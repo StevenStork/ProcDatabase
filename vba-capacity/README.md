@@ -150,9 +150,9 @@ Run **`RefreshRCCP`**. The query filters `[FFA]` to active `FactoryCode` values.
 
 ### Oper Completions (`tblOperComps`)
 
-No M rewrite required. **`RefreshOperComps`** finds `@assembly_number_list = '...'` in the existing Source SQL string, replaces only that quoted value with distinct `ASSEMBLY NO` values from `tblRCCP`, then refreshes. See [`PowerQuery/pqOperComps-AssemblyList.txt`](../PowerQuery/pqOperComps-AssemblyList.txt).
+No full M rewrite required. Keep an `@ffa = '...'` parameter in the Source SQL. **`RefreshOperComps`** uses the same active `FactoryCode` list as RCCP, rewrites `@ffa` **only when that list changed**, then refreshes. See [`PowerQuery/pqOperComps-FFA.txt`](../PowerQuery/pqOperComps-FFA.txt).
 
-`tblOperComps` itself may stay connection-only.
+`tblOperComps` may stay connection-only. Unchanged `@ffa` avoids Power Query permission prompts on every refresh.
 
 ### Combined
 
