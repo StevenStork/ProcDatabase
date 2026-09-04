@@ -536,7 +536,7 @@ Private Sub AddWorksheetButton( _
     btn.Name = buttonName
     On Error GoTo 0
     btn.Caption = captionText
-    btn.OnAction = "'" & ThisWorkbook.Name & "'!" & onActionName
+    btn.OnAction = onActionName
     btn.Font.Bold = True
 End Sub
 

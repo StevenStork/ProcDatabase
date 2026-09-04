@@ -2,7 +2,10 @@ Attribute VB_Name = "modFormLauncher"
 Option Explicit
 
 '==============================================================================
-' Public entry points for Admin sheet buttons and macros.
+' Public entry points unique to this module (form show helpers and aliases).
+' LoadPartToEditor / SavePartFromEditor / ClearPartEditor / OpenPartEditorFromPartsIndex
+' live only in modPartSheetEditor. Refresh* macros live only in modLinkedData.
+' Do not duplicate those Public Sub names here — Excel raises Ambiguous name.
 '==============================================================================
 
 Public Sub ShowFactoryAdmin()
@@ -39,42 +42,6 @@ Public Sub ShowPartEditor()
 
     ws.Activate
     ws.Cells(PE_INPUT_ROW, PE_VALUE_COL).Select
-End Sub
-
-Public Sub LoadPartToEditor()
-    modPartSheetEditor.LoadPartToEditor
-End Sub
-
-Public Sub SavePartFromEditor()
-    modPartSheetEditor.SavePartFromEditor
-End Sub
-
-Public Sub ClearPartEditor()
-    modPartSheetEditor.ClearPartEditor
-End Sub
-
-Public Sub OpenPartEditorFromPartsIndex()
-    modPartSheetEditor.OpenPartEditorFromPartsIndex
-End Sub
-
-Public Sub RefreshRCCP()
-    modLinkedData.RefreshRCCP
-End Sub
-
-Public Sub RefreshOperComps()
-    modLinkedData.RefreshOperComps
-End Sub
-
-Public Sub RefreshAssyStnd()
-    modLinkedData.RefreshAssyStnd
-End Sub
-
-Public Sub RefreshRouteCard()
-    modLinkedData.RefreshRouteCard
-End Sub
-
-Public Sub RefreshAllLinkedData()
-    modLinkedData.RefreshAllLinkedData
 End Sub
 
 Public Sub ShowPartOperationsAdmin()
