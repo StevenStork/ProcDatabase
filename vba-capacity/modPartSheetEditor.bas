@@ -10,6 +10,9 @@ Public Sub LoadPartToEditor(Optional ByVal partInput As String = vbNullString)
     Dim basePartCode As String
     Dim dashCondition As String
     Dim inputValue As String
+    Dim errNumber As Long
+    Dim errDescription As String
+    Dim currentStep As String
 
     Set ws = GetPartEditorWorksheet()
     If ws Is Nothing Then
@@ -36,25 +39,49 @@ Public Sub LoadPartToEditor(Optional ByVal partInput As String = vbNullString)
         Exit Sub
     End If
 
-    On Error GoTo CleanUp
+    On Error GoTo FailLoad
+    currentStep = "OptimizeExcel"
     OptimizeExcel True
 
+    currentStep = "EnsureCacheSheetExists"
     EnsureCacheSheetExists
+    currentStep = "ClearEditorDataRanges"
     ClearEditorDataRanges ws
     ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).Value = basePartCode
 
+    currentStep = "LoadMasterFields"
     LoadMasterFields ws, basePartCode
+    currentStep = "LoadDashRows"
     LoadDashRows ws, basePartCode
+    currentStep = "LoadRouteCardRows"
     LoadRouteCardRows ws, basePartCode
+    currentStep = "LoadOperationRows"
     LoadOperationRows ws, basePartCode
+    currentStep = "WriteEditorCache"
     WriteEditorCache basePartCode
+    currentStep = "ApplyFactoryValidation"
     ApplyFactoryValidation ws
+    currentStep = "ApplyOperationDropdowns"
     ApplyOperationDropdowns ws
 
     SetEditorStatus ws, "Loaded " & basePartCode & "."
-
-CleanUp:
     OptimizeExcel False
+    Exit Sub
+
+FailLoad:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    If Len(Trim$(errDescription)) = 0 Then errDescription = "(no description)"
+    On Error Resume Next
+    OptimizeExcel False
+    On Error GoTo 0
+    MsgBox "LoadPartToEditor failed at step:" & vbCrLf & currentStep & vbCrLf & vbCrLf & _
+        "Error " & CStr(errNumber) & ": " & errDescription, vbExclamation
+End Sub
+
+' Button-safe entry point (OnAction can be unreliable with Optional-parameter Subs).
+Public Sub LoadPartToEditorButton()
+    LoadPartToEditor
 End Sub
 
 Public Sub SavePartFromEditor()
@@ -63,6 +90,9 @@ Public Sub SavePartFromEditor()
     Dim factoryCode As String
     Dim factoryTbl As ListObject
     Dim fieldValues As Object
+    Dim errNumber As Long
+    Dim errDescription As String
+    Dim currentStep As String
 
     Set ws = GetPartEditorWorksheet()
     If ws Is Nothing Then Exit Sub
@@ -76,9 +106,11 @@ Public Sub SavePartFromEditor()
     Set factoryTbl = FindTable(FACTORIES_TABLE_NAME)
     If Not ValidateForeignKeyExists(factoryTbl, COL_FACTORY_CODE, factoryCode, "Factory") Then Exit Sub
 
-    On Error GoTo CleanUp
+    On Error GoTo FailSave
+    currentStep = "OptimizeExcel"
     OptimizeExcel True
 
+    currentStep = "BuildFieldValues"
     Set fieldValues = NewFieldValuesDictionary()
     fieldValues(COL_BASE_PART_CODE) = basePartCode
     fieldValues(COL_PART_NAME) = Trim$(CStr(ws.Cells(PE_ROW_NAME, PE_VALUE_COL).Value2))
@@ -87,33 +119,72 @@ Public Sub SavePartFromEditor()
     fieldValues(COL_PRODUCT_LINE) = Trim$(CStr(ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).Value2))
     fieldValues(COL_NOTES) = ReadEditorNotes(ws)
 
+    currentStep = "UpsertBasePart"
     UpsertRow FindTable(BASE_PARTS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode, fieldValues
+    currentStep = "SyncDashAssignments"
     SyncDashAssignments basePartCode, ws
+    currentStep = "SyncOperationAssignments"
     SyncOperationAssignments basePartCode, ws
+    currentStep = "WriteEditorCache"
     WriteEditorCache basePartCode
 
     SetEditorStatus ws, "Saved " & basePartCode & "."
-
-CleanUp:
     OptimizeExcel False
+    Exit Sub
+
+FailSave:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    If Len(Trim$(errDescription)) = 0 Then errDescription = "(no description)"
+    On Error Resume Next
+    OptimizeExcel False
+    On Error GoTo 0
+    MsgBox "SavePartFromEditor failed at step:" & vbCrLf & currentStep & vbCrLf & vbCrLf & _
+        "Error " & CStr(errNumber) & ": " & errDescription, vbExclamation
+End Sub
+
+Public Sub SavePartFromEditorButton()
+    SavePartFromEditor
 End Sub
 
 Public Sub ClearPartEditor()
     Dim ws As Worksheet
+    Dim errNumber As Long
+    Dim errDescription As String
+    Dim currentStep As String
 
     Set ws = GetPartEditorWorksheet()
     If ws Is Nothing Then Exit Sub
 
-    On Error GoTo CleanUp
+    On Error GoTo FailClear
+    currentStep = "OptimizeExcel"
     OptimizeExcel True
 
+    currentStep = "ClearInput"
     ws.Cells(PE_INPUT_ROW, PE_VALUE_COL).ClearContents
+    currentStep = "ClearEditorDataRanges"
     ClearEditorDataRanges ws
+    currentStep = "ClearEditorCache"
     ClearEditorCache
+    currentStep = "SetEditorStatus"
     SetEditorStatus ws, vbNullString
 
-CleanUp:
     OptimizeExcel False
+    Exit Sub
+
+FailClear:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    If Len(Trim$(errDescription)) = 0 Then errDescription = "(no description)"
+    On Error Resume Next
+    OptimizeExcel False
+    On Error GoTo 0
+    MsgBox "ClearPartEditor failed at step:" & vbCrLf & currentStep & vbCrLf & vbCrLf & _
+        "Error " & CStr(errNumber) & ": " & errDescription, vbExclamation
+End Sub
+
+Public Sub ClearPartEditorButton()
+    ClearPartEditor
 End Sub
 
 Public Sub OpenPartEditorFromPartsIndex()
@@ -230,10 +301,13 @@ Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     Dim operSeq As String
     Dim operCode As String
     Dim matchCount As Long
+    Dim matchIndex As Long
     Dim matchRows() As Variant
     Dim sortIndex As Long
     Dim swapIndex As Long
-    Dim tempRow As Variant
+    Dim tempDash As String
+    Dim tempSeq As String
+    Dim tempCode As String
     Dim hasOperCode As Boolean
 
     ClearRouteCardRange ws
@@ -244,15 +318,32 @@ Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     If Not TableHasColumn(tbl, COL_OPER_SEQ_SOURCE) Then Exit Sub
 
     hasOperCode = TableHasColumn(tbl, COL_OPER_CODE_SOURCE)
-    matchCount = 0
 
+    ' Count matching rows first so we can allocate once.
+    matchCount = 0
     For rowIndex = 1 To tbl.ListRows.Count
         assemblyNo = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
-        If Len(assemblyNo) = 0 Then GoTo ContinueRoute
+        If Len(assemblyNo) = 0 Then GoTo ContinueCount
+        SplitAssemblyNoWithSeparator assemblyNo, rowBasePart, separator, dashCondition
+        If ValuesMatchCode(NormalizeCode(rowBasePart), basePartCode) Then matchCount = matchCount + 1
+ContinueCount:
+    Next rowIndex
+
+    If matchCount = 0 Then Exit Sub
+    If matchCount > PE_ROUTE_MAX_ROWS Then matchCount = PE_ROUTE_MAX_ROWS
+
+    ReDim matchRows(1 To matchCount, 1 To 3)
+
+    matchIndex = 0
+    For rowIndex = 1 To tbl.ListRows.Count
+        If matchIndex >= matchCount Then Exit For
+
+        assemblyNo = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
+        If Len(assemblyNo) = 0 Then GoTo ContinueFill
 
         SplitAssemblyNoWithSeparator assemblyNo, rowBasePart, separator, dashCondition
         rowBasePart = NormalizeCode(rowBasePart)
-        If Not ValuesMatchCode(rowBasePart, basePartCode) Then GoTo ContinueRoute
+        If Not ValuesMatchCode(rowBasePart, basePartCode) Then GoTo ContinueFill
 
         operSeq = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ_SOURCE))))
         operCode = vbNullString
@@ -260,22 +351,31 @@ Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
             operCode = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_CODE_SOURCE))))
         End If
 
-        matchCount = matchCount + 1
-        ReDim Preserve matchRows(1 To matchCount)
-        matchRows(matchCount) = Array(dashCondition, operSeq, operCode)
+        matchIndex = matchIndex + 1
+        matchRows(matchIndex, 1) = dashCondition
+        matchRows(matchIndex, 2) = operSeq
+        matchRows(matchIndex, 3) = operCode
 
-ContinueRoute:
+ContinueFill:
     Next rowIndex
 
+    matchCount = matchIndex
     If matchCount = 0 Then Exit Sub
 
     ' Sort by OPER SEQ then dash condition.
     For sortIndex = 1 To matchCount - 1
         For swapIndex = sortIndex + 1 To matchCount
-            If RouteRowSortKey(matchRows(swapIndex)) < RouteRowSortKey(matchRows(sortIndex)) Then
-                tempRow = matchRows(sortIndex)
-                matchRows(sortIndex) = matchRows(swapIndex)
-                matchRows(swapIndex) = tempRow
+            If RouteRowSortKey2(CStr(matchRows(swapIndex, 2)), CStr(matchRows(swapIndex, 1))) < _
+               RouteRowSortKey2(CStr(matchRows(sortIndex, 2)), CStr(matchRows(sortIndex, 1))) Then
+                tempDash = CStr(matchRows(sortIndex, 1))
+                tempSeq = CStr(matchRows(sortIndex, 2))
+                tempCode = CStr(matchRows(sortIndex, 3))
+                matchRows(sortIndex, 1) = matchRows(swapIndex, 1)
+                matchRows(sortIndex, 2) = matchRows(swapIndex, 2)
+                matchRows(sortIndex, 3) = matchRows(swapIndex, 3)
+                matchRows(swapIndex, 1) = tempDash
+                matchRows(swapIndex, 2) = tempSeq
+                matchRows(swapIndex, 3) = tempCode
             End If
         Next swapIndex
     Next sortIndex
@@ -285,24 +385,23 @@ ContinueRoute:
     For sortIndex = 1 To matchCount
         If loadedCount >= PE_ROUTE_MAX_ROWS Then Exit For
         ws.Cells(sheetRow, PE_COL_ROUTE_DASH).NumberFormat = "@"
-        ws.Cells(sheetRow, PE_COL_ROUTE_DASH).Value = CStr(matchRows(sortIndex)(0))
-        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_SEQ).Value = CStr(matchRows(sortIndex)(1))
-        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_CODE).Value = CStr(matchRows(sortIndex)(2))
+        ws.Cells(sheetRow, PE_COL_ROUTE_DASH).Value = CStr(matchRows(sortIndex, 1))
+        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_SEQ).Value = CStr(matchRows(sortIndex, 2))
+        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_CODE).Value = CStr(matchRows(sortIndex, 3))
         sheetRow = sheetRow + 1
         loadedCount = loadedCount + 1
     Next sortIndex
 End Sub
 
-Private Function RouteRowSortKey(ByVal rowData As Variant) As String
-    Dim operSeq As String
+Private Function RouteRowSortKey2(ByVal operSeq As String, ByVal dashCondition As String) As String
     Dim seqNumber As Double
 
-    operSeq = Trim$(CStr(rowData(1)))
+    operSeq = Trim$(operSeq)
     If IsNumeric(operSeq) Then
         seqNumber = CDbl(operSeq)
-        RouteRowSortKey = Format$(seqNumber, "0000000000.0000") & "|" & CStr(rowData(0))
+        RouteRowSortKey2 = Format$(seqNumber, "0000000000.0000") & "|" & dashCondition
     Else
-        RouteRowSortKey = operSeq & "|" & CStr(rowData(0))
+        RouteRowSortKey2 = operSeq & "|" & dashCondition
     End If
 End Function
 
@@ -554,12 +653,16 @@ Private Sub ApplyListValidation(ByVal targetRange As Range, ByVal csvList As Str
     On Error GoTo 0
 
     If Len(csvList) = 0 Then Exit Sub
+    ' Excel list validation Formula1 max length is 255 characters.
+    If Len(csvList) > 255 Then csvList = Left$(csvList, 255)
 
+    On Error Resume Next
     targetRange.Validation.Add _
         Type:=xlValidateList, _
         AlertStyle:=xlValidAlertStop, _
         Operator:=xlBetween, _
         Formula1:=csvList
+    On Error GoTo 0
 End Sub
 
 Private Function BuildEquipmentValidationList(ByVal factoryCode As String) As String
@@ -947,7 +1050,16 @@ Private Sub WriteEditorNotes(ByVal ws As Worksheet, ByVal notesText As String)
 End Sub
 
 Private Sub ClearEditorNotes(ByVal ws As Worksheet)
-    EditorNotesRange(ws).ClearContents
+    Dim notesRange As Range
+
+    Set notesRange = EditorNotesRange(ws)
+    On Error Resume Next
+    notesRange.ClearContents
+    If Err.Number <> 0 Then
+        Err.Clear
+        ws.Cells(PE_NOTES_VALUE_ROW, PE_NOTES_VALUE_COL_START).ClearContents
+    End If
+    On Error GoTo 0
 End Sub
 
 Private Sub ApplyFactoryValidation(ByVal ws As Worksheet)
@@ -962,12 +1074,15 @@ Private Sub ApplyFactoryValidation(ByVal ws As Worksheet)
     On Error GoTo 0
 
     If Len(factoryCodes) = 0 Then Exit Sub
+    If Len(factoryCodes) > 255 Then factoryCodes = Left$(factoryCodes, 255)
 
+    On Error Resume Next
     validationRange.Validation.Add _
         Type:=xlValidateList, _
         AlertStyle:=xlValidAlertStop, _
         Operator:=xlBetween, _
         Formula1:=factoryCodes
+    On Error GoTo 0
 End Sub
 
 Private Function BuildFactoryValidationList() As String

@@ -493,15 +493,21 @@ End Function
 
 Private Sub StyleMasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal readOnlyLook As Boolean)
     Dim valueRange As Range
+    Dim valueCell As Range
 
+    ' Keep the value in column C only. Style C:G as one visual field, but do not merge
+    ' single-row inputs — merged cells break Validation.Add and button-driven clears.
     Set valueRange = MasterValueRange(ws, rowIndex)
     On Error Resume Next
     valueRange.UnMerge
-    valueRange.Merge
     On Error GoTo 0
+
     StyleInputCell valueRange, readOnlyLook
     valueRange.HorizontalAlignment = xlLeft
     valueRange.VerticalAlignment = xlCenter
+
+    Set valueCell = ws.Cells(rowIndex, PE_VALUE_COL)
+    valueCell.HorizontalAlignment = xlLeft
 End Sub
 
 Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
@@ -641,11 +647,11 @@ Private Sub EnsurePartEditorButtons(ByVal ws As Worksheet)
     buttonWidth = 85
     gap = 6
 
-    AddWorksheetButton ws, PE_BTN_LOAD_NAME, "Load Part", "LoadPartToEditor", _
+    AddWorksheetButton ws, PE_BTN_LOAD_NAME, "Load Part", "LoadPartToEditorButton", _
         anchor.Left, buttonTop, buttonWidth, buttonHeight
-    AddWorksheetButton ws, PE_BTN_SAVE_NAME, "Save Part", "SavePartFromEditor", _
+    AddWorksheetButton ws, PE_BTN_SAVE_NAME, "Save Part", "SavePartFromEditorButton", _
         anchor.Left + buttonWidth + gap, buttonTop, buttonWidth, buttonHeight
-    AddWorksheetButton ws, PE_BTN_CLEAR_NAME, "Clear", "ClearPartEditor", _
+    AddWorksheetButton ws, PE_BTN_CLEAR_NAME, "Clear", "ClearPartEditorButton", _
         anchor.Left + 2 * (buttonWidth + gap), buttonTop, buttonWidth, buttonHeight
 End Sub
 
