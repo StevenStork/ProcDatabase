@@ -345,7 +345,7 @@ ContinueCount:
         operSeq = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ_SOURCE))))
         operCode = vbNullString
         If hasOperCode Then
-            operCode = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_CODE_SOURCE))))
+            operCode = GetListRowCellText(tbl, rowIndex, COL_OPER_CODE_SOURCE)
         End If
 
         matchIndex = matchIndex + 1
@@ -401,8 +401,11 @@ Private Function RouteRowSortKey2(ByVal dashCondition As String, ByVal operSeq A
     ' Keep dash text sortable with leading zeros preserved as text.
     dashKey = dashCondition
     If IsNumeric(dashCondition) Then
-        dashKey = String$(10 - Len(dashCondition), "0") & dashCondition
-        If Len(dashCondition) >= 10 Then dashKey = dashCondition
+        If Len(dashCondition) < 10 Then
+            dashKey = String$(10 - Len(dashCondition), "0") & dashCondition
+        Else
+            dashKey = dashCondition
+        End If
     End If
 
     If IsNumeric(operSeq) Then
@@ -411,6 +414,28 @@ Private Function RouteRowSortKey2(ByVal dashCondition As String, ByVal operSeq A
     Else
         RouteRowSortKey2 = dashKey & "|" & operSeq
     End If
+End Function
+
+Private Function GetListRowCellText( _
+    ByVal tbl As ListObject, _
+    ByVal listRowIndex As Long, _
+    ByVal columnName As String) As String
+
+    Dim cell As Range
+    Dim textValue As String
+
+    On Error GoTo FailText
+    Set cell = tbl.ListRows(listRowIndex).Range.Cells(1, TableColumnIndex(tbl, columnName))
+    textValue = Trim$(cell.Text)
+    If Len(textValue) > 0 Then
+        GetListRowCellText = textValue
+    Else
+        GetListRowCellText = Trim$(CStr(NzBlank(cell.Value2)))
+    End If
+    Exit Function
+
+FailText:
+    GetListRowCellText = vbNullString
 End Function
 
 Private Sub ClearRouteCardRange(ByVal ws As Worksheet)

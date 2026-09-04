@@ -72,7 +72,7 @@ Public Const COL_AVG_PROCESS_HOURS As String = "Avg Process Hours"
 Public Const COL_AVG_EX As String = "Avg Ex"
 
 ' PartEditor sheet layout:
-'   Master (B labels, C:G values): Name/Status/Factory/Active/ProductLine/Notes
+'   Master labels in B; values in C (Name and Notes are merged C:G)
 '   Dash conditions at I5; Route Card at B18 (B-D); Operations at F18
 Public Const PE_LABEL_COL As Long = 2
 Public Const PE_VALUE_COL As Long = 3

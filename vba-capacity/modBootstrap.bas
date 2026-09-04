@@ -121,6 +121,7 @@ Public Sub FormatPartEditorLayout()
     ClearPartEditorListObjects
     FormatPartEditorSheet
     RemoveTableColumnIfExists FindTable(BASE_PARTS_TABLE_NAME), "StatusDate"
+    RepairScrambledBasePartsHeaders FindTable(BASE_PARTS_TABLE_NAME)
     OptimizeExcel False
     MsgBox "PartEditor layout and buttons updated.", vbInformation
     Exit Sub
