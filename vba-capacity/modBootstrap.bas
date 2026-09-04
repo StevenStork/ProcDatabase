@@ -8,7 +8,9 @@ Option Explicit
 '==============================================================================
 
 Public Sub BootstrapCapacityTables()
-    On Error GoTo CleanUp
+    Dim formatError As String
+
+    On Error GoTo FailBootstrap
 
     OptimizeExcel True
 
@@ -40,6 +42,7 @@ Public Sub BootstrapCapacityTables()
     EnsureSheet PART_OPERATIONS_SHEET_NAME, "Part Operations"
 
     MigrateBasePartsTableToPartsSheet
+    ClearPartEditorListObjects
 
     EnsureTable PARTS_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_STATUS_DATE, COL_NOTES)
@@ -55,10 +58,42 @@ Public Sub BootstrapCapacityTables()
 
     FormatAdminSheet
     FormatPartsSheet
-    FormatPartEditorSheet
 
-CleanUp:
+    On Error Resume Next
+    FormatPartEditorSheet
+    If Err.Number <> 0 Then
+        formatError = Err.Description
+        Err.Clear
+    End If
+    On Error GoTo FailBootstrap
+
     OptimizeExcel False
+
+    If Len(formatError) > 0 Then
+        MsgBox "Bootstrap finished, but PartEditor formatting failed:" & vbCrLf & formatError & vbCrLf & vbCrLf & _
+            "Run FormatPartEditorLayout after fixing the issue.", vbExclamation
+    End If
+    Exit Sub
+
+FailBootstrap:
+    OptimizeExcel False
+    MsgBox "BootstrapCapacityTables failed: " & Err.Description, vbExclamation
+End Sub
+
+' Standalone entry point if bootstrap formatting needs a re-run.
+Public Sub FormatPartEditorLayout()
+    On Error GoTo FailFormat
+    OptimizeExcel True
+    EnsureSheet PART_EDITOR_SHEET_NAME, "Part Number Editor"
+    ClearPartEditorListObjects
+    FormatPartEditorSheet
+    OptimizeExcel False
+    MsgBox "PartEditor layout and buttons updated.", vbInformation
+    Exit Sub
+
+FailFormat:
+    OptimizeExcel False
+    MsgBox "FormatPartEditorLayout failed: " & Err.Description, vbExclamation
 End Sub
 
 Private Sub EnsureSheet(ByVal sheetName As String, ByVal titleText As String)
@@ -194,7 +229,8 @@ Private Sub FormatAdminSheet()
     ws.Range("A17").Value = "RefreshAssyStnd"
     ws.Range("A18").Value = "RefreshRouteCard"
     ws.Range("A19").Value = "RefreshAllLinkedData"
-    ws.Range("A20").Value = "BootstrapCapacityTables"
+    ws.Range("A20").Value = "FormatPartEditorLayout"
+    ws.Range("A21").Value = "BootstrapCapacityTables"
     ws.Columns("A").ColumnWidth = 36
 End Sub
 
@@ -209,15 +245,30 @@ Private Sub FormatPartsSheet()
     ws.Rows("2").RowHeight = 30
 End Sub
 
+Private Sub ClearPartEditorListObjects()
+    Dim ws As Worksheet
+    Dim tbl As ListObject
+
+    Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    Do While ws.ListObjects.Count > 0
+        Set tbl = ws.ListObjects(1)
+        tbl.Unlist
+    Loop
+End Sub
+
 Private Sub FormatPartEditorSheet()
     Dim ws As Worksheet
-    Dim inputRange As Range
-    Dim avgHeaderRange As Range
+    Dim avgRange As Range
     Dim dashInputRange As Range
     Dim opsInputRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then Exit Sub
+
+    ws.Unprotect
+    ws.Activate
 
     ' Title and guidance
     ws.Range("A1").Value = "Part Number Editor"
@@ -225,12 +276,12 @@ Private Sub FormatPartEditorSheet()
     ws.Range("A1").Font.Size = 16
     ws.Range("A1").Font.Color = RGB(32, 56, 100)
 
-    ws.Range("A2").Value = "Enter a part or assembly number below, click Load Part, edit the fields, then click Save Part."
+    ws.Range("A2").Value = "Enter a part or assembly number in C3, click Load Part, edit fields, then click Save Part."
     ws.Range("A2").Font.Color = RGB(80, 80, 80)
     ws.Range("A2").WrapText = True
     ws.Rows("2").RowHeight = 28
 
-    ' Load / identity
+    ' Identity
     StyleFieldLabel ws, PE_INPUT_ROW, "Part Number"
     StyleInputCell ws.Cells(PE_INPUT_ROW, PE_VALUE_COL), False
     ws.Cells(PE_INPUT_ROW, PE_HINT_COL).Value = "Base part or full assembly (e.g. 8545784-01 or 8545784A01)"
@@ -241,9 +292,10 @@ Private Sub FormatPartEditorSheet()
     ws.Cells(PE_BASE_PART_ROW, PE_HINT_COL).Value = "Filled by Load Part (read-only)"
     StyleHintCell ws.Cells(PE_BASE_PART_ROW, PE_HINT_COL)
 
-    ' Master section
-    ws.Cells(PE_MASTER_HEADER_ROW, PE_LABEL_COL).Value = "Master Record"
-    StyleSectionHeader ws.Range(ws.Cells(PE_MASTER_HEADER_ROW, PE_LABEL_COL), ws.Cells(PE_MASTER_HEADER_ROW, 6))
+    ' Master section (no Merge — safer with leftover formatting/tables)
+    StyleSectionHeaderCell ws, PE_MASTER_HEADER_ROW, "Master Record"
+    ws.Cells(PE_MASTER_HEADER_ROW, PE_HINT_COL).Value = "Required factory; optional date and notes"
+    StyleHintCell ws.Cells(PE_MASTER_HEADER_ROW, PE_HINT_COL)
 
     StyleFieldLabel ws, PE_ROW_FACTORY, "Factory"
     StyleInputCell ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), False
@@ -266,10 +318,9 @@ Private Sub FormatPartEditorSheet()
     StyleHintCell ws.Cells(PE_ROW_NOTES, PE_HINT_COL)
 
     ' Dash conditions
-    ws.Cells(PE_DASH_HEADER_ROW - 1, PE_LABEL_COL).Value = "Dash Conditions"
-    StyleSectionHeader ws.Range(ws.Cells(PE_DASH_HEADER_ROW - 1, PE_LABEL_COL), ws.Cells(PE_DASH_HEADER_ROW - 1, 6))
-    ws.Cells(PE_DASH_HEADER_ROW - 1, 7).Value = "Add/edit rows below, then Save Part. Separator is usually - or a letter."
-    StyleHintCell ws.Cells(PE_DASH_HEADER_ROW - 1, 7)
+    StyleSectionHeaderCell ws, PE_DASH_SECTION_ROW, "Dash Conditions"
+    ws.Cells(PE_DASH_SECTION_ROW, PE_HINT_COL).Value = "Edit rows below, then Save Part. Separator is usually - or a letter."
+    StyleHintCell ws.Cells(PE_DASH_SECTION_ROW, PE_HINT_COL)
 
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH).Value = "Dash Condition"
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_SEPARATOR).Value = "Separator"
@@ -286,10 +337,9 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
 
     ' Operations
-    ws.Cells(PE_OPS_HEADER_ROW - 1, PE_LABEL_COL).Value = "Operations"
-    StyleSectionHeader ws.Range(ws.Cells(PE_OPS_HEADER_ROW - 1, PE_LABEL_COL), ws.Cells(PE_OPS_HEADER_ROW - 1, 6))
-    ws.Cells(PE_OPS_HEADER_ROW - 1, 7).Value = "Avg Process Hours / Avg Ex are calculated on Load (read-only)."
-    StyleHintCell ws.Cells(PE_OPS_HEADER_ROW - 1, 7)
+    StyleSectionHeaderCell ws, PE_OPS_SECTION_ROW, "Operations"
+    ws.Cells(PE_OPS_SECTION_ROW, PE_HINT_COL).Value = "Avg Process Hours / Avg Ex are calculated on Load (read-only)."
+    StyleHintCell ws.Cells(PE_OPS_SECTION_ROW, PE_HINT_COL)
 
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = "Operation Name"
@@ -304,29 +354,28 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_NOTES))
     StyleEditableBlock opsInputRange
 
-    Set avgHeaderRange = ws.Range( _
+    Set avgRange = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_AVG_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX))
-    avgHeaderRange.Interior.Color = RGB(235, 238, 242)
-    avgHeaderRange.Borders.Color = RGB(190, 198, 210)
-    avgHeaderRange.Locked = True
+    avgRange.Interior.Color = RGB(235, 238, 242)
+    avgRange.Borders.Color = RGB(190, 198, 210)
 
     ' Status
     StyleFieldLabel ws, PE_STATUS_ROW, "Status"
     ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Font.Italic = True
     ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Font.Color = RGB(60, 60, 60)
-    ws.Cells(PE_STATUS_ROW, PE_HINT_COL).Value = "Load/Save messages appear here"
+    ws.Cells(PE_STATUS_ROW, PE_HINT_COL).Value = "Load/Save messages appear in column C"
     StyleHintCell ws.Cells(PE_STATUS_ROW, PE_HINT_COL)
 
     ws.Columns("A").ColumnWidth = 3
     ws.Columns("B").ColumnWidth = 14
-    ws.Columns("C").ColumnWidth = 16
-    ws.Columns("D").ColumnWidth = 14
+    ws.Columns("C").ColumnWidth = 18
+    ws.Columns("D").ColumnWidth = 12
     ws.Columns("E").ColumnWidth = 10
     ws.Columns("F").ColumnWidth = 18
     ws.Columns("G").ColumnWidth = 16
     ws.Columns("H").ColumnWidth = 10
-    ws.Columns("I").ColumnWidth = 42
+    ws.Columns("I").ColumnWidth = 48
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
@@ -356,16 +405,20 @@ Private Sub StyleInputCell(ByVal cell As Range, ByVal readOnlyLook As Boolean)
     End If
 End Sub
 
-Private Sub StyleSectionHeader(ByVal headerRange As Range)
-    headerRange.Merge
+Private Sub StyleSectionHeaderCell(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal captionText As String)
+    Dim headerRange As Range
+
+    Set headerRange = ws.Range(ws.Cells(rowIndex, PE_LABEL_COL), ws.Cells(rowIndex, 8))
+    headerRange.UnMerge
+    headerRange.Value = vbNullString
+    ws.Cells(rowIndex, PE_LABEL_COL).Value = captionText
     headerRange.Font.Bold = True
     headerRange.Font.Size = 11
     headerRange.Font.Color = RGB(255, 255, 255)
     headerRange.Interior.Color = RGB(47, 84, 150)
     headerRange.HorizontalAlignment = xlLeft
     headerRange.VerticalAlignment = xlCenter
-    headerRange.IndentLevel = 1
-    headerRange.RowHeight = 20
+    ws.Rows(rowIndex).RowHeight = 20
 End Sub
 
 Private Sub StyleTableHeaderRow(ByVal headerRange As Range)
@@ -392,12 +445,12 @@ Private Sub EnsurePartEditorButtons(ByVal ws As Worksheet)
     DeleteWorksheetButton ws, PE_BTN_SAVE_NAME
     DeleteWorksheetButton ws, PE_BTN_CLEAR_NAME
 
-    ' Place buttons to the right of the Part Number input on row 3.
-    Set anchor = ws.Cells(PE_INPUT_ROW, 6)
+    ' Place buttons on row 3 starting at column E (right of the part-number input).
+    Set anchor = ws.Cells(PE_BUTTON_ROW, 5)
     buttonTop = anchor.Top
-    buttonHeight = 24
-    buttonWidth = 90
-    gap = 8
+    buttonHeight = 22
+    buttonWidth = 85
+    gap = 6
 
     AddWorksheetButton ws, PE_BTN_LOAD_NAME, "Load Part", "LoadPartToEditor", _
         anchor.Left, buttonTop, buttonWidth, buttonHeight
@@ -420,15 +473,22 @@ Private Sub AddWorksheetButton( _
     Dim btn As Button
 
     Set btn = ws.Buttons.Add(leftPos, topPos, widthPos, heightPos)
+    On Error Resume Next
     btn.Name = buttonName
+    On Error GoTo 0
     btn.Caption = captionText
-    btn.OnAction = onActionName
+    btn.OnAction = "'" & ThisWorkbook.Name & "'!" & onActionName
     btn.Font.Bold = True
 End Sub
 
 Private Sub DeleteWorksheetButton(ByVal ws As Worksheet, ByVal buttonName As String)
+    Dim shp As Shape
+
     On Error Resume Next
     ws.Buttons(buttonName).Delete
+    For Each shp In ws.Shapes
+        If StrComp(shp.Name, buttonName, vbTextCompare) = 0 Then shp.Delete
+    Next shp
     On Error GoTo 0
 End Sub
 
@@ -448,8 +508,6 @@ Private Sub FormatDashConditionTextColumn()
 End Sub
 
 Private Function FindWorksheetByName(ByVal sheetName As String) As Worksheet
-    Dim ws As Worksheet
-
     On Error Resume Next
     Set FindWorksheetByName = ThisWorkbook.Worksheets(sheetName)
     On Error GoTo 0

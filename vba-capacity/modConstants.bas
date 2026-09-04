@@ -67,10 +67,10 @@ Public Const COL_AVG_90_DAY_EX As String = "Avg 90 Day Ex"
 Public Const COL_AVG_PROCESS_HOURS As String = "Avg Process Hours"
 Public Const COL_AVG_EX As String = "Avg Ex"
 
-' PartEditor sheet layout (column B = labels, column C = values, column D = hints for master fields).
+' PartEditor sheet layout (B = labels, C = values, I = hints).
 Public Const PE_LABEL_COL As Long = 2
 Public Const PE_VALUE_COL As Long = 3
-Public Const PE_HINT_COL As Long = 4
+Public Const PE_HINT_COL As Long = 9
 Public Const PE_INPUT_ROW As Long = 3
 Public Const PE_BASE_PART_ROW As Long = 4
 Public Const PE_MASTER_HEADER_ROW As Long = 5
@@ -78,10 +78,13 @@ Public Const PE_ROW_FACTORY As Long = 6
 Public Const PE_ROW_ACTIVE As Long = 7
 Public Const PE_ROW_STATUS_DATE As Long = 8
 Public Const PE_ROW_NOTES As Long = 9
+Public Const PE_BUTTON_ROW As Long = 3
+Public Const PE_DASH_SECTION_ROW As Long = 11
 Public Const PE_DASH_HEADER_ROW As Long = 12
 Public Const PE_DASH_COL_START As Long = 3
 Public Const PE_DASH_DATA_START_ROW As Long = 14
 Public Const PE_DASH_MAX_ROWS As Long = 20
+Public Const PE_OPS_SECTION_ROW As Long = 35
 Public Const PE_OPS_HEADER_ROW As Long = 36
 Public Const PE_OPS_COL_START As Long = 3
 Public Const PE_OPS_DATA_START_ROW As Long = 38

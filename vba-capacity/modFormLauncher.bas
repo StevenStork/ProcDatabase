@@ -77,6 +77,10 @@ Public Sub RefreshAllLinkedData()
     modLinkedData.RefreshAllLinkedData
 End Sub
 
+Public Sub FormatPartEditorLayout()
+    modBootstrap.FormatPartEditorLayout
+End Sub
+
 Public Sub ShowPartOperationsAdmin()
     frmPartOperationsAdmin.Show
 End Sub
