@@ -322,57 +322,48 @@ Private Sub FormatPartEditorSheet()
     ws.Activate
     On Error GoTo 0
 
-    ' Title and guidance
+    ClearLegacyPartEditorLayout ws
+
+    ' Title
     ws.Range("A1").Value = "Part Number Editor"
     ws.Range("A1").Font.Bold = True
     ws.Range("A1").Font.Size = 16
     ws.Range("A1").Font.Color = RGB(32, 56, 100)
-
-    ws.Range("A2").Value = "Enter a part or assembly number in C3, click Load Part, edit fields, then click Save Part."
-    ws.Range("A2").Font.Color = RGB(80, 80, 80)
-    ws.Range("A2").WrapText = True
-    ws.Rows("2").RowHeight = 28
+    ws.Range("A2").ClearContents
 
     ' Identity
     StyleFieldLabel ws, PE_INPUT_ROW, "Part Number"
     StyleInputCell ws.Cells(PE_INPUT_ROW, PE_VALUE_COL), False
-    ws.Cells(PE_INPUT_ROW, PE_HINT_COL).Value = "Base part or full assembly (e.g. 8545784-01 or 8545784A01)"
-    StyleHintCell ws.Cells(PE_INPUT_ROW, PE_HINT_COL)
 
     StyleFieldLabel ws, PE_BASE_PART_ROW, "Base Part"
     StyleInputCell ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL), True
-    ws.Cells(PE_BASE_PART_ROW, PE_HINT_COL).Value = "Filled by Load Part (read-only)"
-    StyleHintCell ws.Cells(PE_BASE_PART_ROW, PE_HINT_COL)
 
-    ' Master section (no Merge — safer with leftover formatting/tables)
-    StyleSectionHeaderCell ws, PE_MASTER_HEADER_ROW, "Master Record"
-    ws.Cells(PE_MASTER_HEADER_ROW, PE_HINT_COL).Value = "Required factory; optional date and notes"
-    StyleHintCell ws.Cells(PE_MASTER_HEADER_ROW, PE_HINT_COL)
+    ' Master section (left)
+    StyleSectionHeaderRange ws, PE_MASTER_HEADER_ROW, PE_LABEL_COL, PE_STATUS_VALUE_COL, "Master Record"
 
     StyleFieldLabel ws, PE_ROW_FACTORY, "Factory"
     StyleInputCell ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), False
-    ws.Cells(PE_ROW_FACTORY, PE_HINT_COL).Value = "FactoryCode from Factories sheet (required)"
-    StyleHintCell ws.Cells(PE_ROW_FACTORY, PE_HINT_COL)
 
     StyleFieldLabel ws, PE_ROW_ACTIVE, "Active"
     StyleInputCell ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL), False
-    ws.Cells(PE_ROW_ACTIVE, PE_HINT_COL).Value = "TRUE / FALSE (or Yes / No)"
-    StyleHintCell ws.Cells(PE_ROW_ACTIVE, PE_HINT_COL)
 
     StyleFieldLabel ws, PE_ROW_STATUS_DATE, "Status Date"
     StyleInputCell ws.Cells(PE_ROW_STATUS_DATE, PE_VALUE_COL), False
-    ws.Cells(PE_ROW_STATUS_DATE, PE_HINT_COL).Value = "Optional date (yyyy-mm-dd)"
-    StyleHintCell ws.Cells(PE_ROW_STATUS_DATE, PE_HINT_COL)
 
     StyleFieldLabel ws, PE_ROW_NOTES, "Notes"
     StyleInputCell ws.Cells(PE_ROW_NOTES, PE_VALUE_COL), False
-    ws.Cells(PE_ROW_NOTES, PE_HINT_COL).Value = "Optional free-text notes"
-    StyleHintCell ws.Cells(PE_ROW_NOTES, PE_HINT_COL)
 
-    ' Dash conditions
-    StyleSectionHeaderCell ws, PE_DASH_SECTION_ROW, "Dash Conditions"
-    ws.Cells(PE_DASH_SECTION_ROW, PE_HINT_COL).Value = "Edit rows below, then Save Part. Separator is usually - or a letter."
-    StyleHintCell ws.Cells(PE_DASH_SECTION_ROW, PE_HINT_COL)
+    ' Status under Master Record (F6 label, G6 value)
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Value = "Status"
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Font.Bold = True
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Font.Color = RGB(40, 50, 65)
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).HorizontalAlignment = xlRight
+    StyleInputCell ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL), True
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL).Font.Italic = True
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL).Font.Color = RGB(60, 60, 60)
+
+    ' Dash conditions (right side starting at J5)
+    StyleSectionHeaderRange ws, PE_DASH_SECTION_ROW, PE_COL_DASH, PE_COL_DASH_NOTES, "Dash Conditions"
 
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH).Value = "Dash Condition"
     ws.Cells(PE_DASH_HEADER_ROW, PE_COL_SEPARATOR).Value = "Separator"
@@ -388,10 +379,8 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
 
-    ' Operations
-    StyleSectionHeaderCell ws, PE_OPS_SECTION_ROW, "Operations"
-    ws.Cells(PE_OPS_SECTION_ROW, PE_HINT_COL).Value = "Avg Process Hours / Avg Ex are calculated on Load (read-only)."
-    StyleHintCell ws.Cells(PE_OPS_SECTION_ROW, PE_HINT_COL)
+    ' Operations (where dash conditions used to be)
+    StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_LABEL_COL, PE_COL_AVG_EX, "Operations"
 
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = "Operation Name"
@@ -412,25 +401,35 @@ Private Sub FormatPartEditorSheet()
     avgRange.Interior.Color = RGB(235, 238, 242)
     avgRange.Borders.Color = RGB(190, 198, 210)
 
-    ' Status
-    StyleFieldLabel ws, PE_STATUS_ROW, "Status"
-    ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Font.Italic = True
-    ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Font.Color = RGB(60, 60, 60)
-    ws.Cells(PE_STATUS_ROW, PE_HINT_COL).Value = "Load/Save messages appear in column C"
-    StyleHintCell ws.Cells(PE_STATUS_ROW, PE_HINT_COL)
-
     ws.Columns("A").ColumnWidth = 3
     ws.Columns("B").ColumnWidth = 14
     ws.Columns("C").ColumnWidth = 18
-    ws.Columns("D").ColumnWidth = 12
+    ws.Columns("D").ColumnWidth = 14
     ws.Columns("E").ColumnWidth = 10
-    ws.Columns("F").ColumnWidth = 18
-    ws.Columns("G").ColumnWidth = 16
-    ws.Columns("H").ColumnWidth = 10
-    ws.Columns("I").ColumnWidth = 48
+    ws.Columns("F").ColumnWidth = 10
+    ws.Columns("G").ColumnWidth = 28
+    ws.Columns("H").ColumnWidth = 12
+    ws.Columns("I").ColumnWidth = 3
+    ws.Columns("J").ColumnWidth = 14
+    ws.Columns("K").ColumnWidth = 10
+    ws.Columns("L").ColumnWidth = 8
+    ws.Columns("M").ColumnWidth = 18
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
+End Sub
+
+Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
+    ' Clear prior instruction/status/dash/ops areas from older layouts.
+    ws.Range("A2").ClearContents
+    ws.Range("I3:I70").ClearContents
+    ws.Range("B11:H70").ClearContents
+    ws.Range("B11:H70").Interior.ColorIndex = xlNone
+    ws.Range("B11:H70").Borders.LineStyle = xlNone
+    ws.Range("J5:M30").ClearContents
+    ws.Range("J5:M30").Interior.ColorIndex = xlNone
+    ws.Range("J5:M30").Borders.LineStyle = xlNone
+    ws.Range("F6:G6").ClearContents
 End Sub
 
 Private Sub StyleFieldLabel(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal captionText As String)
@@ -442,12 +441,6 @@ Private Sub StyleFieldLabel(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal
     End With
 End Sub
 
-Private Sub StyleHintCell(ByVal cell As Range)
-    cell.Font.Color = RGB(110, 110, 110)
-    cell.Font.Italic = True
-    cell.Font.Size = 9
-End Sub
-
 Private Sub StyleInputCell(ByVal cell As Range, ByVal readOnlyLook As Boolean)
     cell.Borders.Color = RGB(160, 170, 185)
     If readOnlyLook Then
@@ -457,11 +450,17 @@ Private Sub StyleInputCell(ByVal cell As Range, ByVal readOnlyLook As Boolean)
     End If
 End Sub
 
-Private Sub StyleSectionHeaderCell(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal captionText As String)
+Private Sub StyleSectionHeaderRange( _
+    ByVal ws As Worksheet, _
+    ByVal rowIndex As Long, _
+    ByVal startCol As Long, _
+    ByVal endCol As Long, _
+    ByVal captionText As String)
+
     Dim headerRange As Range
     Dim cell As Range
 
-    Set headerRange = ws.Range(ws.Cells(rowIndex, PE_LABEL_COL), ws.Cells(rowIndex, 8))
+    Set headerRange = ws.Range(ws.Cells(rowIndex, startCol), ws.Cells(rowIndex, endCol))
     On Error Resume Next
     headerRange.UnMerge
     On Error GoTo 0
@@ -476,7 +475,7 @@ Private Sub StyleSectionHeaderCell(ByVal ws As Worksheet, ByVal rowIndex As Long
         cell.VerticalAlignment = xlCenter
     Next cell
 
-    ws.Cells(rowIndex, PE_LABEL_COL).Value = captionText
+    ws.Cells(rowIndex, startCol).Value = captionText
     ws.Rows(rowIndex).RowHeight = 20
 End Sub
 

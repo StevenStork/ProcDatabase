@@ -587,7 +587,7 @@ Private Function NormalizeOperSeqKey(ByVal operSeq As String) As String
 End Function
 
 Private Sub SetEditorStatus(ByVal ws As Worksheet, ByVal statusText As String)
-    ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Value = statusText
+    ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL).Value = statusText
 End Sub
 
 Private Sub EnsureCacheSheetExists()
