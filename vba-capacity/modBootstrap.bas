@@ -55,7 +55,8 @@ Public Sub BootstrapCapacityTables()
 
     currentStep = "EnsureTable Parts/Dash/Operations"
     EnsureTable PARTS_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
-        COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_STATUS_DATE, COL_NOTES)
+        COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_NOTES)
+    RemoveTableColumnIfExists FindTable(BASE_PARTS_TABLE_NAME), "StatusDate"
 
     EnsureTable PART_DASH_CONDITIONS_SHEET_NAME, PART_DASH_CONDITIONS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_SEPARATOR, COL_ACTIVE, COL_NOTES)
@@ -117,6 +118,7 @@ Public Sub FormatPartEditorLayout()
     EnsureSheet PART_EDITOR_SHEET_NAME, "Part Number Editor"
     ClearPartEditorListObjects
     FormatPartEditorSheet
+    RemoveTableColumnIfExists FindTable(BASE_PARTS_TABLE_NAME), "StatusDate"
     OptimizeExcel False
     MsgBox "PartEditor layout and buttons updated.", vbInformation
     Exit Sub
@@ -311,6 +313,8 @@ Private Sub FormatPartEditorSheet()
     Dim avgRange As Range
     Dim dashInputRange As Range
     Dim opsInputRange As Range
+    Dim notesLabelRange As Range
+    Dim notesValueRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then
@@ -347,11 +351,36 @@ Private Sub FormatPartEditorSheet()
     StyleFieldLabel ws, PE_ROW_ACTIVE, "Active"
     StyleInputCell ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL), False
 
-    StyleFieldLabel ws, PE_ROW_STATUS_DATE, "Status Date"
-    StyleInputCell ws.Cells(PE_ROW_STATUS_DATE, PE_VALUE_COL), False
+    ' Notes: label spans B8:B9; value is merged C8:G9 top-left
+    Set notesLabelRange = ws.Range( _
+        ws.Cells(PE_NOTES_LABEL_ROW, PE_LABEL_COL), _
+        ws.Cells(PE_NOTES_LABEL_ROW_END, PE_LABEL_COL))
+    On Error Resume Next
+    notesLabelRange.Merge
+    On Error GoTo 0
+    With notesLabelRange
+        .Value = "Notes"
+        .Font.Bold = True
+        .Font.Color = RGB(40, 50, 65)
+        .HorizontalAlignment = xlRight
+        .VerticalAlignment = xlTop
+    End With
 
-    StyleFieldLabel ws, PE_ROW_NOTES, "Notes"
-    StyleInputCell ws.Cells(PE_ROW_NOTES, PE_VALUE_COL), False
+    Set notesValueRange = ws.Range( _
+        ws.Cells(PE_NOTES_VALUE_ROW, PE_NOTES_VALUE_COL_START), _
+        ws.Cells(PE_NOTES_VALUE_ROW_END, PE_NOTES_VALUE_COL_END))
+    On Error Resume Next
+    notesValueRange.UnMerge
+    notesValueRange.Merge
+    On Error GoTo 0
+    StyleInputCell notesValueRange, False
+    With notesValueRange
+        .HorizontalAlignment = xlLeft
+        .VerticalAlignment = xlTop
+        .WrapText = True
+    End With
+    ws.Rows(PE_NOTES_VALUE_ROW).RowHeight = 18
+    ws.Rows(PE_NOTES_VALUE_ROW_END).RowHeight = 18
 
     ' Status under Master Record (F6 label, G6 value)
     ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Value = "Status"
@@ -379,8 +408,16 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
 
-    ' Operations (where dash conditions used to be)
-    StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_LABEL_COL, PE_COL_AVG_EX, "Operations"
+    ' Average column toggles (row 17, above Operations columns F/G)
+    ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_HOURS).Value = True
+    ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_EX).Value = True
+    StyleInputCell ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_HOURS), False
+    StyleInputCell ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_EX), False
+
+    ws.Rows(PE_AVG_TOGGLE_ROW).RowHeight = 20
+
+    ' Operations (row 18+, columns start at B to match section title)
+    StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_OPS_COL_START, PE_COL_AVG_EX, "Operations"
 
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = "Operation Name"
@@ -404,11 +441,11 @@ Private Sub FormatPartEditorSheet()
     ws.Columns("A").ColumnWidth = 3
     ws.Columns("B").ColumnWidth = 14
     ws.Columns("C").ColumnWidth = 18
-    ws.Columns("D").ColumnWidth = 14
-    ws.Columns("E").ColumnWidth = 10
-    ws.Columns("F").ColumnWidth = 10
-    ws.Columns("G").ColumnWidth = 28
-    ws.Columns("H").ColumnWidth = 12
+    ws.Columns("D").ColumnWidth = 10
+    ws.Columns("E").ColumnWidth = 14
+    ws.Columns("F").ColumnWidth = 16
+    ws.Columns("G").ColumnWidth = 12
+    ws.Columns("H").ColumnWidth = 3
     ws.Columns("I").ColumnWidth = 3
     ws.Columns("J").ColumnWidth = 14
     ws.Columns("K").ColumnWidth = 10
@@ -417,13 +454,23 @@ Private Sub FormatPartEditorSheet()
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
+    EnsureAverageToggleCheckboxes ws
 End Sub
 
 Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
-    ' Clear prior instruction/status/dash/ops areas from older layouts.
+    ' Clear prior instruction/status/dash/ops/notes areas from older layouts.
+    On Error Resume Next
+    ws.Range("B8:B9").UnMerge
+    ws.Range("C8:G9").UnMerge
+    ws.Range("C8:C9").UnMerge
+    On Error GoTo 0
+
     ws.Range("A2").ClearContents
     ws.Range("I3:I70").ClearContents
     ws.Range("A70").ClearContents
+    ws.Range("B8:G9").ClearContents
+    ws.Range("B8:G9").Interior.ColorIndex = xlNone
+    ws.Range("B8:G9").Borders.LineStyle = xlNone
     ws.Range("B11:H70").ClearContents
     ws.Range("B11:H70").Interior.ColorIndex = xlNone
     ws.Range("B11:H70").Borders.LineStyle = xlNone
@@ -431,6 +478,64 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ws.Range("J5:M30").Interior.ColorIndex = xlNone
     ws.Range("J5:M30").Borders.LineStyle = xlNone
     ws.Range("F6:G6").ClearContents
+    ws.Range("B17:G17").ClearContents
+End Sub
+
+Private Sub EnsureAverageToggleCheckboxes(ByVal ws As Worksheet)
+    Dim hoursCell As Range
+    Dim exCell As Range
+
+    Set hoursCell = ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_HOURS)
+    Set exCell = ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_EX)
+
+    DeleteWorksheetCheckbox ws, PE_CHK_AVG_HOURS_NAME
+    DeleteWorksheetCheckbox ws, PE_CHK_AVG_EX_NAME
+
+    AddWorksheetCheckbox ws, PE_CHK_AVG_HOURS_NAME, "Avg Process Hours", _
+        hoursCell, hoursCell.Left, hoursCell.Top + 1, IIf(hoursCell.Width < 110, 110, hoursCell.Width), 16
+    AddWorksheetCheckbox ws, PE_CHK_AVG_EX_NAME, "Avg Ex", _
+        exCell, exCell.Left, exCell.Top + 1, IIf(exCell.Width < 70, 70, exCell.Width), 16
+
+    hoursCell.Font.Color = hoursCell.Interior.Color
+    exCell.Font.Color = exCell.Interior.Color
+End Sub
+
+Private Sub AddWorksheetCheckbox( _
+    ByVal ws As Worksheet, _
+    ByVal checkboxName As String, _
+    ByVal captionText As String, _
+    ByVal linkedCell As Range, _
+    ByVal leftPos As Double, _
+    ByVal topPos As Double, _
+    ByVal widthPos As Double, _
+    ByVal heightPos As Double)
+
+    Dim cb As CheckBox
+
+    Set cb = ws.CheckBoxes.Add(leftPos, topPos, widthPos, heightPos)
+    cb.Name = checkboxName
+    cb.Caption = captionText
+    cb.LinkedCell = linkedCell.Address(External:=False)
+    cb.Value = xlOn
+    cb.OnAction = "RefreshPartEditorAverages"
+End Sub
+
+Private Sub DeleteWorksheetCheckbox(ByVal ws As Worksheet, ByVal checkboxName As String)
+    On Error Resume Next
+    ws.CheckBoxes(checkboxName).Delete
+    On Error GoTo 0
+End Sub
+
+Private Sub RemoveTableColumnIfExists(ByVal tbl As ListObject, ByVal columnName As String)
+    Dim colIndex As Long
+
+    If tbl Is Nothing Then Exit Sub
+    If Not TableHasColumn(tbl, columnName) Then Exit Sub
+
+    colIndex = TableColumnIndex(tbl, columnName)
+    If colIndex > 0 Then
+        tbl.ListColumns(colIndex).Delete
+    End If
 End Sub
 
 Private Sub StyleFieldLabel(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal captionText As String)

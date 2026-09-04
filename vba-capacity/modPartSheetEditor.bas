@@ -81,8 +81,7 @@ Public Sub SavePartFromEditor()
     fieldValues(COL_BASE_PART_CODE) = basePartCode
     fieldValues(COL_FACTORY_CODE) = factoryCode
     fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(ReadEditorActiveFlag(ws))
-    fieldValues(COL_STATUS_DATE) = ParseEditorStatusDate(ws.Cells(PE_ROW_STATUS_DATE, PE_VALUE_COL).Value2)
-    fieldValues(COL_NOTES) = Trim$(CStr(ws.Cells(PE_ROW_NOTES, PE_VALUE_COL).Value2))
+    fieldValues(COL_NOTES) = ReadEditorNotes(ws)
 
     UpsertRow FindTable(BASE_PARTS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode, fieldValues
     SyncDashAssignments basePartCode, ws
@@ -155,15 +154,13 @@ Private Sub LoadMasterFields(ByVal ws As Worksheet, ByVal basePartCode As String
     If listRowIndex = 0 Then
         ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).ClearContents
         ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
-        ws.Cells(PE_ROW_STATUS_DATE, PE_VALUE_COL).ClearContents
-        ws.Cells(PE_ROW_NOTES, PE_VALUE_COL).ClearContents
+        ClearEditorNotes ws
         Exit Sub
     End If
 
     ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
-    ws.Cells(PE_ROW_STATUS_DATE, PE_VALUE_COL).Value = FormatEditorStatusDate(GetCellValueByListRow(tbl, listRowIndex, COL_STATUS_DATE))
-    ws.Cells(PE_ROW_NOTES, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
+    WriteEditorNotes ws, CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
 End Sub
 
 Private Sub LoadDashRows(ByVal ws As Worksheet, ByVal basePartCode As String)
@@ -213,6 +210,8 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     Dim sheetRow As Long
     Dim loadedCount As Long
     Dim operSeq As String
+    Dim showAvgHours As Boolean
+    Dim showAvgEx As Boolean
     Dim avgHours As Variant
     Dim avgEx As Variant
 
@@ -221,6 +220,9 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
 
     operSeqValues = tbl.ListColumns(COL_OPER_SEQ).DataBodyRange.Value2
     If Not IsArray(operSeqValues) Then Exit Sub
+
+    showAvgHours = IsActiveFlag(ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_HOURS).Value2)
+    showAvgEx = IsActiveFlag(ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_EX).Value2)
 
     rowCount = UBound(operSeqValues, 1)
     sheetRow = PE_OPS_DATA_START_ROW
@@ -236,16 +238,73 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
         ws.Cells(sheetRow, PE_COL_OPER_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
         ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
 
-        avgHours = AvgProcessHoursByBasePartAndOp(basePartCode, operSeq)
-        avgEx = AvgExByBasePartAndOp(basePartCode, operSeq)
-        ws.Cells(sheetRow, PE_COL_AVG_HOURS).Value = FormatAverageDisplay(avgHours)
-        ws.Cells(sheetRow, PE_COL_AVG_EX).Value = FormatAverageDisplay(avgEx)
+        If showAvgHours Then
+            avgHours = AvgProcessHoursByBasePartAndOp(basePartCode, operSeq)
+            ws.Cells(sheetRow, PE_COL_AVG_HOURS).Value = FormatAverageDisplay(avgHours)
+        Else
+            ws.Cells(sheetRow, PE_COL_AVG_HOURS).ClearContents
+        End If
+
+        If showAvgEx Then
+            avgEx = AvgExByBasePartAndOp(basePartCode, operSeq)
+            ws.Cells(sheetRow, PE_COL_AVG_EX).Value = FormatAverageDisplay(avgEx)
+        Else
+            ws.Cells(sheetRow, PE_COL_AVG_EX).ClearContents
+        End If
 
         sheetRow = sheetRow + 1
         loadedCount = loadedCount + 1
 
 ContinueOp:
     Next rowIndex
+End Sub
+
+' Recompute Avg Process Hours / Avg Ex columns based on the row-17 toggles.
+Public Sub RefreshPartEditorAverages()
+    Dim ws As Worksheet
+    Dim basePartCode As String
+    Dim sheetRow As Long
+    Dim lastRow As Long
+    Dim operSeq As String
+    Dim showAvgHours As Boolean
+    Dim showAvgEx As Boolean
+    Dim avgHours As Variant
+    Dim avgEx As Variant
+
+    Set ws = GetPartEditorWorksheet()
+    If ws Is Nothing Then Exit Sub
+
+    basePartCode = NormalizeCode(CStr(ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).Value2))
+    If Len(basePartCode) = 0 Then Exit Sub
+
+    showAvgHours = IsActiveFlag(ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_HOURS).Value2)
+    showAvgEx = IsActiveFlag(ws.Cells(PE_AVG_TOGGLE_ROW, PE_COL_AVG_EX).Value2)
+
+    lastRow = PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+    For sheetRow = PE_OPS_DATA_START_ROW To lastRow
+        operSeq = Trim$(CStr(ws.Cells(sheetRow, PE_COL_OPER_SEQ).Value2))
+        If Len(operSeq) = 0 Then
+            ws.Cells(sheetRow, PE_COL_AVG_HOURS).ClearContents
+            ws.Cells(sheetRow, PE_COL_AVG_EX).ClearContents
+            GoTo ContinueAvgRow
+        End If
+
+        If showAvgHours Then
+            avgHours = AvgProcessHoursByBasePartAndOp(basePartCode, operSeq)
+            ws.Cells(sheetRow, PE_COL_AVG_HOURS).Value = FormatAverageDisplay(avgHours)
+        Else
+            ws.Cells(sheetRow, PE_COL_AVG_HOURS).ClearContents
+        End If
+
+        If showAvgEx Then
+            avgEx = AvgExByBasePartAndOp(basePartCode, operSeq)
+            ws.Cells(sheetRow, PE_COL_AVG_EX).Value = FormatAverageDisplay(avgEx)
+        Else
+            ws.Cells(sheetRow, PE_COL_AVG_EX).ClearContents
+        End If
+
+ContinueAvgRow:
+    Next sheetRow
 End Sub
 
 Private Sub SyncDashAssignments(ByVal basePartCode As String, ByVal ws As Worksheet)
@@ -491,13 +550,33 @@ End Function
 
 Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
     ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).ClearContents
-    ws.Range(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), ws.Cells(PE_ROW_NOTES, PE_VALUE_COL)).ClearContents
+    ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).ClearContents
+    ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).ClearContents
+    ClearEditorNotes ws
     ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_NOTES)).ClearContents
     ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
     ws.Range(ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX)).ClearContents
+End Sub
+
+Private Function EditorNotesRange(ByVal ws As Worksheet) As Range
+    Set EditorNotesRange = ws.Range( _
+        ws.Cells(PE_NOTES_VALUE_ROW, PE_NOTES_VALUE_COL_START), _
+        ws.Cells(PE_NOTES_VALUE_ROW_END, PE_NOTES_VALUE_COL_END))
+End Function
+
+Private Function ReadEditorNotes(ByVal ws As Worksheet) As String
+    ReadEditorNotes = Trim$(CStr(EditorNotesRange(ws).Cells(1, 1).Value2))
+End Function
+
+Private Sub WriteEditorNotes(ByVal ws As Worksheet, ByVal notesText As String)
+    EditorNotesRange(ws).Cells(1, 1).Value = notesText
+End Sub
+
+Private Sub ClearEditorNotes(ByVal ws As Worksheet)
+    EditorNotesRange(ws).ClearContents
 End Sub
 
 Private Sub ApplyFactoryValidation(ByVal ws As Worksheet)
@@ -557,24 +636,6 @@ End Function
 
 Private Function ReadEditorActiveFlag(ByVal ws As Worksheet) As Boolean
     ReadEditorActiveFlag = IsActiveFlag(ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value2)
-End Function
-
-Private Function FormatEditorStatusDate(ByVal rawValue As Variant) As String
-    If IsDate(rawValue) Then
-        FormatEditorStatusDate = Format$(CDate(rawValue), "yyyy-mm-dd")
-    Else
-        FormatEditorStatusDate = Trim$(CStr(NzBlank(rawValue)))
-    End If
-End Function
-
-Private Function ParseEditorStatusDate(ByVal rawValue As Variant) As Variant
-    If IsEmpty(rawValue) Or Len(Trim$(CStr(rawValue))) = 0 Then
-        ParseEditorStatusDate = Empty
-    ElseIf IsDate(rawValue) Then
-        ParseEditorStatusDate = CDate(rawValue)
-    Else
-        ParseEditorStatusDate = Trim$(CStr(rawValue))
-    End If
 End Function
 
 Private Function NormalizeOperSeqKey(ByVal operSeq As String) As String

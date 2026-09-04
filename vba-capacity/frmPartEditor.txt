@@ -54,10 +54,8 @@ Private Sub BuildControls()
     AddComboBox Me, "cboFactory", EDIT_LEFT, 88, EDIT_WIDTH
 
     AddCheckBox Me, "chkActive", "Active", EDIT_LEFT, 120
-    AddLabel Me, "Status Date", EDIT_LEFT, 144, 110
-    AddTextBox Me, "txtStatusDate", EDIT_LEFT, 160, EDIT_WIDTH
-    AddLabel Me, "Notes", EDIT_LEFT, 184, 110
-    AddTextBox Me, "txtNotes", EDIT_LEFT, 200, EDIT_WIDTH, 14
+    AddLabel Me, "Notes", EDIT_LEFT, 148, 110
+    AddTextBox Me, "txtNotes", EDIT_LEFT, 164, EDIT_WIDTH, 36
 
     AddLabel Me, "Dash Conditions", EDIT_LEFT, DASH_TOP, 110
     AddListBox Me, "lstDash", EDIT_LEFT, DASH_TOP + 16, EDIT_WIDTH, DASH_LIST_HEIGHT
@@ -120,7 +118,6 @@ Private Sub LoadSelectedPart()
     GetControl(Me, "txtCode").Enabled = False
     SelectComboByCode GetControl(Me, "cboFactory"), CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
     GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
-    GetControl(Me, "txtStatusDate").Text = FormatStatusDate(GetCellValueByListRow(tbl, listRowIndex, COL_STATUS_DATE))
     GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
 
     LoadDashList codeValue
@@ -137,7 +134,6 @@ Private Sub ClearEditor()
     GetControl(Me, "txtCode").Text = vbNullString
     GetControl(Me, "cboFactory").ListIndex = -1
     GetControl(Me, "chkActive").Value = True
-    GetControl(Me, "txtStatusDate").Text = vbNullString
     GetControl(Me, "txtNotes").Text = vbNullString
     GetControl(Me, "txtDash").Text = vbNullString
     BindListBoxFromArray GetControl(Me, "lstDash"), Empty
@@ -170,7 +166,6 @@ Private Sub SaveCurrentPart()
     fieldValues(COL_BASE_PART_CODE) = codeValue
     fieldValues(COL_FACTORY_CODE) = factoryCode
     fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
-    fieldValues(COL_STATUS_DATE) = ParseStatusDate(GetControl(Me, "txtStatusDate").Text)
     fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
 
     On Error GoTo CleanUp
@@ -293,23 +288,5 @@ Private Function CurrentBasePartCode() As String
     CurrentBasePartCode = NormalizeCode(GetControl(Me, "txtCode").Text)
     If Len(CurrentBasePartCode) = 0 Then
         MsgBox "Save or select a base part first.", vbExclamation
-    End If
-End Function
-
-Private Function FormatStatusDate(ByVal rawValue As Variant) As String
-    If IsDate(rawValue) Then
-        FormatStatusDate = Format$(CDate(rawValue), "yyyy-mm-dd")
-    Else
-        FormatStatusDate = Trim$(CStr(Nz(rawValue)))
-    End If
-End Function
-
-Private Function ParseStatusDate(ByVal textValue As String) As Variant
-    If Len(Trim$(textValue)) = 0 Then
-        ParseStatusDate = Empty
-    ElseIf IsDate(textValue) Then
-        ParseStatusDate = CDate(textValue)
-    Else
-        ParseStatusDate = Trim$(textValue)
     End If
 End Function
