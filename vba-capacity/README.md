@@ -125,11 +125,13 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
-3. Run **`LoadPartToEditor`** — master fields, dash conditions, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex** populate inline per `OperSeq` from linked tables (when loaded).
-4. Edit cells directly (factory, active, status date, notes, dash rows, operation rows).
-5. Run **`SavePartFromEditor`** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
+3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex** populate inline per `OperSeq` from linked tables (when loaded).
+4. Edit cells directly (factory, active, status date, notes, dash rows, operation rows). Labels and hint text sit beside each field.
+5. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
+
+`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet.
 
 ### Average calculations (`modAverages`)
 

@@ -211,52 +211,225 @@ End Sub
 
 Private Sub FormatPartEditorSheet()
     Dim ws As Worksheet
+    Dim inputRange As Range
     Dim avgHeaderRange As Range
+    Dim dashInputRange As Range
+    Dim opsInputRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then Exit Sub
 
-    ws.Range("A2").Value = "Enter a base part or full assembly number, then run Load Part. Edit fields below and run Save Part."
+    ' Title and guidance
+    ws.Range("A1").Value = "Part Number Editor"
+    ws.Range("A1").Font.Bold = True
+    ws.Range("A1").Font.Size = 16
+    ws.Range("A1").Font.Color = RGB(32, 56, 100)
+
+    ws.Range("A2").Value = "Enter a part or assembly number below, click Load Part, edit the fields, then click Save Part."
+    ws.Range("A2").Font.Color = RGB(80, 80, 80)
     ws.Range("A2").WrapText = True
     ws.Rows("2").RowHeight = 28
 
-    ws.Cells(PE_INPUT_ROW, PE_LABEL_COL).Value = "Part Number"
-    ws.Cells(PE_BASE_PART_ROW, PE_LABEL_COL).Value = "Base Part"
-    ws.Cells(PE_ROW_FACTORY, PE_LABEL_COL).Value = "Factory"
-    ws.Cells(PE_ROW_ACTIVE, PE_LABEL_COL).Value = "Active"
-    ws.Cells(PE_ROW_STATUS_DATE, PE_LABEL_COL).Value = "Status Date"
-    ws.Cells(PE_ROW_NOTES, PE_LABEL_COL).Value = "Notes"
+    ' Load / identity
+    StyleFieldLabel ws, PE_INPUT_ROW, "Part Number"
+    StyleInputCell ws.Cells(PE_INPUT_ROW, PE_VALUE_COL), False
+    ws.Cells(PE_INPUT_ROW, PE_HINT_COL).Value = "Base part or full assembly (e.g. 8545784-01 or 8545784A01)"
+    StyleHintCell ws.Cells(PE_INPUT_ROW, PE_HINT_COL)
 
-    ws.Cells(PE_DASH_HEADER_ROW, PE_LABEL_COL).Value = "Dash Conditions"
-    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH).Value = COL_DASH_CONDITION
-    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_SEPARATOR).Value = COL_SEPARATOR
-    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_ACTIVE).Value = COL_ACTIVE
-    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES).Value = COL_NOTES
-    ws.Range(ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH), ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES)).Font.Bold = True
+    StyleFieldLabel ws, PE_BASE_PART_ROW, "Base Part"
+    StyleInputCell ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL), True
+    ws.Cells(PE_BASE_PART_ROW, PE_HINT_COL).Value = "Filled by Load Part (read-only)"
+    StyleHintCell ws.Cells(PE_BASE_PART_ROW, PE_HINT_COL)
 
-    ws.Cells(PE_OPS_HEADER_ROW, PE_LABEL_COL).Value = "Operations"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = COL_OPER_SEQ
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = COL_OPERATION_NAME
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = COL_ACTIVE
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = COL_NOTES
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_HOURS).Value = COL_AVG_PROCESS_HOURS
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = COL_AVG_EX
-    ws.Range(ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ), ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX)).Font.Bold = True
+    ' Master section
+    ws.Cells(PE_MASTER_HEADER_ROW, PE_LABEL_COL).Value = "Master Record"
+    StyleSectionHeader ws.Range(ws.Cells(PE_MASTER_HEADER_ROW, PE_LABEL_COL), ws.Cells(PE_MASTER_HEADER_ROW, 6))
 
-    Set avgHeaderRange = ws.Range(ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_AVG_HOURS), _
+    StyleFieldLabel ws, PE_ROW_FACTORY, "Factory"
+    StyleInputCell ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_FACTORY, PE_HINT_COL).Value = "FactoryCode from Factories sheet (required)"
+    StyleHintCell ws.Cells(PE_ROW_FACTORY, PE_HINT_COL)
+
+    StyleFieldLabel ws, PE_ROW_ACTIVE, "Active"
+    StyleInputCell ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_ACTIVE, PE_HINT_COL).Value = "TRUE / FALSE (or Yes / No)"
+    StyleHintCell ws.Cells(PE_ROW_ACTIVE, PE_HINT_COL)
+
+    StyleFieldLabel ws, PE_ROW_STATUS_DATE, "Status Date"
+    StyleInputCell ws.Cells(PE_ROW_STATUS_DATE, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_STATUS_DATE, PE_HINT_COL).Value = "Optional date (yyyy-mm-dd)"
+    StyleHintCell ws.Cells(PE_ROW_STATUS_DATE, PE_HINT_COL)
+
+    StyleFieldLabel ws, PE_ROW_NOTES, "Notes"
+    StyleInputCell ws.Cells(PE_ROW_NOTES, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_NOTES, PE_HINT_COL).Value = "Optional free-text notes"
+    StyleHintCell ws.Cells(PE_ROW_NOTES, PE_HINT_COL)
+
+    ' Dash conditions
+    ws.Cells(PE_DASH_HEADER_ROW - 1, PE_LABEL_COL).Value = "Dash Conditions"
+    StyleSectionHeader ws.Range(ws.Cells(PE_DASH_HEADER_ROW - 1, PE_LABEL_COL), ws.Cells(PE_DASH_HEADER_ROW - 1, 6))
+    ws.Cells(PE_DASH_HEADER_ROW - 1, 7).Value = "Add/edit rows below, then Save Part. Separator is usually - or a letter."
+    StyleHintCell ws.Cells(PE_DASH_HEADER_ROW - 1, 7)
+
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH).Value = "Dash Condition"
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_SEPARATOR).Value = "Separator"
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_ACTIVE).Value = "Active"
+    ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES).Value = "Notes"
+    StyleTableHeaderRow ws.Range(ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH), ws.Cells(PE_DASH_HEADER_ROW, PE_COL_DASH_NOTES))
+
+    Set dashInputRange = ws.Range( _
+        ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
+        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_NOTES))
+    StyleEditableBlock dashInputRange
+    ws.Range( _
+        ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
+        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
+
+    ' Operations
+    ws.Cells(PE_OPS_HEADER_ROW - 1, PE_LABEL_COL).Value = "Operations"
+    StyleSectionHeader ws.Range(ws.Cells(PE_OPS_HEADER_ROW - 1, PE_LABEL_COL), ws.Cells(PE_OPS_HEADER_ROW - 1, 6))
+    ws.Cells(PE_OPS_HEADER_ROW - 1, 7).Value = "Avg Process Hours / Avg Ex are calculated on Load (read-only)."
+    StyleHintCell ws.Cells(PE_OPS_HEADER_ROW - 1, 7)
+
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = "Operation Name"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = "Active"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = "Notes"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_HOURS).Value = "Avg Process Hours"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = "Avg Ex"
+    StyleTableHeaderRow ws.Range(ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ), ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX))
+
+    Set opsInputRange = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_NOTES))
+    StyleEditableBlock opsInputRange
+
+    Set avgHeaderRange = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_AVG_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX))
-    avgHeaderRange.Interior.Color = RGB(242, 242, 242)
+    avgHeaderRange.Interior.Color = RGB(235, 238, 242)
+    avgHeaderRange.Borders.Color = RGB(190, 198, 210)
     avgHeaderRange.Locked = True
 
-    ws.Columns("B").ColumnWidth = 16
-    ws.Columns("C").ColumnWidth = 14
-    ws.Columns("D").ColumnWidth = 12
-    ws.Columns("E").ColumnWidth = 8
+    ' Status
+    StyleFieldLabel ws, PE_STATUS_ROW, "Status"
+    ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Font.Italic = True
+    ws.Cells(PE_STATUS_ROW, PE_VALUE_COL).Font.Color = RGB(60, 60, 60)
+    ws.Cells(PE_STATUS_ROW, PE_HINT_COL).Value = "Load/Save messages appear here"
+    StyleHintCell ws.Cells(PE_STATUS_ROW, PE_HINT_COL)
+
+    ws.Columns("A").ColumnWidth = 3
+    ws.Columns("B").ColumnWidth = 14
+    ws.Columns("C").ColumnWidth = 16
+    ws.Columns("D").ColumnWidth = 14
+    ws.Columns("E").ColumnWidth = 10
     ws.Columns("F").ColumnWidth = 18
     ws.Columns("G").ColumnWidth = 16
     ws.Columns("H").ColumnWidth = 10
+    ws.Columns("I").ColumnWidth = 42
 
     FormatDashConditionTextColumn
+    EnsurePartEditorButtons ws
+End Sub
+
+Private Sub StyleFieldLabel(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal captionText As String)
+    With ws.Cells(rowIndex, PE_LABEL_COL)
+        .Value = captionText
+        .Font.Bold = True
+        .Font.Color = RGB(40, 50, 65)
+        .HorizontalAlignment = xlRight
+    End With
+End Sub
+
+Private Sub StyleHintCell(ByVal cell As Range)
+    cell.Font.Color = RGB(110, 110, 110)
+    cell.Font.Italic = True
+    cell.Font.Size = 9
+End Sub
+
+Private Sub StyleInputCell(ByVal cell As Range, ByVal readOnlyLook As Boolean)
+    cell.Borders.Color = RGB(160, 170, 185)
+    If readOnlyLook Then
+        cell.Interior.Color = RGB(235, 238, 242)
+    Else
+        cell.Interior.Color = RGB(255, 252, 245)
+    End If
+End Sub
+
+Private Sub StyleSectionHeader(ByVal headerRange As Range)
+    headerRange.Merge
+    headerRange.Font.Bold = True
+    headerRange.Font.Size = 11
+    headerRange.Font.Color = RGB(255, 255, 255)
+    headerRange.Interior.Color = RGB(47, 84, 150)
+    headerRange.HorizontalAlignment = xlLeft
+    headerRange.VerticalAlignment = xlCenter
+    headerRange.IndentLevel = 1
+    headerRange.RowHeight = 20
+End Sub
+
+Private Sub StyleTableHeaderRow(ByVal headerRange As Range)
+    headerRange.Font.Bold = True
+    headerRange.Font.Color = RGB(40, 50, 65)
+    headerRange.Interior.Color = RGB(210, 220, 232)
+    headerRange.Borders.Color = RGB(160, 170, 185)
+    headerRange.HorizontalAlignment = xlCenter
+End Sub
+
+Private Sub StyleEditableBlock(ByVal blockRange As Range)
+    blockRange.Interior.Color = RGB(255, 252, 245)
+    blockRange.Borders.Color = RGB(190, 198, 210)
+End Sub
+
+Private Sub EnsurePartEditorButtons(ByVal ws As Worksheet)
+    Dim anchor As Range
+    Dim buttonTop As Double
+    Dim buttonHeight As Double
+    Dim buttonWidth As Double
+    Dim gap As Double
+
+    DeleteWorksheetButton ws, PE_BTN_LOAD_NAME
+    DeleteWorksheetButton ws, PE_BTN_SAVE_NAME
+    DeleteWorksheetButton ws, PE_BTN_CLEAR_NAME
+
+    ' Place buttons to the right of the Part Number input on row 3.
+    Set anchor = ws.Cells(PE_INPUT_ROW, 6)
+    buttonTop = anchor.Top
+    buttonHeight = 24
+    buttonWidth = 90
+    gap = 8
+
+    AddWorksheetButton ws, PE_BTN_LOAD_NAME, "Load Part", "LoadPartToEditor", _
+        anchor.Left, buttonTop, buttonWidth, buttonHeight
+    AddWorksheetButton ws, PE_BTN_SAVE_NAME, "Save Part", "SavePartFromEditor", _
+        anchor.Left + buttonWidth + gap, buttonTop, buttonWidth, buttonHeight
+    AddWorksheetButton ws, PE_BTN_CLEAR_NAME, "Clear", "ClearPartEditor", _
+        anchor.Left + 2 * (buttonWidth + gap), buttonTop, buttonWidth, buttonHeight
+End Sub
+
+Private Sub AddWorksheetButton( _
+    ByVal ws As Worksheet, _
+    ByVal buttonName As String, _
+    ByVal captionText As String, _
+    ByVal onActionName As String, _
+    ByVal leftPos As Double, _
+    ByVal topPos As Double, _
+    ByVal widthPos As Double, _
+    ByVal heightPos As Double)
+
+    Dim btn As Button
+
+    Set btn = ws.Buttons.Add(leftPos, topPos, widthPos, heightPos)
+    btn.Name = buttonName
+    btn.Caption = captionText
+    btn.OnAction = onActionName
+    btn.Font.Bold = True
+End Sub
+
+Private Sub DeleteWorksheetButton(ByVal ws As Worksheet, ByVal buttonName As String)
+    On Error Resume Next
+    ws.Buttons(buttonName).Delete
+    On Error GoTo 0
 End Sub
 
 Private Sub FormatDashConditionTextColumn()
