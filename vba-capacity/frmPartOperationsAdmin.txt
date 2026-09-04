@@ -1,0 +1,184 @@
+' Paste into UserForm named frmPartOperationsAdmin.
+
+Option Explicit
+
+Private Const FORM_WIDTH As Single = 520
+Private Const FORM_HEIGHT As Single = 360
+Private Const FORM_MARGIN As Single = 12
+Private Const BTN_WIDTH As Single = 76
+Private Const BTN_TOP As Single = 310
+Private Const BTN_0 As Single = 12
+Private Const BTN_1 As Single = 96
+Private Const BTN_2 As Single = 180
+Private Const BTN_CLOSE As Single = 432
+Private Const EDIT_LEFT As Single = 250
+
+Private mHandlers As Collection
+Private mEditingOperSeq As String
+Private mPreselectedBasePart As String
+
+Public Sub PreselectBasePart(ByVal basePartCode As String)
+    mPreselectedBasePart = NormalizeCode(basePartCode)
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Part Operations"
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
+    Set mHandlers = CreateControlHandlers()
+    BuildControls
+    RefreshPartCombo
+    If Len(mPreselectedBasePart) > 0 Then
+        SelectComboByCode GetControl(Me, "cboPart"), mPreselectedBasePart
+        mPreselectedBasePart = vbNullString
+    End If
+    LoadOperations
+    ClearOperationEditor
+End Sub
+
+Private Sub BuildControls()
+    AddLabel Me, "Base Part", FORM_MARGIN, 8, 80
+    AddComboBox Me, "cboPart", FORM_MARGIN, 24, 220
+
+    AddLabel Me, "Operations", FORM_MARGIN, 56, 80
+    AddListBox Me, "lstOperations", FORM_MARGIN, 72, 220, 200
+
+    AddLabel Me, "Oper Seq", EDIT_LEFT, 72, 80
+    AddTextBox Me, "txtOperSeq", EDIT_LEFT, 88, 240
+    AddLabel Me, "Operation Name", EDIT_LEFT, 116, 90
+    AddTextBox Me, "txtOperName", EDIT_LEFT, 132, 240
+    AddCheckBox Me, "chkActive", "Active", EDIT_LEFT, 160
+    AddLabel Me, "Notes", EDIT_LEFT, 184, 80
+    AddTextBox Me, "txtNotes", EDIT_LEFT, 200, 240, 60
+
+    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+
+    WireControlEvent mHandlers, GetControl(Me, "cboPart"), Me, "PartChanged", "Change"
+    WireControlEvent mHandlers, GetControl(Me, "lstOperations"), Me, "OperationClick", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdNew"), Me, "NewRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdSave"), Me, "SaveRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdDelete"), Me, "DeleteRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
+End Sub
+
+Public Sub HandleFormEvent(ByVal eventName As String)
+    Select Case eventName
+        Case "PartChanged": LoadOperations: ClearOperationEditor
+        Case "OperationClick": LoadSelectedOperation
+        Case "NewRecord": ClearOperationEditor
+        Case "SaveRecord": SaveCurrentOperation
+        Case "DeleteRecord": DeleteCurrentOperation
+        Case "CloseForm": Unload Me
+    End Select
+End Sub
+
+Private Sub RefreshPartCombo()
+    BindComboBoxFromTable GetControl(Me, "cboPart"), FindTable(BASE_PARTS_TABLE_NAME), COL_BASE_PART_CODE, COL_BASE_PART_CODE, False
+End Sub
+
+Private Sub LoadOperations()
+    Dim basePartCode As String
+
+    basePartCode = SelectedComboCode(GetControl(Me, "cboPart"))
+    If Len(basePartCode) = 0 Then
+        BindListBoxFromArray GetControl(Me, "lstOperations"), Empty
+        Exit Sub
+    End If
+
+    BindListBoxFromArray GetControl(Me, "lstOperations"), _
+        ListPartAssignmentCodes(FindTable(PART_OPERATIONS_TABLE_NAME), basePartCode, COL_OPER_SEQ)
+End Sub
+
+Private Sub LoadSelectedOperation()
+    Dim tbl As ListObject
+    Dim basePartCode As String
+    Dim operSeq As String
+    Dim listRowIndex As Long
+
+    basePartCode = SelectedComboCode(GetControl(Me, "cboPart"))
+    operSeq = SelectedListCode(GetControl(Me, "lstOperations"))
+    If Len(basePartCode) = 0 Or Len(operSeq) = 0 Then Exit Sub
+
+    Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
+    listRowIndex = FindJunctionListRow(tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq)
+    If listRowIndex = 0 Then Exit Sub
+
+    mEditingOperSeq = operSeq
+    GetControl(Me, "txtOperSeq").Text = operSeq
+    GetControl(Me, "txtOperSeq").Enabled = False
+    GetControl(Me, "txtOperName").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_OPERATION_NAME)))
+    GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
+    GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
+End Sub
+
+Private Sub ClearOperationEditor()
+    mEditingOperSeq = vbNullString
+    GetControl(Me, "txtOperSeq").Enabled = True
+    GetControl(Me, "txtOperSeq").Text = vbNullString
+    GetControl(Me, "txtOperName").Text = vbNullString
+    GetControl(Me, "chkActive").Value = True
+    GetControl(Me, "txtNotes").Text = vbNullString
+    GetControl(Me, "lstOperations").ListIndex = -1
+End Sub
+
+Private Sub SaveCurrentOperation()
+    Dim tbl As ListObject
+    Dim fieldValues As Object
+    Dim basePartCode As String
+    Dim operSeq As String
+
+    basePartCode = SelectedComboCode(GetControl(Me, "cboPart"))
+    operSeq = NormalizeCode(GetControl(Me, "txtOperSeq").Text)
+    If Not ValidateRequiredCode(basePartCode, "Base Part") Then Exit Sub
+    If Not ValidateRequiredCode(operSeq, "Oper Seq") Then Exit Sub
+
+    Dim excludeRow As Long
+
+    Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
+    excludeRow = 0
+    If Len(mEditingOperSeq) > 0 Then
+        excludeRow = FindJunctionListRow(tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, mEditingOperSeq)
+    End If
+    If Not ValidateJunctionUnique(tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, excludeRow) Then Exit Sub
+
+    Set fieldValues = NewFieldValuesDictionary()
+    fieldValues(COL_BASE_PART_CODE) = basePartCode
+    fieldValues(COL_OPER_SEQ) = operSeq
+    fieldValues(COL_OPERATION_NAME) = Trim$(GetControl(Me, "txtOperName").Text)
+    fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
+    fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, fieldValues
+    mEditingOperSeq = operSeq
+    GetControl(Me, "txtOperSeq").Enabled = False
+    LoadOperations
+    SelectListItemByCode GetControl(Me, "lstOperations"), operSeq
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub DeleteCurrentOperation()
+    Dim tbl As ListObject
+    Dim basePartCode As String
+    Dim operSeq As String
+
+    basePartCode = SelectedComboCode(GetControl(Me, "cboPart"))
+    operSeq = NormalizeCode(GetControl(Me, "txtOperSeq").Text)
+    If Len(basePartCode) = 0 Or Len(operSeq) = 0 Then Exit Sub
+    If MsgBox("Delete operation '" & operSeq & "' for part '" & basePartCode & "'?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+
+    Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq
+    ClearOperationEditor
+    LoadOperations
+
+CleanUp:
+    OptimizeExcel False
+End Sub

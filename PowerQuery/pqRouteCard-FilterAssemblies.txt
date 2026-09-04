@@ -1,0 +1,35 @@
+' Add this step to tblRouteCard immediately after Source.
+' Filters rows where [ASSEMBLY NO] is in the ASSEMBLY NO list from tblRCCP.
+'
+' Also keep an @ffa = '...' parameter in Source SQL. RefreshRouteCard updates
+' @ffa only when FactoriesTbl active codes change (same as tblAssyStnd).
+'
+' Prerequisites:
+'   - tblRCCP is loaded to a sheet as a ListObject (hidden is fine) so
+'     Excel.CurrentWorkbook can read it.
+'   - RefreshRCCP before RefreshRouteCard (RefreshAllLinkedData does this).
+'   - Privacy: allow combining database + workbook sources for this file.
+'
+' Insert after Source:
+
+#"Filter Assemblies" =
+    let
+        RccpTable = Excel.CurrentWorkbook(){[Name = "tblRCCP"]}[Content],
+        AssemblyRows = Table.SelectRows(
+            RccpTable,
+            each [#"ASSEMBLY NO"] <> null
+                and Text.Trim(Text.From([#"ASSEMBLY NO"])) <> ""
+        ),
+        AssemblyNos = List.Distinct(AssemblyRows[#"ASSEMBLY NO"])
+    in
+    Table.SelectRows(
+        Source,
+        each List.Contains(AssemblyNos, [#"ASSEMBLY NO"])
+    ),
+
+' Notes:
+' - Column name must match exactly: ASSEMBLY NO (quoted in M as [#"ASSEMBLY NO"]).
+' - If your Source step uses a different intermediate name than Source, change
+'   the Table.SelectRows first argument to that step name.
+' - Subsequent steps should chain from #"Filter Assemblies" instead of Source.
+' - Admin macros: RefreshRouteCard, or RefreshAllLinkedData.

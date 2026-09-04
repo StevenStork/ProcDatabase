@@ -1,0 +1,23 @@
+' tblAssyStnd — @ffa parameter (same pattern as tblOperComps).
+'
+' Keep a Source SQL parameter like:
+'
+'   @ffa = 'EA, EB',
+'
+' RefreshAssyStnd (VBA):
+'   1. Builds the same active FactoryCode list used by tblRCCP / FactoriesTbl.
+'   2. Compares it to the current @ffa quoted value.
+'   3. Rewrites @ffa ONLY when the list changed.
+'   4. Always refreshes the query data.
+'
+' Assembly filtering is done in Power Query (not VBA) via #"Filter Assemblies":
+'   see pqAssyStnd-FilterAssemblies.txt
+'
+' Prerequisites:
+'   - FactoriesTbl has active FactoryCode rows.
+'   - Source SQL contains literal @ffa = '...' with single quotes.
+'   - tblAssyStnd may remain connection-only for the SQL load; assembly filter
+'     still needs tblRCCP as a workbook ListObject.
+'
+' Admin button macro: RefreshAssyStnd
+' Combined via: RefreshAllLinkedData
