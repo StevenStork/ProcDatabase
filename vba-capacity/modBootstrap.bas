@@ -9,11 +9,16 @@ Option Explicit
 
 Public Sub BootstrapCapacityTables()
     Dim formatError As String
+    Dim bootstrapError As String
+    Dim bootstrapErrorNumber As Long
+    Dim currentStep As String
 
     On Error GoTo FailBootstrap
 
+    currentStep = "OptimizeExcel True"
     OptimizeExcel True
 
+    currentStep = "EnsureSheet Admin/Factories/Equipment/ProcessTypes"
     EnsureSheet ADMIN_SHEET_NAME, "Factory Capacity Database"
     EnsureSheet FACTORIES_SHEET_NAME, "Factories"
     EnsureSheet EQUIPMENT_SHEET_NAME, "Equipment"
@@ -21,6 +26,7 @@ Public Sub BootstrapCapacityTables()
     EnsureSheet FACTORY_EQUIPMENT_SHEET_NAME, "Factory Equipment Assignments"
     EnsureSheet EQUIPMENT_PROCESSES_SHEET_NAME, "Equipment Process Capabilities"
 
+    currentStep = "EnsureTable capacity masters"
     EnsureTable FACTORIES_SHEET_NAME, FACTORIES_TABLE_NAME, Array( _
         COL_FACTORY_CODE, COL_FACTORY_NAME, COL_ACTIVE, COL_NOTES)
 
@@ -36,14 +42,18 @@ Public Sub BootstrapCapacityTables()
     EnsureTable EQUIPMENT_PROCESSES_SHEET_NAME, EQUIPMENT_PROCESSES_TABLE_NAME, Array( _
         COL_EQUIPMENT_CODE, COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES)
 
+    currentStep = "EnsureSheet Parts/PartEditor"
     EnsureSheet PARTS_SHEET_NAME, "Parts Index"
     EnsureSheet PART_EDITOR_SHEET_NAME, "Part Number Editor"
     EnsureSheet PART_DASH_CONDITIONS_SHEET_NAME, "Part Dash Conditions"
     EnsureSheet PART_OPERATIONS_SHEET_NAME, "Part Operations"
 
+    currentStep = "MigrateBasePartsTableToPartsSheet"
     MigrateBasePartsTableToPartsSheet
+    currentStep = "ClearPartEditorListObjects"
     ClearPartEditorListObjects
 
+    currentStep = "EnsureTable Parts/Dash/Operations"
     EnsureTable PARTS_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_STATUS_DATE, COL_NOTES)
 
@@ -53,20 +63,27 @@ Public Sub BootstrapCapacityTables()
     EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OPERATION_NAME, COL_ACTIVE, COL_NOTES)
 
+    currentStep = "EnsureCacheSheet"
     EnsureCacheSheet
+    currentStep = "CompactAllCapacityTables"
     CompactAllCapacityTables
 
+    currentStep = "FormatAdminSheet"
     FormatAdminSheet
+    currentStep = "FormatPartsSheet"
     FormatPartsSheet
 
+    currentStep = "FormatPartEditorSheet"
     On Error Resume Next
     FormatPartEditorSheet
     If Err.Number <> 0 Then
-        formatError = Err.Description
+        formatError = "Error " & CStr(Err.Number) & ": " & Err.Description
+        If Len(Trim$(Err.Description)) = 0 Then formatError = formatError & " (no description)"
         Err.Clear
     End If
     On Error GoTo FailBootstrap
 
+    currentStep = "OptimizeExcel False"
     OptimizeExcel False
 
     If Len(formatError) > 0 Then
@@ -76,12 +93,25 @@ Public Sub BootstrapCapacityTables()
     Exit Sub
 
 FailBootstrap:
+    bootstrapErrorNumber = Err.Number
+    bootstrapError = Err.Description
+    If Len(Trim$(bootstrapError)) = 0 Then
+        bootstrapError = "(no description)"
+    End If
+
+    On Error Resume Next
     OptimizeExcel False
-    MsgBox "BootstrapCapacityTables failed: " & Err.Description, vbExclamation
+    On Error GoTo 0
+
+    MsgBox "BootstrapCapacityTables failed at step:" & vbCrLf & currentStep & vbCrLf & vbCrLf & _
+        "Error " & CStr(bootstrapErrorNumber) & ": " & bootstrapError, vbExclamation
 End Sub
 
 ' Standalone entry point if bootstrap formatting needs a re-run.
 Public Sub FormatPartEditorLayout()
+    Dim formatErrorNumber As Long
+    Dim formatError As String
+
     On Error GoTo FailFormat
     OptimizeExcel True
     EnsureSheet PART_EDITOR_SHEET_NAME, "Part Number Editor"
@@ -92,8 +122,16 @@ Public Sub FormatPartEditorLayout()
     Exit Sub
 
 FailFormat:
+    formatErrorNumber = Err.Number
+    formatError = Err.Description
+    If Len(Trim$(formatError)) = 0 Then formatError = "(no description)"
+
+    On Error Resume Next
     OptimizeExcel False
-    MsgBox "FormatPartEditorLayout failed: " & Err.Description, vbExclamation
+    On Error GoTo 0
+
+    MsgBox "FormatPartEditorLayout failed:" & vbCrLf & _
+        "Error " & CStr(formatErrorNumber) & ": " & formatError, vbExclamation
 End Sub
 
 Private Sub EnsureSheet(ByVal sheetName As String, ByVal titleText As String)
@@ -247,14 +285,24 @@ End Sub
 
 Private Sub ClearPartEditorListObjects()
     Dim ws As Worksheet
-    Dim tbl As ListObject
+    Dim tableName As String
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then Exit Sub
 
     Do While ws.ListObjects.Count > 0
-        Set tbl = ws.ListObjects(1)
-        tbl.Unlist
+        tableName = ws.ListObjects(1).Name
+        On Error Resume Next
+        ws.ListObjects(1).Unlist
+        If Err.Number <> 0 Then
+            Err.Clear
+            ws.ListObjects(1).Delete
+        End If
+        On Error GoTo 0
+
+        If ws.ListObjects.Count > 0 Then
+            If StrComp(ws.ListObjects(1).Name, tableName, vbTextCompare) = 0 Then Exit Do
+        End If
     Loop
 End Sub
 
@@ -265,10 +313,14 @@ Private Sub FormatPartEditorSheet()
     Dim opsInputRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
-    If ws Is Nothing Then Exit Sub
+    If ws Is Nothing Then
+        Err.Raise vbObjectError + 540, "FormatPartEditorSheet", "PartEditor sheet was not found."
+    End If
 
+    On Error Resume Next
     ws.Unprotect
     ws.Activate
+    On Error GoTo 0
 
     ' Title and guidance
     ws.Range("A1").Value = "Part Number Editor"
@@ -407,17 +459,24 @@ End Sub
 
 Private Sub StyleSectionHeaderCell(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal captionText As String)
     Dim headerRange As Range
+    Dim cell As Range
 
     Set headerRange = ws.Range(ws.Cells(rowIndex, PE_LABEL_COL), ws.Cells(rowIndex, 8))
+    On Error Resume Next
     headerRange.UnMerge
-    headerRange.Value = vbNullString
+    On Error GoTo 0
+
+    For Each cell In headerRange.Cells
+        cell.Value = vbNullString
+        cell.Font.Bold = True
+        cell.Font.Size = 11
+        cell.Font.Color = RGB(255, 255, 255)
+        cell.Interior.Color = RGB(47, 84, 150)
+        cell.HorizontalAlignment = xlLeft
+        cell.VerticalAlignment = xlCenter
+    Next cell
+
     ws.Cells(rowIndex, PE_LABEL_COL).Value = captionText
-    headerRange.Font.Bold = True
-    headerRange.Font.Size = 11
-    headerRange.Font.Color = RGB(255, 255, 255)
-    headerRange.Interior.Color = RGB(47, 84, 150)
-    headerRange.HorizontalAlignment = xlLeft
-    headerRange.VerticalAlignment = xlCenter
     ws.Rows(rowIndex).RowHeight = 20
 End Sub
 
