@@ -187,7 +187,7 @@ Private Sub EnsureCacheSheet()
     End If
 
     ws.Visible = xlSheetVeryHidden
-    ws.Cells(CACHE_BASE_PART_CELL).Value = vbNullString
+    ws.Range(CACHE_BASE_PART_CELL).Value = vbNullString
 End Sub
 
 Private Sub EnsureTable(ByVal sheetName As String, ByVal tableName As String, ByVal headers As Variant)
