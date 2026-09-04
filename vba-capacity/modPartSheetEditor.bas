@@ -45,6 +45,7 @@ Public Sub LoadPartToEditor(Optional ByVal partInput As String = vbNullString)
 
     LoadMasterFields ws, basePartCode
     LoadDashRows ws, basePartCode
+    LoadRouteCardRows ws, basePartCode
     LoadOperationRows ws, basePartCode
     WriteEditorCache basePartCode
     ApplyFactoryValidation ws
@@ -80,8 +81,10 @@ Public Sub SavePartFromEditor()
 
     Set fieldValues = NewFieldValuesDictionary()
     fieldValues(COL_BASE_PART_CODE) = basePartCode
+    fieldValues(COL_PART_NAME) = Trim$(CStr(ws.Cells(PE_ROW_NAME, PE_VALUE_COL).Value2))
     fieldValues(COL_FACTORY_CODE) = factoryCode
     fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(ReadEditorActiveFlag(ws))
+    fieldValues(COL_PRODUCT_LINE) = Trim$(CStr(ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).Value2))
     fieldValues(COL_NOTES) = ReadEditorNotes(ws)
 
     UpsertRow FindTable(BASE_PARTS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode, fieldValues
@@ -153,14 +156,26 @@ Private Sub LoadMasterFields(ByVal ws As Worksheet, ByVal basePartCode As String
     listRowIndex = FindListRowByKey(tbl, COL_BASE_PART_CODE, basePartCode)
 
     If listRowIndex = 0 Then
+        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).ClearContents
         ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).ClearContents
         ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
+        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).ClearContents
         ClearEditorNotes ws
         Exit Sub
     End If
 
+    If TableHasColumn(tbl, COL_PART_NAME) Then
+        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_PART_NAME)))
+    Else
+        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).ClearContents
+    End If
     ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
+    If TableHasColumn(tbl, COL_PRODUCT_LINE) Then
+        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_PRODUCT_LINE)))
+    Else
+        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).ClearContents
+    End If
     WriteEditorNotes ws, CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
 End Sub
 
@@ -201,6 +216,103 @@ Private Sub LoadDashRows(ByVal ws As Worksheet, ByVal basePartCode As String)
 
 ContinueDash:
     Next rowIndex
+End Sub
+
+Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As String)
+    Dim tbl As ListObject
+    Dim rowIndex As Long
+    Dim sheetRow As Long
+    Dim loadedCount As Long
+    Dim assemblyNo As String
+    Dim rowBasePart As String
+    Dim dashCondition As String
+    Dim separator As String
+    Dim operSeq As String
+    Dim operCode As String
+    Dim matchCount As Long
+    Dim matchRows() As Variant
+    Dim sortIndex As Long
+    Dim swapIndex As Long
+    Dim tempRow As Variant
+    Dim hasOperCode As Boolean
+
+    ClearRouteCardRange ws
+
+    Set tbl = FindTable(LINKED_ROUTE_CARD_TABLE)
+    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
+    If Not TableHasColumn(tbl, COL_ASSEMBLY_NO) Then Exit Sub
+    If Not TableHasColumn(tbl, COL_OPER_SEQ_SOURCE) Then Exit Sub
+
+    hasOperCode = TableHasColumn(tbl, COL_OPER_CODE_SOURCE)
+    matchCount = 0
+
+    For rowIndex = 1 To tbl.ListRows.Count
+        assemblyNo = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
+        If Len(assemblyNo) = 0 Then GoTo ContinueRoute
+
+        SplitAssemblyNoWithSeparator assemblyNo, rowBasePart, separator, dashCondition
+        rowBasePart = NormalizeCode(rowBasePart)
+        If Not ValuesMatchCode(rowBasePart, basePartCode) Then GoTo ContinueRoute
+
+        operSeq = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ_SOURCE))))
+        operCode = vbNullString
+        If hasOperCode Then
+            operCode = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_CODE_SOURCE))))
+        End If
+
+        matchCount = matchCount + 1
+        ReDim Preserve matchRows(1 To matchCount)
+        matchRows(matchCount) = Array(dashCondition, operSeq, operCode)
+
+ContinueRoute:
+    Next rowIndex
+
+    If matchCount = 0 Then Exit Sub
+
+    ' Sort by OPER SEQ then dash condition.
+    For sortIndex = 1 To matchCount - 1
+        For swapIndex = sortIndex + 1 To matchCount
+            If RouteRowSortKey(matchRows(swapIndex)) < RouteRowSortKey(matchRows(sortIndex)) Then
+                tempRow = matchRows(sortIndex)
+                matchRows(sortIndex) = matchRows(swapIndex)
+                matchRows(swapIndex) = tempRow
+            End If
+        Next swapIndex
+    Next sortIndex
+
+    sheetRow = PE_ROUTE_DATA_START_ROW
+    loadedCount = 0
+    For sortIndex = 1 To matchCount
+        If loadedCount >= PE_ROUTE_MAX_ROWS Then Exit For
+        ws.Cells(sheetRow, PE_COL_ROUTE_DASH).NumberFormat = "@"
+        ws.Cells(sheetRow, PE_COL_ROUTE_DASH).Value = CStr(matchRows(sortIndex)(0))
+        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_SEQ).Value = CStr(matchRows(sortIndex)(1))
+        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_CODE).Value = CStr(matchRows(sortIndex)(2))
+        sheetRow = sheetRow + 1
+        loadedCount = loadedCount + 1
+    Next sortIndex
+End Sub
+
+Private Function RouteRowSortKey(ByVal rowData As Variant) As String
+    Dim operSeq As String
+    Dim seqNumber As Double
+
+    operSeq = Trim$(CStr(rowData(1)))
+    If IsNumeric(operSeq) Then
+        seqNumber = CDbl(operSeq)
+        RouteRowSortKey = Format$(seqNumber, "0000000000.0000") & "|" & CStr(rowData(0))
+    Else
+        RouteRowSortKey = operSeq & "|" & CStr(rowData(0))
+    End If
+End Function
+
+Private Sub ClearRouteCardRange(ByVal ws As Worksheet)
+    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)).ClearContents
+    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)).NumberFormat = "@"
 End Sub
 
 Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As String)
@@ -806,13 +918,16 @@ End Function
 
 Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
     ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).ClearContents
+    ws.Cells(PE_ROW_NAME, PE_VALUE_COL).ClearContents
     ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).ClearContents
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).ClearContents
+    ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).ClearContents
     ClearEditorNotes ws
     ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_NOTES)).ClearContents
     ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
+    ClearRouteCardRange ws
     ws.Range(ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL)).ClearContents
 End Sub

@@ -50,6 +50,8 @@ Public Const COL_ACTIVE As String = "Active"
 Public Const COL_NOTES As String = "Notes"
 
 Public Const COL_BASE_PART_CODE As String = "BasePartCode"
+Public Const COL_PART_NAME As String = "Name"
+Public Const COL_PRODUCT_LINE As String = "ProductLine"
 Public Const COL_DASH_CONDITION As String = "DashCondition"
 Public Const COL_SEPARATOR As String = "Separator"
 Public Const COL_OPER_SEQ As String = "OperSeq"
@@ -61,6 +63,7 @@ Public Const COL_SHOW_AVG_EX As String = "ShowAvgEx"
 Public Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
 Public Const COL_RCCP_BASE_PN As String = "Base PN: Text"
 Public Const COL_OPER_SEQ_SOURCE As String = "OPER SEQ"
+Public Const COL_OPER_CODE_SOURCE As String = "OPER CODE"
 Public Const COL_LABOR_HPS As String = "LABOR HPS (HOURS)"
 Public Const COL_RUN_TIME As String = "RUN TIME (HOURS)"
 Public Const COL_AVG_180_DAY_EX As String = "Avg 180 Day Ex"
@@ -69,27 +72,29 @@ Public Const COL_AVG_PROCESS_HOURS As String = "Avg Process Hours"
 Public Const COL_AVG_EX As String = "Avg Ex"
 
 ' PartEditor sheet layout:
-'   Left: identity + master (B:G), status at F6:G6, notes C8:G9
-'   Right: dash conditions starting at I5 (10 rows)
-'   Operations section at row 18, table starting at column B
+'   Master (B labels, C:G values): Name/Status/Factory/Active/ProductLine/Notes
+'   Dash conditions at I5; Route Card at B18 (B-D); Operations at F18
 Public Const PE_LABEL_COL As Long = 2
 Public Const PE_VALUE_COL As Long = 3
+Public Const PE_VALUE_COL_END As Long = 7
 Public Const PE_INPUT_ROW As Long = 3
 Public Const PE_BASE_PART_ROW As Long = 4
 Public Const PE_MASTER_HEADER_ROW As Long = 5
-Public Const PE_ROW_FACTORY As Long = 6
-Public Const PE_ROW_ACTIVE As Long = 7
-Public Const PE_NOTES_LABEL_ROW As Long = 8
-Public Const PE_NOTES_LABEL_ROW_END As Long = 9
-Public Const PE_NOTES_VALUE_ROW As Long = 8
-Public Const PE_NOTES_VALUE_ROW_END As Long = 9
+Public Const PE_ROW_NAME As Long = 6
+Public Const PE_STATUS_ROW As Long = 7
+Public Const PE_ROW_FACTORY As Long = 8
+Public Const PE_ROW_ACTIVE As Long = 9
+Public Const PE_ROW_PRODUCT_LINE As Long = 10
+Public Const PE_NOTES_LABEL_ROW As Long = 11
+Public Const PE_NOTES_LABEL_ROW_END As Long = 16
+Public Const PE_NOTES_VALUE_ROW As Long = 11
+Public Const PE_NOTES_VALUE_ROW_END As Long = 16
 Public Const PE_NOTES_VALUE_COL_START As Long = 3
 Public Const PE_NOTES_VALUE_COL_END As Long = 7
 Public Const PE_BUTTON_ROW As Long = 3
 
-Public Const PE_STATUS_ROW As Long = 6
-Public Const PE_STATUS_LABEL_COL As Long = 6
-Public Const PE_STATUS_VALUE_COL As Long = 7
+Public Const PE_STATUS_LABEL_COL As Long = 2
+Public Const PE_STATUS_VALUE_COL As Long = 3
 
 Public Const PE_DASH_SECTION_ROW As Long = 5
 Public Const PE_DASH_HEADER_ROW As Long = 6
@@ -100,9 +105,17 @@ Public Const PE_COL_SEPARATOR As Long = 10
 Public Const PE_COL_DASH_ACTIVE As Long = 11
 Public Const PE_COL_DASH_NOTES As Long = 12
 
+Public Const PE_ROUTE_SECTION_ROW As Long = 18
+Public Const PE_ROUTE_HEADER_ROW As Long = 19
+Public Const PE_ROUTE_DATA_START_ROW As Long = 20
+Public Const PE_ROUTE_MAX_ROWS As Long = 40
+Public Const PE_COL_ROUTE_DASH As Long = 2
+Public Const PE_COL_ROUTE_OPER_SEQ As Long = 3
+Public Const PE_COL_ROUTE_OPER_CODE As Long = 4
+
 Public Const PE_OPS_SECTION_ROW As Long = 18
 Public Const PE_OPS_HEADER_ROW As Long = 19
-Public Const PE_OPS_COL_START As Long = 2
+Public Const PE_OPS_COL_START As Long = 6
 Public Const PE_OPS_DATA_START_ROW As Long = 20
 Public Const PE_OPS_MAX_ROWS As Long = 30
 
@@ -110,17 +123,17 @@ Public Const PE_BTN_LOAD_NAME As String = "btnPartEditorLoad"
 Public Const PE_BTN_SAVE_NAME As String = "btnPartEditorSave"
 Public Const PE_BTN_CLEAR_NAME As String = "btnPartEditorClear"
 
-Public Const PE_COL_OPER_SEQ As Long = 2
-Public Const PE_COL_OPER_NAME As Long = 3
-Public Const PE_COL_EQUIPMENT As Long = 4
-Public Const PE_COL_PROCESS_TYPE As Long = 5
-Public Const PE_COL_OPER_ACTIVE As Long = 6
-Public Const PE_COL_OPER_NOTES As Long = 7
-Public Const PE_COL_SHOW_AVG_HOURS As Long = 8
-Public Const PE_COL_SHOW_AVG_EX As Long = 9
-Public Const PE_COL_AVG_HOURS As Long = 10
-Public Const PE_COL_AVG_EX As Long = 11
-Public Const PE_OPS_LAST_COL As Long = 11
+Public Const PE_COL_OPER_SEQ As Long = 6
+Public Const PE_COL_OPER_NAME As Long = 7
+Public Const PE_COL_EQUIPMENT As Long = 8
+Public Const PE_COL_PROCESS_TYPE As Long = 9
+Public Const PE_COL_OPER_ACTIVE As Long = 10
+Public Const PE_COL_OPER_NOTES As Long = 11
+Public Const PE_COL_SHOW_AVG_HOURS As Long = 12
+Public Const PE_COL_SHOW_AVG_EX As Long = 13
+Public Const PE_COL_AVG_HOURS As Long = 14
+Public Const PE_COL_AVG_EX As Long = 15
+Public Const PE_OPS_LAST_COL As Long = 15
 
 ' PartEditorCache hidden sheet layout.
 Public Const CACHE_BASE_PART_CELL As String = "A1"

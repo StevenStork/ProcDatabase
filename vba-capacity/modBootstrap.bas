@@ -55,7 +55,7 @@ Public Sub BootstrapCapacityTables()
 
     currentStep = "EnsureTable Parts/Dash/Operations"
     EnsureTable PARTS_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
-        COL_BASE_PART_CODE, COL_FACTORY_CODE, COL_ACTIVE, COL_NOTES)
+        COL_BASE_PART_CODE, COL_PART_NAME, COL_FACTORY_CODE, COL_ACTIVE, COL_PRODUCT_LINE, COL_NOTES)
     RemoveTableColumnIfExists FindTable(BASE_PARTS_TABLE_NAME), "StatusDate"
 
     EnsureTable PART_DASH_CONDITIONS_SHEET_NAME, PART_DASH_CONDITIONS_TABLE_NAME, Array( _
@@ -316,6 +316,7 @@ Private Sub FormatPartEditorSheet()
     Dim opsInputRange As Range
     Dim notesLabelRange As Range
     Dim notesValueRange As Range
+    Dim routeRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then
@@ -338,25 +339,39 @@ Private Sub FormatPartEditorSheet()
 
     ' Identity
     StyleFieldLabel ws, PE_INPUT_ROW, "Part Number"
-    StyleInputCell ws.Cells(PE_INPUT_ROW, PE_VALUE_COL), False
+    StyleMasterValueRange ws, PE_INPUT_ROW, False
 
     StyleFieldLabel ws, PE_BASE_PART_ROW, "Base Part"
-    StyleInputCell ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL), True
+    StyleMasterValueRange ws, PE_BASE_PART_ROW, True
 
     ' Master section header ends at column G
-    StyleSectionHeaderRange ws, PE_MASTER_HEADER_ROW, PE_LABEL_COL, PE_STATUS_VALUE_COL, "Master Record"
+    StyleSectionHeaderRange ws, PE_MASTER_HEADER_ROW, PE_LABEL_COL, PE_VALUE_COL_END, "Master Record"
+
+    StyleFieldLabel ws, PE_ROW_NAME, "Name"
+    StyleMasterValueRange ws, PE_ROW_NAME, False
+
+    StyleFieldLabel ws, PE_STATUS_ROW, "Status"
+    StyleMasterValueRange ws, PE_STATUS_ROW, True
+    With MasterValueRange(ws, PE_STATUS_ROW)
+        .Font.Italic = True
+        .Font.Color = RGB(60, 60, 60)
+    End With
 
     StyleFieldLabel ws, PE_ROW_FACTORY, "Factory"
-    StyleInputCell ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), False
+    StyleMasterValueRange ws, PE_ROW_FACTORY, False
 
     StyleFieldLabel ws, PE_ROW_ACTIVE, "Active"
-    StyleInputCell ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL), False
+    StyleMasterValueRange ws, PE_ROW_ACTIVE, False
 
-    ' Notes: label spans B8:B9; value is merged C8:G9 top-left
+    StyleFieldLabel ws, PE_ROW_PRODUCT_LINE, "Product Line"
+    StyleMasterValueRange ws, PE_ROW_PRODUCT_LINE, False
+
+    ' Notes: label B11:B16; value merged C11:G16 top-left
     Set notesLabelRange = ws.Range( _
         ws.Cells(PE_NOTES_LABEL_ROW, PE_LABEL_COL), _
         ws.Cells(PE_NOTES_LABEL_ROW_END, PE_LABEL_COL))
     On Error Resume Next
+    notesLabelRange.UnMerge
     notesLabelRange.Merge
     On Error GoTo 0
     With notesLabelRange
@@ -380,17 +395,6 @@ Private Sub FormatPartEditorSheet()
         .VerticalAlignment = xlTop
         .WrapText = True
     End With
-    ws.Rows(PE_NOTES_VALUE_ROW).RowHeight = 18
-    ws.Rows(PE_NOTES_VALUE_ROW_END).RowHeight = 18
-
-    ' Status under Master Record (F6 label, G6 value)
-    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Value = "Status"
-    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Font.Bold = True
-    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).Font.Color = RGB(40, 50, 65)
-    ws.Cells(PE_STATUS_ROW, PE_STATUS_LABEL_COL).HorizontalAlignment = xlRight
-    StyleInputCell ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL), True
-    ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL).Font.Italic = True
-    ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL).Font.Color = RGB(60, 60, 60)
 
     ' Dash conditions (right side starting at I5)
     StyleSectionHeaderRange ws, PE_DASH_SECTION_ROW, PE_COL_DASH, PE_COL_DASH_NOTES, "Dash Conditions"
@@ -409,7 +413,25 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
 
-    ' Operations (row 18+, columns start at B to match section title)
+    ' Route Card (B-D, left of Operations)
+    StyleSectionHeaderRange ws, PE_ROUTE_SECTION_ROW, PE_COL_ROUTE_DASH, PE_COL_ROUTE_OPER_CODE, "Route Card"
+    ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_DASH).Value = "Dash"
+    ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_OPER_SEQ).Value = "OPER SEQ"
+    ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_OPER_CODE).Value = "OPER CODE"
+    StyleTableHeaderRow ws.Range( _
+        ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_DASH), _
+        ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_OPER_CODE))
+
+    Set routeRange = ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE))
+    routeRange.Interior.Color = RGB(235, 238, 242)
+    routeRange.Borders.Color = RGB(190, 198, 210)
+    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)).NumberFormat = "@"
+
+    ' Operations (row 18+, columns start at F)
     StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_OPS_COL_START, PE_OPS_LAST_COL, "Operations"
 
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
@@ -443,28 +465,50 @@ Private Sub FormatPartEditorSheet()
     avgRange.Borders.Color = RGB(190, 198, 210)
 
     ws.Columns("A").ColumnWidth = 3
-    ws.Columns("B").ColumnWidth = 10
-    ws.Columns("C").ColumnWidth = 16
+    ws.Columns("B").ColumnWidth = 12
+    ws.Columns("C").ColumnWidth = 12
     ws.Columns("D").ColumnWidth = 12
-    ws.Columns("E").ColumnWidth = 12
-    ws.Columns("F").ColumnWidth = 8
-    ws.Columns("G").ColumnWidth = 14
+    ws.Columns("E").ColumnWidth = 3
+    ws.Columns("F").ColumnWidth = 10
+    ws.Columns("G").ColumnWidth = 16
     ws.Columns("H").ColumnWidth = 12
     ws.Columns("I").ColumnWidth = 12
-    ws.Columns("J").ColumnWidth = 14
-    ws.Columns("K").ColumnWidth = 10
-    ws.Columns("L").ColumnWidth = 8
-    ws.Columns("M").ColumnWidth = 16
+    ws.Columns("J").ColumnWidth = 8
+    ws.Columns("K").ColumnWidth = 12
+    ws.Columns("L").ColumnWidth = 12
+    ws.Columns("M").ColumnWidth = 12
+    ws.Columns("N").ColumnWidth = 14
+    ws.Columns("O").ColumnWidth = 10
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
     DeleteLegacyAverageToggleCheckboxes ws
 End Sub
 
-Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
-    ' Clear prior instruction/status/dash/ops/notes areas from older layouts.
+Private Function MasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long) As Range
+    Set MasterValueRange = ws.Range( _
+        ws.Cells(rowIndex, PE_VALUE_COL), _
+        ws.Cells(rowIndex, PE_VALUE_COL_END))
+End Function
+
+Private Sub StyleMasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal readOnlyLook As Boolean)
+    Dim valueRange As Range
+
+    Set valueRange = MasterValueRange(ws, rowIndex)
     On Error Resume Next
-    ws.Range("B8:B9").UnMerge
+    valueRange.UnMerge
+    valueRange.Merge
+    On Error GoTo 0
+    StyleInputCell valueRange, readOnlyLook
+    valueRange.HorizontalAlignment = xlLeft
+    valueRange.VerticalAlignment = xlCenter
+End Sub
+
+Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
+    On Error Resume Next
+    ws.Range("B8:B16").UnMerge
+    ws.Range("B11:B16").UnMerge
+    ws.Range("C3:G16").UnMerge
     ws.Range("C8:G9").UnMerge
     ws.Range("C8:C9").UnMerge
     On Error GoTo 0
@@ -472,22 +516,19 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     DeleteLegacyAverageToggleCheckboxes ws
 
     ws.Range("A2").ClearContents
-    ws.Range("I3:I70").ClearContents
     ws.Range("A70").ClearContents
-    ws.Range("B8:G9").ClearContents
-    ws.Range("B8:G9").Interior.ColorIndex = xlNone
-    ws.Range("B8:G9").Borders.LineStyle = xlNone
-    ws.Range("B11:K70").ClearContents
-    ws.Range("B11:K70").Interior.ColorIndex = xlNone
-    ws.Range("B11:K70").Borders.LineStyle = xlNone
+    ws.Range("B3:G70").ClearContents
+    ws.Range("B3:G70").Interior.ColorIndex = xlNone
+    ws.Range("B3:G70").Borders.LineStyle = xlNone
+    ws.Range("F18:O70").ClearContents
+    ws.Range("F18:O70").Interior.ColorIndex = xlNone
+    ws.Range("F18:O70").Borders.LineStyle = xlNone
     ws.Range("I5:M30").ClearContents
     ws.Range("I5:M30").Interior.ColorIndex = xlNone
     ws.Range("I5:M30").Borders.LineStyle = xlNone
     ws.Range("J5:M30").ClearContents
     ws.Range("J5:M30").Interior.ColorIndex = xlNone
     ws.Range("J5:M30").Borders.LineStyle = xlNone
-    ws.Range("F6:G6").ClearContents
-    ws.Range("B17:G17").ClearContents
 End Sub
 
 Private Sub ApplyTrueFalseValidation(ByVal targetRange As Range)
@@ -593,8 +634,8 @@ Private Sub EnsurePartEditorButtons(ByVal ws As Worksheet)
     DeleteWorksheetButton ws, PE_BTN_SAVE_NAME
     DeleteWorksheetButton ws, PE_BTN_CLEAR_NAME
 
-    ' Place buttons on row 3 starting at column E (right of the part-number input).
-    Set anchor = ws.Cells(PE_BUTTON_ROW, 5)
+    ' Place buttons on row 3 starting at column I (right of merged master inputs).
+    Set anchor = ws.Cells(PE_BUTTON_ROW, 9)
     buttonTop = anchor.Top
     buttonHeight = 22
     buttonWidth = 85
