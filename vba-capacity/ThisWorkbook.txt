@@ -3,3 +3,11 @@
 Private Sub Workbook_Open()
     BootstrapCapacityTables
 End Sub
+
+Private Sub Workbook_SheetChange(ByVal Sh As Object, ByVal Target As Range)
+    On Error Resume Next
+    If StrComp(Sh.Name, PART_EDITOR_SHEET_NAME, vbTextCompare) = 0 Then
+        HandlePartEditorSheetChange Target
+    End If
+    On Error GoTo 0
+End Sub

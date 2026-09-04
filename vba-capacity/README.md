@@ -125,8 +125,8 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
-3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex** populate inline per `OperSeq` from linked tables (when loaded).
-4. Edit cells directly (factory, active, notes in **C8:G9**, dash rows on the right, operation rows from row 20). Use the **Avg Process Hours** / **Avg Ex** checkboxes on row 17 to show or hide those columns. Status messages appear in **G6**.
+3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex** populate inline per `OperSeq` when that row’s **Show Avg Hours** / **Show Avg Ex** flags are TRUE.
+4. Edit cells directly (factory, active, notes in **C8:G9**, dash rows from column **I**, operation rows from row 20). Pick **Equipment** (factory equipment) and **Process Type** (processes for that equipment) from the dropdowns. Status messages appear in **G6**.
 5. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
@@ -140,7 +140,7 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 | **Avg Process Hours** | `tblOperComps` → `tblAssyStnd` | Average non-zero `LABOR HPS (HOURS)` for base part + `OPER SEQ`; fallback to average non-zero `RUN TIME (HOURS)` |
 | **Avg Ex** | `tblTimeYield` | Average non-zero `Avg 180 Day Ex`; fallback to `Avg 90 Day Ex` |
 
-Row-17 checkboxes toggle whether each average column is filled (`RefreshPartEditorAverages`). Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base part before `-`.
+Per-operation **Show Avg Hours** / **Show Avg Ex** columns control whether those values are filled. Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base part before `-`.
 
 ## Linked query refresh
 
