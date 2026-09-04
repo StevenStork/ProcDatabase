@@ -227,25 +227,26 @@ Private Sub LoadMasterFields(ByVal ws As Worksheet, ByVal basePartCode As String
     listRowIndex = FindListRowByKey(tbl, COL_BASE_PART_CODE, basePartCode)
 
     If listRowIndex = 0 Then
-        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).ClearContents
-        ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).ClearContents
+        SafeClearCellOrMerge ws.Cells(PE_ROW_NAME, PE_VALUE_COL)
+        SafeClearCellOrMerge ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL)
         ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
-        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).ClearContents
+        SafeClearCellOrMerge ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL)
         ClearEditorNotes ws
         Exit Sub
     End If
 
     If TableHasColumn(tbl, COL_PART_NAME) Then
+        SafeClearCellOrMerge ws.Cells(PE_ROW_NAME, PE_VALUE_COL)
         ws.Cells(PE_ROW_NAME, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_PART_NAME)))
     Else
-        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).ClearContents
+        SafeClearCellOrMerge ws.Cells(PE_ROW_NAME, PE_VALUE_COL)
     End If
     ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
     If TableHasColumn(tbl, COL_PRODUCT_LINE) Then
         ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_PRODUCT_LINE)))
     Else
-        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).ClearContents
+        SafeClearCellOrMerge ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL)
     End If
     WriteEditorNotes ws, CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
 End Sub
@@ -439,15 +440,15 @@ FailText:
 End Function
 
 Private Sub ClearRouteCardRange(ByVal ws As Worksheet)
-    ws.Range( _
+    SafeClearRange ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)).ClearContents
-    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE))
+    SafeNumberFormat ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)).NumberFormat = "@"
-    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)), "@"
+    SafeNumberFormat ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_OPER_CODE), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)).NumberFormat = "@"
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)), "@"
 End Sub
 
 Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As String)
@@ -1056,19 +1057,26 @@ ContinueOp:
 End Function
 
 Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
-    ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).ClearContents
-    ws.Cells(PE_ROW_NAME, PE_VALUE_COL).ClearContents
-    ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).ClearContents
-    ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).ClearContents
-    ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).ClearContents
+    SafeClearCellOrMerge ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL)
+    SafeClearCellOrMerge ws.Cells(PE_ROW_NAME, PE_VALUE_COL)
+    SafeClearCellOrMerge ws.Cells(PE_STATUS_ROW, PE_VALUE_COL)
+    SafeClearCellOrMerge ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL)
+    SafeClearCellOrMerge ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL)
+    SafeClearCellOrMerge ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL)
     ClearEditorNotes ws
-    ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
-        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_NOTES)).ClearContents
-    ws.Range(ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
-        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)).NumberFormat = "@"
+
+    SafeClearRange ws.Range( _
+        ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
+        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_NOTES))
+    SafeNumberFormat ws.Range( _
+        ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH), _
+        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH)), "@"
+
     ClearRouteCardRange ws
-    ws.Range(ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL)).ClearContents
+
+    SafeClearRange ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL))
 End Sub
 
 Private Function EditorNotesRange(ByVal ws As Worksheet) As Range
@@ -1089,12 +1097,51 @@ Private Sub ClearEditorNotes(ByVal ws As Worksheet)
     Dim notesRange As Range
 
     Set notesRange = EditorNotesRange(ws)
+    SafeClearRange notesRange
+End Sub
+
+Private Sub SafeClearCellOrMerge(ByVal cell As Range)
     On Error Resume Next
-    notesRange.ClearContents
+    If cell.MergeCells Then
+        cell.MergeArea.ClearContents
+    Else
+        cell.ClearContents
+    End If
     If Err.Number <> 0 Then
         Err.Clear
-        ws.Cells(PE_NOTES_VALUE_ROW, PE_NOTES_VALUE_COL_START).ClearContents
+        cell.Value = vbNullString
     End If
+    On Error GoTo 0
+End Sub
+
+Private Sub SafeClearRange(ByVal targetRange As Range)
+    Dim cell As Range
+
+    On Error Resume Next
+    targetRange.ClearContents
+    If Err.Number = 0 Then
+        On Error GoTo 0
+        Exit Sub
+    End If
+    Err.Clear
+
+    ' Fall back cell-by-cell / merge-area clears when a partial merge blocks the range clear.
+    For Each cell In targetRange.Cells
+        If cell.MergeCells Then
+            If cell.Address = cell.MergeArea.Cells(1, 1).Address Then
+                cell.MergeArea.ClearContents
+            End If
+        Else
+            cell.ClearContents
+        End If
+        Err.Clear
+    Next cell
+    On Error GoTo 0
+End Sub
+
+Private Sub SafeNumberFormat(ByVal targetRange As Range, ByVal formatText As String)
+    On Error Resume Next
+    targetRange.NumberFormat = formatText
     On Error GoTo 0
 End Sub
 
