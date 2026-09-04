@@ -423,6 +423,7 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ' Clear prior instruction/status/dash/ops areas from older layouts.
     ws.Range("A2").ClearContents
     ws.Range("I3:I70").ClearContents
+    ws.Range("A70").ClearContents
     ws.Range("B11:H70").ClearContents
     ws.Range("B11:H70").Interior.ColorIndex = xlNone
     ws.Range("B11:H70").Borders.LineStyle = xlNone
