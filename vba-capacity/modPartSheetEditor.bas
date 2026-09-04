@@ -330,14 +330,11 @@ ContinueCount:
     Next rowIndex
 
     If matchCount = 0 Then Exit Sub
-    If matchCount > PE_ROUTE_MAX_ROWS Then matchCount = PE_ROUTE_MAX_ROWS
 
     ReDim matchRows(1 To matchCount, 1 To 3)
 
     matchIndex = 0
     For rowIndex = 1 To tbl.ListRows.Count
-        If matchIndex >= matchCount Then Exit For
-
         assemblyNo = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
         If Len(assemblyNo) = 0 Then GoTo ContinueFill
 
@@ -362,11 +359,11 @@ ContinueFill:
     matchCount = matchIndex
     If matchCount = 0 Then Exit Sub
 
-    ' Sort by OPER SEQ then dash condition.
+    ' Sort by dash condition, then OPER SEQ.
     For sortIndex = 1 To matchCount - 1
         For swapIndex = sortIndex + 1 To matchCount
-            If RouteRowSortKey2(CStr(matchRows(swapIndex, 2)), CStr(matchRows(swapIndex, 1))) < _
-               RouteRowSortKey2(CStr(matchRows(sortIndex, 2)), CStr(matchRows(sortIndex, 1))) Then
+            If RouteRowSortKey2(CStr(matchRows(swapIndex, 1)), CStr(matchRows(swapIndex, 2))) < _
+               RouteRowSortKey2(CStr(matchRows(sortIndex, 1)), CStr(matchRows(sortIndex, 2))) Then
                 tempDash = CStr(matchRows(sortIndex, 1))
                 tempSeq = CStr(matchRows(sortIndex, 2))
                 tempCode = CStr(matchRows(sortIndex, 3))
@@ -387,21 +384,32 @@ ContinueFill:
         ws.Cells(sheetRow, PE_COL_ROUTE_DASH).NumberFormat = "@"
         ws.Cells(sheetRow, PE_COL_ROUTE_DASH).Value = CStr(matchRows(sortIndex, 1))
         ws.Cells(sheetRow, PE_COL_ROUTE_OPER_SEQ).Value = CStr(matchRows(sortIndex, 2))
+        ws.Cells(sheetRow, PE_COL_ROUTE_OPER_CODE).NumberFormat = "@"
         ws.Cells(sheetRow, PE_COL_ROUTE_OPER_CODE).Value = CStr(matchRows(sortIndex, 3))
         sheetRow = sheetRow + 1
         loadedCount = loadedCount + 1
     Next sortIndex
 End Sub
 
-Private Function RouteRowSortKey2(ByVal operSeq As String, ByVal dashCondition As String) As String
+Private Function RouteRowSortKey2(ByVal dashCondition As String, ByVal operSeq As String) As String
     Dim seqNumber As Double
+    Dim dashKey As String
 
+    dashCondition = Trim$(dashCondition)
     operSeq = Trim$(operSeq)
+
+    ' Keep dash text sortable with leading zeros preserved as text.
+    dashKey = dashCondition
+    If IsNumeric(dashCondition) Then
+        dashKey = String$(10 - Len(dashCondition), "0") & dashCondition
+        If Len(dashCondition) >= 10 Then dashKey = dashCondition
+    End If
+
     If IsNumeric(operSeq) Then
         seqNumber = CDbl(operSeq)
-        RouteRowSortKey2 = Format$(seqNumber, "0000000000.0000") & "|" & dashCondition
+        RouteRowSortKey2 = dashKey & "|" & Format$(seqNumber, "0000000000.0000")
     Else
-        RouteRowSortKey2 = operSeq & "|" & dashCondition
+        RouteRowSortKey2 = dashKey & "|" & operSeq
     End If
 End Function
 
@@ -412,6 +420,9 @@ Private Sub ClearRouteCardRange(ByVal ws As Worksheet)
     ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
         ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)).NumberFormat = "@"
+    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_OPER_CODE), _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)).NumberFormat = "@"
 End Sub
 
 Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As String)

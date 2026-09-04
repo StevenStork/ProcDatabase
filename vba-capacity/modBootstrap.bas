@@ -57,6 +57,7 @@ Public Sub BootstrapCapacityTables()
     EnsureTable PARTS_SHEET_NAME, BASE_PARTS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_PART_NAME, COL_FACTORY_CODE, COL_ACTIVE, COL_PRODUCT_LINE, COL_NOTES)
     RemoveTableColumnIfExists FindTable(BASE_PARTS_TABLE_NAME), "StatusDate"
+    RepairScrambledBasePartsHeaders FindTable(BASE_PARTS_TABLE_NAME)
 
     EnsureTable PART_DASH_CONDITIONS_SHEET_NAME, PART_DASH_CONDITIONS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_SEPARATOR, COL_ACTIVE, COL_NOTES)
@@ -205,15 +206,17 @@ Private Sub EnsureTable(ByVal sheetName As String, ByVal tableName As String, By
 
     lastCol = UBound(headers) - LBound(headers) + 1
 
-    For headerIndex = LBound(headers) To UBound(headers)
-        ws.Cells(TABLE_HEADER_ROW, headerIndex - LBound(headers) + 1).Value = CStr(headers(headerIndex))
-    Next headerIndex
-
     On Error Resume Next
     Set tbl = ws.ListObjects(tableName)
     On Error GoTo 0
 
     If tbl Is Nothing Then
+        ' Only write header cells when creating a new table. Overwriting headers on an
+        ' existing ListObject renames columns and scrambles data mapping.
+        For headerIndex = LBound(headers) To UBound(headers)
+            ws.Cells(TABLE_HEADER_ROW, headerIndex - LBound(headers) + 1).Value = CStr(headers(headerIndex))
+        Next headerIndex
+
         Set tableRange = ws.Range(ws.Cells(TABLE_HEADER_ROW, 1), ws.Cells(TABLE_HEADER_ROW, lastCol))
         Set tbl = ws.ListObjects.Add(xlSrcRange, tableRange, , xlYes)
         tbl.Name = tableName
@@ -246,6 +249,126 @@ Private Sub EnsureTableHeaders(ByVal tbl As ListObject, ByVal headers As Variant
         End If
     Next headerIndex
 End Sub
+
+' Earlier EnsureTable overwrote headers and renamed FactoryCode->Name, Active->FactoryCode,
+' Notes->Active. Detect that scramble and restore column names / data mapping.
+Private Sub RepairScrambledBasePartsHeaders(ByVal tbl As ListObject)
+    Dim nameCol As ListColumn
+    Dim factoryCol As ListColumn
+    Dim activeCol As ListColumn
+    Dim notesCol As ListColumn
+    Dim newNameCol As ListColumn
+
+    If tbl Is Nothing Then Exit Sub
+    If Not TableHasColumn(tbl, COL_PART_NAME) Then Exit Sub
+    If Not TableHasColumn(tbl, COL_FACTORY_CODE) Then Exit Sub
+    If Not TableHasColumn(tbl, COL_ACTIVE) Then Exit Sub
+
+    ' FactoryCode column holding Active True/False means headers were scrambled.
+    If Not ColumnLooksLikeActiveFlags(tbl, COL_FACTORY_CODE) Then Exit Sub
+
+    Set nameCol = tbl.ListColumns(COL_PART_NAME)
+    Set factoryCol = tbl.ListColumns(COL_FACTORY_CODE)
+    Set activeCol = tbl.ListColumns(COL_ACTIVE)
+
+    nameCol.Name = "_RepairFactory"
+    factoryCol.Name = "_RepairActive"
+    activeCol.Name = "_RepairNotes"
+
+    tbl.ListColumns("_RepairFactory").Name = COL_FACTORY_CODE
+    tbl.ListColumns("_RepairActive").Name = COL_ACTIVE
+
+    If TableHasColumn(tbl, COL_NOTES) Then
+        Set notesCol = tbl.ListColumns(COL_NOTES)
+        If ColumnIsEntirelyBlank(tbl, COL_NOTES) Then
+            CopyListColumnValues tbl.ListColumns("_RepairNotes"), notesCol
+            tbl.ListColumns("_RepairNotes").Delete
+        Else
+            tbl.ListColumns("_RepairNotes").Name = COL_NOTES & "_Old"
+        End If
+    Else
+        tbl.ListColumns("_RepairNotes").Name = COL_NOTES
+    End If
+
+    If Not TableHasColumn(tbl, COL_PART_NAME) Then
+        Set newNameCol = tbl.ListColumns.Add(2)
+        newNameCol.Name = COL_PART_NAME
+    End If
+
+    If Not TableHasColumn(tbl, COL_PRODUCT_LINE) Then
+        tbl.ListColumns.Add.Name = COL_PRODUCT_LINE
+    End If
+End Sub
+
+Private Function ColumnLooksLikeActiveFlags(ByVal tbl As ListObject, ByVal columnName As String) As Boolean
+    Dim rowIndex As Long
+    Dim rawValue As Variant
+    Dim checkedCount As Long
+    Dim flagCount As Long
+    Dim textValue As String
+
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+
+    For rowIndex = 1 To tbl.ListRows.Count
+        rawValue = GetCellValueByListRow(tbl, rowIndex, columnName)
+        If IsBlankCellValueLocal(rawValue) Then GoTo ContinueFlagCheck
+
+        checkedCount = checkedCount + 1
+        Select Case VarType(rawValue)
+            Case vbBoolean
+                flagCount = flagCount + 1
+            Case vbByte, vbInteger, vbLong, vbSingle, vbDouble, vbCurrency, vbDecimal
+                If CDbl(rawValue) = 0 Or CDbl(rawValue) = 1 Then flagCount = flagCount + 1
+            Case Else
+                textValue = LCase$(Trim$(CStr(rawValue)))
+                If textValue = "true" Or textValue = "false" Or textValue = "yes" Or textValue = "no" _
+                    Or textValue = "y" Or textValue = "n" Or textValue = "1" Or textValue = "0" Then
+                    flagCount = flagCount + 1
+                End If
+        End Select
+
+        If checkedCount >= 10 Then Exit For
+ContinueFlagCheck:
+    Next rowIndex
+
+    ColumnLooksLikeActiveFlags = (checkedCount > 0 And flagCount = checkedCount)
+End Function
+
+Private Function ColumnIsEntirelyBlank(ByVal tbl As ListObject, ByVal columnName As String) As Boolean
+    Dim rowIndex As Long
+
+    If tbl.DataBodyRange Is Nothing Then
+        ColumnIsEntirelyBlank = True
+        Exit Function
+    End If
+
+    For rowIndex = 1 To tbl.ListRows.Count
+        If Not IsBlankCellValueLocal(GetCellValueByListRow(tbl, rowIndex, columnName)) Then Exit Function
+    Next rowIndex
+
+    ColumnIsEntirelyBlank = True
+End Function
+
+Private Sub CopyListColumnValues(ByVal sourceCol As ListColumn, ByVal targetCol As ListColumn)
+    Dim rowIndex As Long
+    Dim rowCount As Long
+
+    If sourceCol.DataBodyRange Is Nothing Then Exit Sub
+    rowCount = sourceCol.DataBodyRange.Rows.Count
+    For rowIndex = 1 To rowCount
+        targetCol.DataBodyRange.Cells(rowIndex, 1).Value = sourceCol.DataBodyRange.Cells(rowIndex, 1).Value
+    Next rowIndex
+End Sub
+
+Private Function IsBlankCellValueLocal(ByVal rawValue As Variant) As Boolean
+    If IsError(rawValue) Then
+        IsBlankCellValueLocal = True
+    ElseIf IsEmpty(rawValue) Or IsNull(rawValue) Then
+        IsBlankCellValueLocal = True
+    Else
+        IsBlankCellValueLocal = (Len(Trim$(CStr(rawValue))) = 0)
+    End If
+End Function
 
 Private Sub FormatAdminSheet()
     Dim ws As Worksheet
@@ -339,32 +462,39 @@ Private Sub FormatPartEditorSheet()
 
     ' Identity
     StyleFieldLabel ws, PE_INPUT_ROW, "Part Number"
-    StyleMasterValueRange ws, PE_INPUT_ROW, False
+    StyleInputCell ws.Cells(PE_INPUT_ROW, PE_VALUE_COL), False
+    ws.Cells(PE_INPUT_ROW, PE_VALUE_COL).HorizontalAlignment = xlLeft
 
     StyleFieldLabel ws, PE_BASE_PART_ROW, "Base Part"
-    StyleMasterValueRange ws, PE_BASE_PART_ROW, True
+    StyleInputCell ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL), True
+    ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).HorizontalAlignment = xlLeft
 
-    ' Master section header ends at column G
+    ' Master section header
     StyleSectionHeaderRange ws, PE_MASTER_HEADER_ROW, PE_LABEL_COL, PE_VALUE_COL_END, "Master Record"
 
+    ' Name: merged C:G
     StyleFieldLabel ws, PE_ROW_NAME, "Name"
-    StyleMasterValueRange ws, PE_ROW_NAME, False
+    StyleMergedValueRange ws, PE_ROW_NAME, PE_VALUE_COL, PE_VALUE_COL_END, False
 
     StyleFieldLabel ws, PE_STATUS_ROW, "Status"
-    StyleMasterValueRange ws, PE_STATUS_ROW, True
-    With MasterValueRange(ws, PE_STATUS_ROW)
+    StyleInputCell ws.Cells(PE_STATUS_ROW, PE_VALUE_COL), True
+    With ws.Cells(PE_STATUS_ROW, PE_VALUE_COL)
+        .HorizontalAlignment = xlLeft
         .Font.Italic = True
         .Font.Color = RGB(60, 60, 60)
     End With
 
     StyleFieldLabel ws, PE_ROW_FACTORY, "Factory"
-    StyleMasterValueRange ws, PE_ROW_FACTORY, False
+    StyleInputCell ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).HorizontalAlignment = xlLeft
 
     StyleFieldLabel ws, PE_ROW_ACTIVE, "Active"
-    StyleMasterValueRange ws, PE_ROW_ACTIVE, False
+    StyleInputCell ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).HorizontalAlignment = xlLeft
 
     StyleFieldLabel ws, PE_ROW_PRODUCT_LINE, "Product Line"
-    StyleMasterValueRange ws, PE_ROW_PRODUCT_LINE, False
+    StyleInputCell ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL), False
+    ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).HorizontalAlignment = xlLeft
 
     ' Notes: label B11:B16; value merged C11:G16 top-left
     Set notesLabelRange = ws.Range( _
@@ -430,6 +560,9 @@ Private Sub FormatPartEditorSheet()
     ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
         ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)).NumberFormat = "@"
+    ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_OPER_CODE), _
+        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)).NumberFormat = "@"
 
     ' Operations (row 18+, columns start at F)
     StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_OPS_COL_START, PE_OPS_LAST_COL, "Operations"
@@ -466,7 +599,7 @@ Private Sub FormatPartEditorSheet()
 
     ws.Columns("A").ColumnWidth = 3
     ws.Columns("B").ColumnWidth = 12
-    ws.Columns("C").ColumnWidth = 12
+    ws.Columns("C").ColumnWidth = 22
     ws.Columns("D").ColumnWidth = 12
     ws.Columns("E").ColumnWidth = 3
     ws.Columns("F").ColumnWidth = 10
@@ -491,32 +624,37 @@ Private Function MasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long)
         ws.Cells(rowIndex, PE_VALUE_COL_END))
 End Function
 
-Private Sub StyleMasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long, ByVal readOnlyLook As Boolean)
-    Dim valueRange As Range
-    Dim valueCell As Range
+Private Sub StyleMergedValueRange( _
+    ByVal ws As Worksheet, _
+    ByVal rowIndex As Long, _
+    ByVal startCol As Long, _
+    ByVal endCol As Long, _
+    ByVal readOnlyLook As Boolean)
 
-    ' Keep the value in column C only. Style C:G as one visual field, but do not merge
-    ' single-row inputs — merged cells break Validation.Add and button-driven clears.
-    Set valueRange = MasterValueRange(ws, rowIndex)
+    Dim valueRange As Range
+
+    Set valueRange = ws.Range(ws.Cells(rowIndex, startCol), ws.Cells(rowIndex, endCol))
     On Error Resume Next
     valueRange.UnMerge
+    valueRange.Merge
     On Error GoTo 0
-
     StyleInputCell valueRange, readOnlyLook
     valueRange.HorizontalAlignment = xlLeft
     valueRange.VerticalAlignment = xlCenter
-
-    Set valueCell = ws.Cells(rowIndex, PE_VALUE_COL)
-    valueCell.HorizontalAlignment = xlLeft
 End Sub
 
 Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
+    Dim rowIndex As Long
+
     On Error Resume Next
     ws.Range("B8:B16").UnMerge
     ws.Range("B11:B16").UnMerge
     ws.Range("C3:G16").UnMerge
     ws.Range("C8:G9").UnMerge
     ws.Range("C8:C9").UnMerge
+    For rowIndex = 3 To 10
+        ws.Range(ws.Cells(rowIndex, 3), ws.Cells(rowIndex, 7)).UnMerge
+    Next rowIndex
     On Error GoTo 0
 
     DeleteLegacyAverageToggleCheckboxes ws
