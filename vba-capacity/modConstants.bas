@@ -58,6 +58,9 @@ Public Const COL_OPER_SEQ As String = "OperSeq"
 Public Const COL_OPERATION_NAME As String = "OperationName"
 Public Const COL_SHOW_AVG_HOURS As String = "ShowAvgHours"
 Public Const COL_SHOW_AVG_EX As String = "ShowAvgEx"
+Public Const COL_PROCESS_HOURS As String = "ProcessHours"
+Public Const COL_MANUAL_AVG_EX As String = "ManualAvgEx"
+Public Const COL_BATCH_SIZE As String = "BatchSize"
 
 ' Linked source column headers.
 Public Const COL_ASSEMBLY_NO As String = "ASSEMBLY NO"
@@ -129,17 +132,26 @@ Public Const PE_COL_EQUIPMENT As Long = 8
 Public Const PE_COL_PROCESS_TYPE As Long = 9
 Public Const PE_COL_OPER_ACTIVE As Long = 10
 Public Const PE_COL_OPER_NOTES As Long = 11
-Public Const PE_COL_SHOW_AVG_HOURS As Long = 12
-Public Const PE_COL_SHOW_AVG_EX As Long = 13
-Public Const PE_COL_AVG_HOURS As Long = 14
-Public Const PE_COL_AVG_EX As Long = 15
-Public Const PE_OPS_LAST_COL As Long = 15
+Public Const PE_COL_PROCESS_HOURS As Long = 12
+Public Const PE_COL_MANUAL_AVG_EX As Long = 13
+Public Const PE_COL_BATCH_SIZE As Long = 14
+Public Const PE_COL_SHOW_AVG_HOURS As Long = 15
+Public Const PE_COL_SHOW_AVG_EX As Long = 16
+Public Const PE_COL_AVG_HOURS As Long = 17
+Public Const PE_COL_AVG_EX As Long = 18
+Public Const PE_OPS_LAST_COL As Long = 18
+
+Public Const PE_CHK_MASTER_ACTIVE As String = "peChkMasterActive"
+Public Const PE_CHK_DASH_ACTIVE_PREFIX As String = "peChkDashActive_"
+Public Const PE_CHK_OPS_ACTIVE_PREFIX As String = "peChkOpsActive_"
+Public Const PE_CHK_OPS_SHOW_HOURS_PREFIX As String = "peChkOpsShowHours_"
+Public Const PE_CHK_OPS_SHOW_EX_PREFIX As String = "peChkOpsShowEx_"
 
 ' PartEditorCache hidden sheet layout.
 Public Const CACHE_BASE_PART_CELL As String = "A1"
 Public Const CACHE_DASH_START_ROW As Long = 3
 Public Const CACHE_OPS_START_ROW As Long = 30
-Public Const CACHE_OPS_VALUE_COL_COUNT As Long = 8
+Public Const CACHE_OPS_VALUE_COL_COUNT As Long = 11
 Public Const CACHE_VALIDATION_EQUIP_COL As Long = 20
 Public Const CACHE_VALIDATION_PROCESS_COL As Long = 21
 

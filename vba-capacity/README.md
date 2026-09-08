@@ -125,24 +125,46 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
-3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex** populate inline per `OperSeq` when that row’s **Show Avg Hours** / **Show Avg Ex** flags are TRUE.
-4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Pick **Equipment** (factory equipment) and **Process Type** (processes for that equipment) from the dropdowns. Status messages appear in **C7**.
+3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** populate inline per `OperSeq` when that row’s **Show Avg Hours** / **Show Avg Ex** checkboxes are checked.
+4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Pick **Equipment** (factory equipment) and **Process Type** (processes for that equipment) from the dropdowns. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed (separate from the calculated columns). Status messages appear in **C7**.
 5. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 
-`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present.
+`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present, adds the operations user columns if missing, and creates **ActiveX** checkboxes (Insert → Controls) for all true/false fields (master Active, dash Active, operation Active / Show Avg Hours / Show Avg Ex). Form Control checkboxes are not used.
 
 **Route Card** (columns B–D, from `tblRouteCard`): dash condition parsed from `ASSEMBLY NO`, plus `OPER SEQ` and `OPER CODE` for the loaded base part. Load `tblRouteCard` to a sheet as a ListObject.
+
+### Operations columns (PartEditor)
+
+| Column | Source | Notes |
+|---|---|---|
+| **Process Hours** | User entry → `PartOperationsTbl.ProcessHours` | Manual override / planning value |
+| **Avg Ex** | User entry → `PartOperationsTbl.ManualAvgEx` | Manual override (not the calculated avg) |
+| **Batch Size** | User entry → `PartOperationsTbl.BatchSize` | User-entered batch size |
+| **Avg Process Hours** | Calculated | See below; shown when **Show Avg Hours** is checked |
+| **Avg Ex (Calc)** | Calculated | See below; shown when **Show Avg Ex** is checked |
 
 ### Average calculations (`modAverages`)
 
 | Column | Source | Logic |
 |---|---|---|
 | **Avg Process Hours** | `tblOperComps` → `tblAssyStnd` | Average non-zero `LABOR HPS (HOURS)` for base part + `OPER SEQ`; fallback to average non-zero `RUN TIME (HOURS)` |
-| **Avg Ex** | `tblTimeYield` | Average non-zero `Avg 180 Day Ex`; fallback to `Avg 90 Day Ex` |
+| **Avg Ex (Calc)** | `tblTimeYield` | Average non-zero `Avg 180 Day Ex`; fallback to `Avg 90 Day Ex` |
 
-Per-operation **Show Avg Hours** / **Show Avg Ex** columns control whether those values are filled. Matching uses `ASSEMBLY NO` (full dashed assembly numbers) and extracts the base part before `-`.
+**What must be in place for averages to calculate:**
+
+1. Load these Power Query results to worksheets as **ListObjects** (connection-only is not enough for VBA `FindTable`):
+   - `tblOperComps` (preferred for process hours) and/or `tblAssyStnd` (fallback)
+   - `tblTimeYield` (for Avg Ex)
+2. Required columns on those tables:
+   - Shared keys: `ASSEMBLY NO`, `OPER SEQ`
+   - Hours: `LABOR HPS (HOURS)` on `tblOperComps`; `RUN TIME (HOURS)` on `tblAssyStnd`
+   - Ex factors: `Avg 180 Day Ex`, `Avg 90 Day Ex` on `tblTimeYield`
+3. Matching uses the base part extracted from `ASSEMBLY NO` (text before `-` / letter separator) plus `OPER SEQ` equal to the operation row’s Oper Seq. Zero values are excluded from the average.
+4. Refresh linked data (`RefreshOperComps`, `RefreshAssyStnd`, or `RefreshAllLinkedData`) so the ListObjects are current before loading a part.
+
+Per-operation **Show Avg Hours** / **Show Avg Ex** ActiveX checkboxes control whether those calculated values are filled.
 
 ## Linked query refresh
 
@@ -190,6 +212,6 @@ Run **`RefreshRouteCard`**.
 ## Notes
 
 - **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
-- Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented.
-- Re-run **`BootstrapCapacityTables`** to migrate `BasePartsTbl` from PartEditor to Parts (legacy table renamed automatically).
+- Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented. Specifically for PartEditor calc columns: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`.
+- Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so ActiveX checkboxes and the new operations columns appear.
 - First data row is **row 4** on index sheets (headers on row 3).

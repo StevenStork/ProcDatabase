@@ -64,7 +64,8 @@ Public Sub BootstrapCapacityTables()
 
     EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
         COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OPERATION_NAME, COL_EQUIPMENT_CODE, _
-        COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES, COL_SHOW_AVG_HOURS, COL_SHOW_AVG_EX)
+        COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES, COL_PROCESS_HOURS, COL_MANUAL_AVG_EX, _
+        COL_BATCH_SIZE, COL_SHOW_AVG_HOURS, COL_SHOW_AVG_EX)
 
     currentStep = "EnsureCacheSheet"
     EnsureCacheSheet
@@ -574,10 +575,13 @@ Private Sub FormatPartEditorSheet()
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_PROCESS_TYPE).Value = "Process Type"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = "Active"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = "Notes"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_PROCESS_HOURS).Value = "Process Hours"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_MANUAL_AVG_EX).Value = "Avg Ex"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_BATCH_SIZE).Value = "Batch Size"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_SHOW_AVG_HOURS).Value = "Show Avg Hours"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_SHOW_AVG_EX).Value = "Show Avg Ex"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_HOURS).Value = "Avg Process Hours"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = "Avg Ex"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = "Avg Ex (Calc)"
     StyleTableHeaderRow ws.Range(ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ), ws.Cells(PE_OPS_HEADER_ROW, PE_OPS_LAST_COL))
 
     Set opsInputRange = ws.Range( _
@@ -585,18 +589,29 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
     StyleEditableBlock opsInputRange
 
-    ApplyTrueFalseValidation ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
+    ' User-entered numeric columns
+    ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_PROCESS_HOURS), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_PROCESS_HOURS)).NumberFormat = "0.####"
+    ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MANUAL_AVG_EX), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MANUAL_AVG_EX)).NumberFormat = "0.####"
+    ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_BATCH_SIZE), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_BATCH_SIZE)).NumberFormat = "0.####"
+
+    ' Default Show Avg toggles to True (ActiveX checkboxes bind to these cells).
     ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX)).Value = True
+    ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
 
     Set avgRange = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_AVG_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX))
     avgRange.Interior.Color = RGB(235, 238, 242)
     avgRange.Borders.Color = RGB(190, 198, 210)
+    avgRange.NumberFormat = "0.####"
 
     ws.Columns("A").ColumnWidth = 3
     ws.Columns("B").ColumnWidth = 12
@@ -610,13 +625,17 @@ Private Sub FormatPartEditorSheet()
     ws.Columns("J").ColumnWidth = 8
     ws.Columns("K").ColumnWidth = 12
     ws.Columns("L").ColumnWidth = 12
-    ws.Columns("M").ColumnWidth = 12
-    ws.Columns("N").ColumnWidth = 14
-    ws.Columns("O").ColumnWidth = 10
+    ws.Columns("M").ColumnWidth = 10
+    ws.Columns("N").ColumnWidth = 10
+    ws.Columns("O").ColumnWidth = 12
+    ws.Columns("P").ColumnWidth = 12
+    ws.Columns("Q").ColumnWidth = 14
+    ws.Columns("R").ColumnWidth = 12
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
     DeleteLegacyAverageToggleCheckboxes ws
+    EnsurePartEditorActiveXCheckboxes ws
 End Sub
 
 Private Function MasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long) As Range
@@ -665,9 +684,9 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ws.Range("B3:G70").ClearContents
     ws.Range("B3:G70").Interior.ColorIndex = xlNone
     ws.Range("B3:G70").Borders.LineStyle = xlNone
-    ws.Range("F18:O70").ClearContents
-    ws.Range("F18:O70").Interior.ColorIndex = xlNone
-    ws.Range("F18:O70").Borders.LineStyle = xlNone
+    ws.Range("F18:R70").ClearContents
+    ws.Range("F18:R70").Interior.ColorIndex = xlNone
+    ws.Range("F18:R70").Borders.LineStyle = xlNone
     ws.Range("I5:M30").ClearContents
     ws.Range("I5:M30").Interior.ColorIndex = xlNone
     ws.Range("I5:M30").Borders.LineStyle = xlNone
@@ -676,23 +695,82 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ws.Range("J5:M30").Borders.LineStyle = xlNone
 End Sub
 
-Private Sub ApplyTrueFalseValidation(ByVal targetRange As Range)
+' ActiveX checkboxes (Insert -> Controls), linked to TRUE/FALSE cells.
+' Not Form Controls (ws.CheckBoxes).
+Private Sub EnsurePartEditorActiveXCheckboxes(ByVal ws As Worksheet)
+    Dim rowIndex As Long
+    Dim index As Long
+
+    EnsureActiveXCheckbox ws, PE_CHK_MASTER_ACTIVE, ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL)
+
+    For rowIndex = PE_DASH_DATA_START_ROW To PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1
+        index = rowIndex - PE_DASH_DATA_START_ROW + 1
+        EnsureActiveXCheckbox ws, PE_CHK_DASH_ACTIVE_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_DASH_ACTIVE)
+    Next rowIndex
+
+    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+        index = rowIndex - PE_OPS_DATA_START_ROW + 1
+        EnsureActiveXCheckbox ws, PE_CHK_OPS_ACTIVE_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_OPER_ACTIVE)
+        EnsureActiveXCheckbox ws, PE_CHK_OPS_SHOW_HOURS_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS)
+        EnsureActiveXCheckbox ws, PE_CHK_OPS_SHOW_EX_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX)
+    Next rowIndex
+End Sub
+
+Private Sub EnsureActiveXCheckbox( _
+    ByVal ws As Worksheet, _
+    ByVal controlName As String, _
+    ByVal linkedCell As Range)
+
+    Dim ole As OLEObject
+    Dim boxSize As Double
+
     On Error Resume Next
-    targetRange.Validation.Delete
+    linkedCell.Validation.Delete
     On Error GoTo 0
 
-    targetRange.Validation.Add _
-        Type:=xlValidateList, _
-        AlertStyle:=xlValidAlertStop, _
-        Operator:=xlBetween, _
-        Formula1:="TRUE,FALSE"
-    targetRange.HorizontalAlignment = xlCenter
+    ' Hide TRUE/FALSE text under the checkbox; Value2 still drives load/save.
+    linkedCell.NumberFormat = ";;;"
+    linkedCell.HorizontalAlignment = xlCenter
+
+    On Error Resume Next
+    Set ole = ws.OLEObjects(controlName)
+    On Error GoTo 0
+
+    boxSize = Application.WorksheetFunction.Min(linkedCell.Height - 2, 14)
+    If boxSize < 10 Then boxSize = 12
+
+    If ole Is Nothing Then
+        Set ole = ws.OLEObjects.Add( _
+            ClassType:="Forms.CheckBox.1", _
+            Left:=linkedCell.Left + 2, _
+            Top:=linkedCell.Top + (linkedCell.Height - boxSize) / 2, _
+            Width:=boxSize + 2, _
+            Height:=boxSize)
+        ole.Name = controlName
+    Else
+        ole.Left = linkedCell.Left + 2
+        ole.Top = linkedCell.Top + (linkedCell.Height - boxSize) / 2
+        ole.Width = boxSize + 2
+        ole.Height = boxSize
+    End If
+
+    ole.Placement = xlMoveAndSize
+    On Error Resume Next
+    ole.Object.Caption = vbNullString
+    ole.LinkedCell = linkedCell.Address(RowAbsolute:=True, ColumnAbsolute:=True)
+    On Error GoTo 0
 End Sub
 
 Private Sub DeleteLegacyAverageToggleCheckboxes(ByVal ws As Worksheet)
+    Dim cb As Object
+
+    ' Remove Form Control checkboxes only (legacy avg toggles / old TRUE-FALSE UI).
     On Error Resume Next
     ws.CheckBoxes("chkAvgProcessHours").Delete
     ws.CheckBoxes("chkAvgEx").Delete
+    For Each cb In ws.CheckBoxes
+        cb.Delete
+    Next cb
     On Error GoTo 0
 End Sub
 
