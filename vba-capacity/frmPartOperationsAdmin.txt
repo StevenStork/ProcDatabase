@@ -44,7 +44,7 @@ Private Sub BuildControls()
 
     AddLabel Me, "Oper Seq", EDIT_LEFT, 72, 80
     AddTextBox Me, "txtOperSeq", EDIT_LEFT, 88, 240
-    AddLabel Me, "Operation Name", EDIT_LEFT, 116, 90
+    AddLabel Me, "Oper Code", EDIT_LEFT, 116, 90
     AddTextBox Me, "txtOperName", EDIT_LEFT, 132, 240
     AddCheckBox Me, "chkActive", "Active", EDIT_LEFT, 160
     AddLabel Me, "Notes", EDIT_LEFT, 184, 80
@@ -108,7 +108,11 @@ Private Sub LoadSelectedOperation()
     mEditingOperSeq = operSeq
     GetControl(Me, "txtOperSeq").Text = operSeq
     GetControl(Me, "txtOperSeq").Enabled = False
-    GetControl(Me, "txtOperName").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_OPERATION_NAME)))
+    If TableHasColumn(tbl, COL_OPER_CODE) Then
+        GetControl(Me, "txtOperName").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_OPER_CODE)))
+    Else
+        GetControl(Me, "txtOperName").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_OPERATION_NAME)))
+    End If
     GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
     GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
 End Sub
@@ -146,7 +150,11 @@ Private Sub SaveCurrentOperation()
     Set fieldValues = NewFieldValuesDictionary()
     fieldValues(COL_BASE_PART_CODE) = basePartCode
     fieldValues(COL_OPER_SEQ) = operSeq
-    fieldValues(COL_OPERATION_NAME) = Trim$(GetControl(Me, "txtOperName").Text)
+    If TableHasColumn(tbl, COL_OPER_CODE) Then
+        fieldValues(COL_OPER_CODE) = Trim$(GetControl(Me, "txtOperName").Text)
+    Else
+        fieldValues(COL_OPERATION_NAME) = Trim$(GetControl(Me, "txtOperName").Text)
+    End If
     fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
     fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
 

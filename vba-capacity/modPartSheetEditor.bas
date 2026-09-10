@@ -507,7 +507,9 @@ ContinueCollect:
 
         ws.Cells(sheetRow, PE_COL_OPER_SEQ).Value = operSeq
         ws.Cells(sheetRow, PE_COL_OP_LINE).Value = opLine
-        ws.Cells(sheetRow, PE_COL_OPER_NAME).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPERATION_NAME)))
+
+        ws.Cells(sheetRow, PE_COL_OPER_CODE).NumberFormat = "@"
+        ws.Cells(sheetRow, PE_COL_OPER_CODE).Value = ReadOperationCodeFromRow(tbl, rowIndex)
 
         madeInFfa = vbNullString
         If TableHasColumn(tbl, COL_MADE_IN_FFA) Then
@@ -539,20 +541,28 @@ ContinueCollect:
         End If
 
         showAvgHours = True
-        If TableHasColumn(tbl, COL_SHOW_AVG_HOURS) Then
+        If TableHasColumn(tbl, COL_USE_AVG_HOURS) Then
+            If Not IsBlankCellValue(GetCellValueByListRow(tbl, rowIndex, COL_USE_AVG_HOURS)) Then
+                showAvgHours = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_USE_AVG_HOURS))
+            End If
+        ElseIf TableHasColumn(tbl, COL_SHOW_AVG_HOURS) Then
             If Not IsBlankCellValue(GetCellValueByListRow(tbl, rowIndex, COL_SHOW_AVG_HOURS)) Then
                 showAvgHours = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_SHOW_AVG_HOURS))
             End If
         End If
-        ws.Cells(sheetRow, PE_COL_SHOW_AVG_HOURS).Value = showAvgHours
+        ws.Cells(sheetRow, PE_COL_USE_AVG_HOURS).Value = showAvgHours
 
         showAvgEx = True
-        If TableHasColumn(tbl, COL_SHOW_AVG_EX) Then
+        If TableHasColumn(tbl, COL_USE_AVG_EX) Then
+            If Not IsBlankCellValue(GetCellValueByListRow(tbl, rowIndex, COL_USE_AVG_EX)) Then
+                showAvgEx = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_USE_AVG_EX))
+            End If
+        ElseIf TableHasColumn(tbl, COL_SHOW_AVG_EX) Then
             If Not IsBlankCellValue(GetCellValueByListRow(tbl, rowIndex, COL_SHOW_AVG_EX)) Then
                 showAvgEx = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_SHOW_AVG_EX))
             End If
         End If
-        ws.Cells(sheetRow, PE_COL_SHOW_AVG_EX).Value = showAvgEx
+        ws.Cells(sheetRow, PE_COL_USE_AVG_EX).Value = showAvgEx
 
         ws.Cells(sheetRow, PE_COL_OPER_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
         ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
@@ -563,6 +573,19 @@ ContinueCollect:
         loadedCount = loadedCount + 1
     Next sortIndex
 End Sub
+
+Private Function ReadOperationCodeFromRow(ByVal tbl As ListObject, ByVal rowIndex As Long) As String
+    Dim codeText As String
+
+    codeText = vbNullString
+    If TableHasColumn(tbl, COL_OPER_CODE) Then
+        codeText = GetListRowCellText(tbl, rowIndex, COL_OPER_CODE)
+    End If
+    If Len(Trim$(codeText)) = 0 And TableHasColumn(tbl, COL_OPERATION_NAME) Then
+        codeText = GetListRowCellText(tbl, rowIndex, COL_OPERATION_NAME)
+    End If
+    ReadOperationCodeFromRow = codeText
+End Function
 
 Private Sub SortOperationListRows(ByVal tbl As ListObject, ByRef matchRows As Variant, ByVal matchCount As Long)
     Dim i As Long
@@ -642,7 +665,6 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Dim factoryCell As Range
     Dim opsEquipment As Range
     Dim opsMadeInFfa As Range
-    Dim opsShowToggle As Range
     Dim opsSeq As Range
     Dim changedRow As Long
     Dim basePartCode As String
@@ -658,9 +680,6 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Set opsMadeInFfa = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MADE_IN_FFA), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MADE_IN_FFA))
-    Set opsShowToggle = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
     Set opsSeq = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_SEQ))
@@ -688,7 +707,7 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
         GoTo CleanUp
     End If
 
-    If Not Intersect(Target, opsShowToggle) Is Nothing Or Not Intersect(Target, opsSeq) Is Nothing Then
+    If Not Intersect(Target, opsSeq) Is Nothing Then
         basePartCode = NormalizeCode(CStr(ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).Value2))
         changedRow = Target.Row
         If changedRow >= PE_OPS_DATA_START_ROW And changedRow <= PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1 Then
@@ -716,19 +735,12 @@ Private Sub ApplyAveragesForOperationRow(ByVal ws As Worksheet, ByVal sheetRow A
         Exit Sub
     End If
 
-    If IsActiveFlag(ws.Cells(sheetRow, PE_COL_SHOW_AVG_HOURS).Value2) Then
-        avgHours = AvgProcessHoursByBasePartAndOp(basePartCode, operSeq)
-        ws.Cells(sheetRow, PE_COL_AVG_HOURS).Value = FormatAverageDisplay(avgHours)
-    Else
-        ws.Cells(sheetRow, PE_COL_AVG_HOURS).ClearContents
-    End If
+    ' Calculated averages are always shown; Use Avg Hours/Ex are preference flags only.
+    avgHours = AvgProcessHoursByBasePartAndOp(basePartCode, operSeq)
+    ws.Cells(sheetRow, PE_COL_AVG_HOURS).Value = FormatAverageDisplay(avgHours)
 
-    If IsActiveFlag(ws.Cells(sheetRow, PE_COL_SHOW_AVG_EX).Value2) Then
-        avgEx = AvgExByBasePartAndOp(basePartCode, operSeq)
-        ws.Cells(sheetRow, PE_COL_AVG_EX).Value = FormatAverageDisplay(avgEx)
-    Else
-        ws.Cells(sheetRow, PE_COL_AVG_EX).ClearContents
-    End If
+    avgEx = AvgExByBasePartAndOp(basePartCode, operSeq)
+    ws.Cells(sheetRow, PE_COL_AVG_EX).Value = FormatAverageDisplay(avgEx)
 End Sub
 
 Public Sub ApplyOperationDropdowns(ByVal ws As Worksheet)
@@ -1020,17 +1032,25 @@ Private Sub SyncOperationAssignments(ByVal basePartCode As String, ByVal ws As W
         fieldValues(COL_BASE_PART_CODE) = basePartCode
         fieldValues(COL_OPER_SEQ) = operSeq
         If TableHasColumn(tbl, COL_OP_LINE) Then fieldValues(COL_OP_LINE) = opLine
-        fieldValues(COL_OPERATION_NAME) = CStr(rowData(3))
+        If TableHasColumn(tbl, COL_OPER_CODE) Then
+            fieldValues(COL_OPER_CODE) = CStr(rowData(3))
+        ElseIf TableHasColumn(tbl, COL_OPERATION_NAME) Then
+            fieldValues(COL_OPERATION_NAME) = CStr(rowData(3))
+        End If
         If TableHasColumn(tbl, COL_MADE_IN_FFA) Then fieldValues(COL_MADE_IN_FFA) = CStr(rowData(4))
         fieldValues(COL_EQUIPMENT_CODE) = CStr(rowData(5))
         fieldValues(COL_PROCESS_TYPE_CODE) = CStr(rowData(6))
         If TableHasColumn(tbl, COL_PROCESS_HOURS) Then fieldValues(COL_PROCESS_HOURS) = rowData(7)
         If TableHasColumn(tbl, COL_MANUAL_AVG_EX) Then fieldValues(COL_MANUAL_AVG_EX) = rowData(8)
         If TableHasColumn(tbl, COL_BATCH_SIZE) Then fieldValues(COL_BATCH_SIZE) = rowData(9)
-        If TableHasColumn(tbl, COL_SHOW_AVG_HOURS) Then
+        If TableHasColumn(tbl, COL_USE_AVG_HOURS) Then
+            fieldValues(COL_USE_AVG_HOURS) = ActiveFlagToCellValue(IsActiveFlag(rowData(10)))
+        ElseIf TableHasColumn(tbl, COL_SHOW_AVG_HOURS) Then
             fieldValues(COL_SHOW_AVG_HOURS) = ActiveFlagToCellValue(IsActiveFlag(rowData(10)))
         End If
-        If TableHasColumn(tbl, COL_SHOW_AVG_EX) Then
+        If TableHasColumn(tbl, COL_USE_AVG_EX) Then
+            fieldValues(COL_USE_AVG_EX) = ActiveFlagToCellValue(IsActiveFlag(rowData(11)))
+        ElseIf TableHasColumn(tbl, COL_SHOW_AVG_EX) Then
             fieldValues(COL_SHOW_AVG_EX) = ActiveFlagToCellValue(IsActiveFlag(rowData(11)))
         End If
         fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(IsActiveFlag(rowData(12)))
@@ -1045,7 +1065,41 @@ Private Sub SyncOperationAssignments(ByVal basePartCode As String, ByVal ws As W
         Else
             UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, fieldValues
         End If
+
+        WriteOperCodeText tbl, basePartCode, operSeq, opLine, CStr(rowData(3))
     Next operKey
+End Sub
+
+Private Sub WriteOperCodeText( _
+    ByVal tbl As ListObject, _
+    ByVal basePartCode As String, _
+    ByVal operSeq As String, _
+    ByVal opLine As Long, _
+    ByVal operCode As String)
+
+    Dim listRowIndex As Long
+    Dim codeCell As Range
+    Dim columnName As String
+
+    If TableHasColumn(tbl, COL_OPER_CODE) Then
+        columnName = COL_OPER_CODE
+    ElseIf TableHasColumn(tbl, COL_OPERATION_NAME) Then
+        columnName = COL_OPERATION_NAME
+    Else
+        Exit Sub
+    End If
+
+    If TableHasColumn(tbl, COL_OP_LINE) Then
+        listRowIndex = FindTripleJunctionListRow( _
+            tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, COL_OP_LINE, CStr(opLine))
+    Else
+        listRowIndex = FindJunctionListRow(tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq)
+    End If
+    If listRowIndex <= 0 Then Exit Sub
+
+    Set codeCell = tbl.ListRows(listRowIndex).Range.Cells(1, TableColumnIndex(tbl, columnName))
+    codeCell.NumberFormat = "@"
+    codeCell.Value = operCode
 End Sub
 
 Private Sub WriteEditorCache(ByVal basePartCode As String)
@@ -1085,15 +1139,15 @@ Private Sub WriteEditorCache(ByVal basePartCode As String)
 
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 1).Value = COL_OPER_SEQ
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 2).Value = COL_OP_LINE
-    wsCache.Cells(CACHE_OPS_START_ROW - 1, 3).Value = COL_OPERATION_NAME
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 3).Value = COL_OPER_CODE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 4).Value = COL_MADE_IN_FFA
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 5).Value = COL_EQUIPMENT_CODE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 6).Value = COL_PROCESS_TYPE_CODE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 7).Value = COL_PROCESS_HOURS
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 8).Value = COL_MANUAL_AVG_EX
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 9).Value = COL_BATCH_SIZE
-    wsCache.Cells(CACHE_OPS_START_ROW - 1, 10).Value = COL_SHOW_AVG_HOURS
-    wsCache.Cells(CACHE_OPS_START_ROW - 1, 11).Value = COL_SHOW_AVG_EX
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 10).Value = COL_USE_AVG_HOURS
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 11).Value = COL_USE_AVG_EX
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 12).Value = COL_ACTIVE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 13).Value = COL_NOTES
 
@@ -1103,7 +1157,8 @@ Private Sub WriteEditorCache(ByVal basePartCode As String)
         rowData = opRows(operKey)
         wsCache.Cells(sheetRow, 1).Value = CStr(rowData(1))
         wsCache.Cells(sheetRow, 2).Value = rowData(2)
-        wsCache.Cells(sheetRow, 3).Value = rowData(3)
+        wsCache.Cells(sheetRow, 3).NumberFormat = "@"
+        wsCache.Cells(sheetRow, 3).Value = CStr(rowData(3))
         wsCache.Cells(sheetRow, 4).Value = rowData(4)
         wsCache.Cells(sheetRow, 5).Value = rowData(5)
         wsCache.Cells(sheetRow, 6).Value = rowData(6)
@@ -1261,24 +1316,28 @@ Private Function ReadSheetOperationRows(ByVal ws As Worksheet) As Object
         ReDim rowData(0 To CACHE_OPS_VALUE_COL_COUNT - 1)
         rowData(1) = operSeq
         rowData(2) = opLine
-        rowData(3) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NAME).Value2))
+        If Len(Trim$(ws.Cells(rowIndex, PE_COL_OPER_CODE).Text)) > 0 Then
+            rowData(3) = Trim$(ws.Cells(rowIndex, PE_COL_OPER_CODE).Text)
+        Else
+            rowData(3) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_CODE).Value2))
+        End If
         rowData(4) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_MADE_IN_FFA).Value2))
         rowData(5) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_EQUIPMENT).Value2))
         rowData(6) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_PROCESS_TYPE).Value2))
         rowData(7) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_PROCESS_HOURS))
         rowData(8) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_MANUAL_AVG_EX))
         rowData(9) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_BATCH_SIZE))
-        rowData(10) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2)
-        rowData(11) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2)
+        rowData(10) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_USE_AVG_HOURS).Value2)
+        rowData(11) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_USE_AVG_EX).Value2)
         rowData(12) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_OPER_ACTIVE).Value2)
         rowData(13) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NOTES).Value2))
 
-        If IsEmpty(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2) _
-            Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2)))) = 0 Then
+        If IsEmpty(ws.Cells(rowIndex, PE_COL_USE_AVG_HOURS).Value2) _
+            Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_USE_AVG_HOURS).Value2)))) = 0 Then
             rowData(10) = True
         End If
-        If IsEmpty(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2) _
-            Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2)))) = 0 Then
+        If IsEmpty(ws.Cells(rowIndex, PE_COL_USE_AVG_EX).Value2) _
+            Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_USE_AVG_EX).Value2)))) = 0 Then
             rowData(11) = True
         End If
 
@@ -1348,12 +1407,15 @@ Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
     SafeClearRange ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL))
+    SafeNumberFormat ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_CODE), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_CODE)), "@"
 
     ' Restore in-cell checkbox defaults after clear.
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
     ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX)).Value = True
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_HOURS), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_EX)).Value = True
 End Sub
 
 Private Function EditorNotesRange(ByVal ws As Worksheet) As Range

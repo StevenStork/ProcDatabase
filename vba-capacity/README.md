@@ -125,13 +125,13 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
-3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** populate inline per `OperSeq` when that row’s **Show Avg Hours** / **Show Avg Ex** checkboxes are checked.
-4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Use **Op Line** (`1`, `2`, …) for multiple equipment/time rows that share the same **Oper Seq**. Pick **Made In FFA** (factory codes), then **Equipment** (filtered by that factory) and **Process Type**. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed. **Active** and **Notes** are the rightmost ops columns. Status messages appear in **C7**.
+3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** always populate inline per `OperSeq` when linked average tables are available.
+4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Use **Op Line** (`1`, `2`, …) for multiple equipment/time rows that share the same **Oper Seq**. Enter **Oper Code** as text (leading zeros preserved). Pick **Made In FFA** (factory codes), then **Equipment** (filtered by that factory) and **Process Type**. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed. **Use Avg Hours** / **Use Avg Ex** are preference flags (calculated averages are always shown). **Active** and **Notes** are the rightmost ops columns. Status messages appear in **C7**.
 5. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 
-`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present, adds the operations user columns if missing, and applies **Insert → Checkbox** in-cell checkboxes (Microsoft 365) for all true/false fields (master Active, dash Active, operation Active / Show Avg Hours / Show Avg Ex). These are cell formatting (TRUE/FALSE values), not ActiveX or Form Control objects floating on the sheet.
+`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present, adds the operations user columns if missing, and applies **Insert → Checkbox** in-cell checkboxes (Microsoft 365) for all true/false fields (master Active, dash Active, operation Active / Use Avg Hours / Use Avg Ex). These are cell formatting (TRUE/FALSE values), not ActiveX or Form Control objects floating on the sheet.
 
 **Route Card** (columns B–D, from `tblRouteCard`): dash condition parsed from `ASSEMBLY NO`, plus `OPER SEQ` and `OPER CODE` for the loaded base part. Load `tblRouteCard` to a sheet as a ListObject.
 
@@ -141,15 +141,17 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 |---|---|---|
 | **Oper Seq** | User / table | Operation sequence |
 | **Op Line** | User / table (`OpLine`) | Sub-line for multiple rows with the same Oper Seq; defaults to `1` |
-| **Operation Name** | User / table | |
+| **Oper Code** | User / table (`OperCode`) | Text format; leading zeros preserved |
 | **Made In FFA** | User / table (`MadeInFFA`) | Dropdown of factory codes; equipment list filters by this factory |
 | **Equipment** | User / table | Filtered by Made In FFA (else part factory) |
 | **Process Type** | User / table | Filtered by equipment |
 | **Process Hours** | User entry → `PartOperationsTbl.ProcessHours` | Manual override / planning value |
 | **Avg Ex** | User entry → `PartOperationsTbl.ManualAvgEx` | Manual override (not the calculated avg) |
 | **Batch Size** | User entry → `PartOperationsTbl.BatchSize` | User-entered batch size |
-| **Avg Process Hours** | Calculated | See below; shown when **Show Avg Hours** is checked |
-| **Avg Ex (Calc)** | Calculated | See below; shown when **Show Avg Ex** is checked |
+| **Use Avg Hours** | User / table (`UseAvgHours`) | Preference flag; does not hide calculated hours |
+| **Use Avg Ex** | User / table (`UseAvgEx`) | Preference flag; does not hide calculated Avg Ex |
+| **Avg Process Hours** | Calculated | Always shown when Oper Seq is set and source data exists |
+| **Avg Ex (Calc)** | Calculated | Always shown when Oper Seq is set and source data exists |
 | **Active** | User / table | Far-right checkbox column |
 | **Notes** | User / table | Far-right notes column |
 
@@ -172,7 +174,7 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 3. Matching uses the base part extracted from `ASSEMBLY NO` (text before `-` / letter separator) plus `OPER SEQ` equal to the operation row’s Oper Seq. Zero values are excluded from the average.
 4. Refresh linked data (`RefreshOperComps`, `RefreshAssyStnd`, or `RefreshAllLinkedData`) so the ListObjects are current before loading a part.
 
-Per-operation **Show Avg Hours** / **Show Avg Ex** in-cell checkboxes control whether those calculated values are filled.
+Per-operation **Use Avg Hours** / **Use Avg Ex** flags are stored preferences. Calculated **Avg Process Hours** / **Avg Ex (Calc)** always populate when Oper Seq and linked source tables are available.
 
 ## Linked query refresh
 
@@ -221,5 +223,5 @@ Run **`RefreshRouteCard`**.
 
 - **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
 - Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented. Specifically for PartEditor calc columns: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`.
-- Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so Insert→Checkbox in-cell checkboxes and the new operations columns appear. If checkbox formatting does not apply automatically, select the Active / Show Avg cells and use **Insert → Checkbox** once.
+- Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so Insert→Checkbox in-cell checkboxes and the new operations columns appear. If checkbox formatting does not apply automatically, select the Active / Use Avg cells and use **Insert → Checkbox** once.
 - First data row is **row 4** on index sheets (headers on row 3).

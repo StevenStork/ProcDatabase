@@ -63,9 +63,9 @@ Public Sub BootstrapCapacityTables()
         COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_SEPARATOR, COL_ACTIVE, COL_NOTES)
 
     EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
-        COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OP_LINE, COL_OPERATION_NAME, COL_MADE_IN_FFA, _
+        COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OP_LINE, COL_OPER_CODE, COL_MADE_IN_FFA, _
         COL_EQUIPMENT_CODE, COL_PROCESS_TYPE_CODE, COL_PROCESS_HOURS, COL_MANUAL_AVG_EX, _
-        COL_BATCH_SIZE, COL_SHOW_AVG_HOURS, COL_SHOW_AVG_EX, COL_ACTIVE, COL_NOTES)
+        COL_BATCH_SIZE, COL_USE_AVG_HOURS, COL_USE_AVG_EX, COL_ACTIVE, COL_NOTES)
 
     currentStep = "EnsureCacheSheet"
     EnsureCacheSheet
@@ -571,15 +571,15 @@ Private Sub FormatPartEditorSheet()
 
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OP_LINE).Value = "Op Line"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = "Operation Name"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_CODE).Value = "Oper Code"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_MADE_IN_FFA).Value = "Made In FFA"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_EQUIPMENT).Value = "Equipment"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_PROCESS_TYPE).Value = "Process Type"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_PROCESS_HOURS).Value = "Process Hours"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_MANUAL_AVG_EX).Value = "Avg Ex"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_BATCH_SIZE).Value = "Batch Size"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_SHOW_AVG_HOURS).Value = "Show Avg Hours"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_SHOW_AVG_EX).Value = "Show Avg Ex"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_USE_AVG_HOURS).Value = "Use Avg Hours"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_USE_AVG_EX).Value = "Use Avg Ex"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_HOURS).Value = "Avg Process Hours"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = "Avg Ex (Calc)"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = "Active"
@@ -590,6 +590,11 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_NOTES))
     StyleEditableBlock opsInputRange
+
+    ' Oper Code is text so leading zeros are preserved.
+    ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_CODE), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_CODE)).NumberFormat = "@"
 
     ' User-entered numeric columns
     ws.Range( _
@@ -605,10 +610,10 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OP_LINE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OP_LINE)).NumberFormat = "0"
 
-    ' Default Show Avg toggles to True (in-cell Insert→Checkbox values).
+    ' Default Use Avg toggles to True (in-cell Insert→Checkbox values).
     ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX)).Value = True
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_HOURS), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_EX)).Value = True
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
 
     Set avgRange = ws.Range( _
@@ -744,11 +749,11 @@ Private Sub EnsurePartEditorInCellCheckboxes(ByVal ws As Worksheet)
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_ACTIVE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_ACTIVE))
     Set opsShowHours = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_HOURS))
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_HOURS), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_HOURS))
     Set opsShowEx = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_EX), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_EX), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_EX))
     On Error GoTo 0
 
     PrepareBooleanCheckboxCells masterActive
