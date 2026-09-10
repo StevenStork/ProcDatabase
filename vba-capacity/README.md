@@ -22,7 +22,7 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | **Parts** | `BasePartsTbl` | Master index of all base parts (`Name`, `FactoryCode`, `ProductLine`, …) |
 | **PartEditor** | — | Load/edit workspace for one part at a time |
 | PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part (`Separator`, `Active`) |
-| PartOperations | `PartOperationsTbl` | Operations per base part (`OperSeq`, equipment, process type, avg toggles) |
+| PartOperations | `PartOperationsTbl` | Operations per base part (`OperSeq`, `OpLine`, Made In FFA, equipment, process type, times, avg toggles) |
 | PartEditorCache | — | Hidden cache for sheet editor save diff (auto-created) |
 
 ### Linked source queries (connection-only)
@@ -126,7 +126,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
 3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** populate inline per `OperSeq` when that row’s **Show Avg Hours** / **Show Avg Ex** checkboxes are checked.
-4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Pick **Equipment** (factory equipment) and **Process Type** (processes for that equipment) from the dropdowns. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed (separate from the calculated columns). Status messages appear in **C7**.
+4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Use **Op Line** (`1`, `2`, …) for multiple equipment/time rows that share the same **Oper Seq**. Pick **Made In FFA** (factory codes), then **Equipment** (filtered by that factory) and **Process Type**. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed. **Active** and **Notes** are the rightmost ops columns. Status messages appear in **C7**.
 5. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
@@ -139,11 +139,19 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 
 | Column | Source | Notes |
 |---|---|---|
+| **Oper Seq** | User / table | Operation sequence |
+| **Op Line** | User / table (`OpLine`) | Sub-line for multiple rows with the same Oper Seq; defaults to `1` |
+| **Operation Name** | User / table | |
+| **Made In FFA** | User / table (`MadeInFFA`) | Dropdown of factory codes; equipment list filters by this factory |
+| **Equipment** | User / table | Filtered by Made In FFA (else part factory) |
+| **Process Type** | User / table | Filtered by equipment |
 | **Process Hours** | User entry → `PartOperationsTbl.ProcessHours` | Manual override / planning value |
 | **Avg Ex** | User entry → `PartOperationsTbl.ManualAvgEx` | Manual override (not the calculated avg) |
 | **Batch Size** | User entry → `PartOperationsTbl.BatchSize` | User-entered batch size |
 | **Avg Process Hours** | Calculated | See below; shown when **Show Avg Hours** is checked |
 | **Avg Ex (Calc)** | Calculated | See below; shown when **Show Avg Ex** is checked |
+| **Active** | User / table | Far-right checkbox column |
+| **Notes** | User / table | Far-right notes column |
 
 ### Average calculations (`modAverages`)
 

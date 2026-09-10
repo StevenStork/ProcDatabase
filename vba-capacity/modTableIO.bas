@@ -122,6 +122,94 @@ Public Function JunctionExists( _
     JunctionExists = (FindJunctionListRow(tbl, key1ColumnName, key1Value, key2ColumnName, key2Value) > 0)
 End Function
 
+Public Function FindTripleJunctionListRow( _
+    ByVal tbl As ListObject, _
+    ByVal key1ColumnName As String, _
+    ByVal key1Value As String, _
+    ByVal key2ColumnName As String, _
+    ByVal key2Value As String, _
+    ByVal key3ColumnName As String, _
+    ByVal key3Value As String) As Long
+
+    Dim key1Values As Variant
+    Dim key2Values As Variant
+    Dim key3Values As Variant
+    Dim rowIndex As Long
+    Dim rowCount As Long
+
+    FindTripleJunctionListRow = 0
+    If tbl Is Nothing Then Exit Function
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+    If Not TableHasColumn(tbl, key1ColumnName) Then Exit Function
+    If Not TableHasColumn(tbl, key2ColumnName) Then Exit Function
+    If Not TableHasColumn(tbl, key3ColumnName) Then Exit Function
+
+    key1Values = tbl.ListColumns(key1ColumnName).DataBodyRange.Value2
+    key2Values = tbl.ListColumns(key2ColumnName).DataBodyRange.Value2
+    key3Values = tbl.ListColumns(key3ColumnName).DataBodyRange.Value2
+
+    If Not IsArray(key1Values) Then
+        If ValuesMatchCode(key1Values, key1Value) _
+            And ValuesMatchCode(key2Values, key2Value) _
+            And ValuesMatchCode(key3Values, key3Value) Then
+            FindTripleJunctionListRow = tbl.ListRows(1).Index
+        End If
+        Exit Function
+    End If
+
+    rowCount = UBound(key1Values, 1)
+    For rowIndex = 1 To rowCount
+        If ValuesMatchCode(key1Values(rowIndex, 1), key1Value) _
+            And ValuesMatchCode(key2Values(rowIndex, 1), key2Value) _
+            And ValuesMatchCode(key3Values(rowIndex, 1), key3Value) Then
+            FindTripleJunctionListRow = tbl.ListRows(rowIndex).Index
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Sub DeleteTripleJunctionRow( _
+    ByVal tbl As ListObject, _
+    ByVal key1ColumnName As String, _
+    ByVal key1Value As String, _
+    ByVal key2ColumnName As String, _
+    ByVal key2Value As String, _
+    ByVal key3ColumnName As String, _
+    ByVal key3Value As String)
+
+    Dim listRowIndex As Long
+
+    listRowIndex = FindTripleJunctionListRow( _
+        tbl, key1ColumnName, key1Value, key2ColumnName, key2Value, key3ColumnName, key3Value)
+    If listRowIndex > 0 Then
+        tbl.ListRows(listRowIndex).Delete
+    End If
+End Sub
+
+Public Sub UpsertTripleJunctionRow( _
+    ByVal tbl As ListObject, _
+    ByVal key1ColumnName As String, _
+    ByVal key1Value As String, _
+    ByVal key2ColumnName As String, _
+    ByVal key2Value As String, _
+    ByVal key3ColumnName As String, _
+    ByVal key3Value As String, _
+    ByVal fieldValues As Object)
+
+    Dim listRowIndex As Long
+    Dim colName As Variant
+
+    listRowIndex = FindTripleJunctionListRow( _
+        tbl, key1ColumnName, key1Value, key2ColumnName, key2Value, key3ColumnName, key3Value)
+    If listRowIndex = 0 Then
+        listRowIndex = GetOrCreateListRowIndex(tbl)
+    End If
+
+    For Each colName In fieldValues.Keys
+        SetCellValueByListRow tbl, listRowIndex, CStr(colName), fieldValues(colName)
+    Next colName
+End Sub
+
 Public Function GetCellValueByListRow(ByVal tbl As ListObject, ByVal listRowIndex As Long, ByVal columnName As String) As Variant
     Dim lr As ListRow
 

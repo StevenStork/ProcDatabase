@@ -458,11 +458,17 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     Dim rowCount As Long
     Dim sheetRow As Long
     Dim loadedCount As Long
+    Dim matchCount As Long
+    Dim sortIndex As Long
+    Dim matchRows() As Variant
     Dim operSeq As String
+    Dim opLine As Long
     Dim showAvgHours As Boolean
     Dim showAvgEx As Boolean
     Dim equipmentCode As String
     Dim processTypeCode As String
+    Dim madeInFfa As String
+    Dim partFactory As String
 
     Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
     If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
@@ -471,16 +477,44 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     If Not IsArray(operSeqValues) Then Exit Sub
 
     rowCount = UBound(operSeqValues, 1)
+    partFactory = NormalizeCode(CStr(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value2))
+    matchCount = 0
+    ReDim matchRows(1 To PE_OPS_MAX_ROWS, 1 To 1)
+
+    For rowIndex = 1 To rowCount
+        If Not ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then GoTo ContinueCollect
+        If matchCount >= PE_OPS_MAX_ROWS Then Exit For
+        matchCount = matchCount + 1
+        matchRows(matchCount, 1) = rowIndex
+
+ContinueCollect:
+    Next rowIndex
+
+    If matchCount = 0 Then Exit Sub
+
+    ' Sort by Oper Seq then Op Line.
+    SortOperationListRows tbl, matchRows, matchCount
+
     sheetRow = PE_OPS_DATA_START_ROW
     loadedCount = 0
 
-    For rowIndex = 1 To rowCount
-        If Not ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then GoTo ContinueOp
+    For sortIndex = 1 To matchCount
+        rowIndex = CLng(matchRows(sortIndex, 1))
         If loadedCount >= PE_OPS_MAX_ROWS Then Exit For
 
         operSeq = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ))))
+        opLine = ReadOpLineValue(GetCellValueByListRow(tbl, rowIndex, COL_OP_LINE))
+
         ws.Cells(sheetRow, PE_COL_OPER_SEQ).Value = operSeq
+        ws.Cells(sheetRow, PE_COL_OP_LINE).Value = opLine
         ws.Cells(sheetRow, PE_COL_OPER_NAME).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPERATION_NAME)))
+
+        madeInFfa = vbNullString
+        If TableHasColumn(tbl, COL_MADE_IN_FFA) Then
+            madeInFfa = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_MADE_IN_FFA))))
+        End If
+        If Len(madeInFfa) = 0 Then madeInFfa = partFactory
+        ws.Cells(sheetRow, PE_COL_MADE_IN_FFA).Value = madeInFfa
 
         equipmentCode = vbNullString
         If TableHasColumn(tbl, COL_EQUIPMENT_CODE) Then
@@ -493,9 +527,6 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
             processTypeCode = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_PROCESS_TYPE_CODE))))
         End If
         ws.Cells(sheetRow, PE_COL_PROCESS_TYPE).Value = processTypeCode
-
-        ws.Cells(sheetRow, PE_COL_OPER_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
-        ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
 
         If TableHasColumn(tbl, COL_PROCESS_HOURS) Then
             ws.Cells(sheetRow, PE_COL_PROCESS_HOURS).Value = GetCellValueByListRow(tbl, rowIndex, COL_PROCESS_HOURS)
@@ -523,20 +554,94 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
         End If
         ws.Cells(sheetRow, PE_COL_SHOW_AVG_EX).Value = showAvgEx
 
+        ws.Cells(sheetRow, PE_COL_OPER_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
+        ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
+
         ApplyAveragesForOperationRow ws, sheetRow, basePartCode
 
         sheetRow = sheetRow + 1
         loadedCount = loadedCount + 1
-
-ContinueOp:
-    Next rowIndex
+    Next sortIndex
 End Sub
+
+Private Sub SortOperationListRows(ByVal tbl As ListObject, ByRef matchRows As Variant, ByVal matchCount As Long)
+    Dim i As Long
+    Dim j As Long
+    Dim leftRow As Long
+    Dim rightRow As Long
+    Dim leftSeq As String
+    Dim rightSeq As String
+    Dim leftLine As Long
+    Dim rightLine As Long
+    Dim swapValue As Variant
+
+    For i = 1 To matchCount - 1
+        For j = i + 1 To matchCount
+            leftRow = CLng(matchRows(i, 1))
+            rightRow = CLng(matchRows(j, 1))
+            leftSeq = NormalizeOperSeqKey(CStr(NzBlank(GetCellValueByListRow(tbl, leftRow, COL_OPER_SEQ))))
+            rightSeq = NormalizeOperSeqKey(CStr(NzBlank(GetCellValueByListRow(tbl, rightRow, COL_OPER_SEQ))))
+            leftLine = ReadOpLineValue(GetCellValueByListRow(tbl, leftRow, COL_OP_LINE))
+            rightLine = ReadOpLineValue(GetCellValueByListRow(tbl, rightRow, COL_OP_LINE))
+
+            If CompareOperSeqThenLine(leftSeq, leftLine, rightSeq, rightLine) > 0 Then
+                swapValue = matchRows(i, 1)
+                matchRows(i, 1) = matchRows(j, 1)
+                matchRows(j, 1) = swapValue
+            End If
+        Next j
+    Next i
+End Sub
+
+Private Function CompareOperSeqThenLine( _
+    ByVal leftSeq As String, _
+    ByVal leftLine As Long, _
+    ByVal rightSeq As String, _
+    ByVal rightLine As Long) As Long
+
+    If IsNumeric(leftSeq) And IsNumeric(rightSeq) Then
+        If CDbl(leftSeq) < CDbl(rightSeq) Then
+            CompareOperSeqThenLine = -1
+            Exit Function
+        ElseIf CDbl(leftSeq) > CDbl(rightSeq) Then
+            CompareOperSeqThenLine = 1
+            Exit Function
+        End If
+    Else
+        CompareOperSeqThenLine = StrComp(leftSeq, rightSeq, vbTextCompare)
+        If CompareOperSeqThenLine <> 0 Then Exit Function
+    End If
+
+    If leftLine < rightLine Then
+        CompareOperSeqThenLine = -1
+    ElseIf leftLine > rightLine Then
+        CompareOperSeqThenLine = 1
+    Else
+        CompareOperSeqThenLine = 0
+    End If
+End Function
+
+Private Function ReadOpLineValue(ByVal rawValue As Variant) As Long
+    If IsError(rawValue) Then
+        ReadOpLineValue = 1
+    ElseIf IsEmpty(rawValue) Or IsNull(rawValue) Then
+        ReadOpLineValue = 1
+    ElseIf Len(Trim$(CStr(rawValue))) = 0 Then
+        ReadOpLineValue = 1
+    ElseIf IsNumeric(rawValue) Then
+        ReadOpLineValue = CLng(CDbl(rawValue))
+        If ReadOpLineValue < 1 Then ReadOpLineValue = 1
+    Else
+        ReadOpLineValue = 1
+    End If
+End Function
 
 ' Called from ThisWorkbook SheetChange for cascading dropdowns and avg toggles.
 Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Dim ws As Worksheet
     Dim factoryCell As Range
     Dim opsEquipment As Range
+    Dim opsMadeInFfa As Range
     Dim opsShowToggle As Range
     Dim opsSeq As Range
     Dim changedRow As Long
@@ -550,6 +655,9 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Set opsEquipment = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_EQUIPMENT), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_EQUIPMENT))
+    Set opsMadeInFfa = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MADE_IN_FFA), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MADE_IN_FFA))
     Set opsShowToggle = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
@@ -563,6 +671,13 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     If Not Intersect(Target, factoryCell) Is Nothing Then
         ApplyOperationDropdowns ws
         ClearInvalidEquipmentAndProcess ws
+        GoTo CleanUp
+    End If
+
+    If Not Intersect(Target, opsMadeInFfa) Is Nothing Then
+        changedRow = Intersect(Target, opsMadeInFfa).Row
+        ApplyEquipmentValidationForRow ws, changedRow
+        ClearInvalidEquipmentAndProcessForRow ws, changedRow
         GoTo CleanUp
     End If
 
@@ -617,25 +732,43 @@ Private Sub ApplyAveragesForOperationRow(ByVal ws As Worksheet, ByVal sheetRow A
 End Sub
 
 Public Sub ApplyOperationDropdowns(ByVal ws As Worksheet)
-    Dim factoryCode As String
-    Dim equipmentList As String
     Dim rowIndex As Long
-    Dim equipmentRange As Range
+    Dim madeInRange As Range
+    Dim factoryCodes As String
 
     If ws Is Nothing Then Set ws = GetPartEditorWorksheet()
     If ws Is Nothing Then Exit Sub
 
-    factoryCode = NormalizeCode(CStr(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value2))
-    equipmentList = BuildEquipmentValidationList(factoryCode)
-
-    Set equipmentRange = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_EQUIPMENT), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_EQUIPMENT))
-    ApplyListValidation equipmentRange, equipmentList
+    factoryCodes = BuildFactoryValidationList()
+    Set madeInRange = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MADE_IN_FFA), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MADE_IN_FFA))
+    ApplyListValidation madeInRange, factoryCodes
 
     For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+        ApplyEquipmentValidationForRow ws, rowIndex
         ApplyProcessTypeValidationForRow ws, rowIndex
     Next rowIndex
+End Sub
+
+Private Function OperationFactoryCodeForRow(ByVal ws As Worksheet, ByVal sheetRow As Long) As String
+    Dim madeInFfa As String
+
+    madeInFfa = NormalizeCode(CStr(ws.Cells(sheetRow, PE_COL_MADE_IN_FFA).Value2))
+    If Len(madeInFfa) > 0 Then
+        OperationFactoryCodeForRow = madeInFfa
+    Else
+        OperationFactoryCodeForRow = NormalizeCode(CStr(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value2))
+    End If
+End Function
+
+Private Sub ApplyEquipmentValidationForRow(ByVal ws As Worksheet, ByVal sheetRow As Long)
+    Dim factoryCode As String
+    Dim equipmentList As String
+
+    factoryCode = OperationFactoryCodeForRow(ws, sheetRow)
+    equipmentList = BuildEquipmentValidationList(factoryCode)
+    ApplyListValidation ws.Cells(sheetRow, PE_COL_EQUIPMENT), equipmentList
 End Sub
 
 Private Sub ApplyProcessTypeValidationForRow(ByVal ws As Worksheet, ByVal sheetRow As Long)
@@ -661,26 +794,33 @@ Private Sub ClearInvalidProcessTypeForRow(ByVal ws As Worksheet, ByVal sheetRow 
     End If
 End Sub
 
-Private Sub ClearInvalidEquipmentAndProcess(ByVal ws As Worksheet)
+Private Sub ClearInvalidEquipmentAndProcessForRow(ByVal ws As Worksheet, ByVal sheetRow As Long)
     Dim factoryCode As String
     Dim equipmentList As String
-    Dim rowIndex As Long
     Dim equipmentCode As String
 
-    factoryCode = NormalizeCode(CStr(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value2))
+    factoryCode = OperationFactoryCodeForRow(ws, sheetRow)
     equipmentList = "," & UCase$(BuildEquipmentValidationList(factoryCode)) & ","
+    equipmentCode = NormalizeCode(CStr(ws.Cells(sheetRow, PE_COL_EQUIPMENT).Value2))
+
+    If Len(equipmentCode) > 0 Then
+        If InStr(1, equipmentList, "," & UCase$(equipmentCode) & ",", vbTextCompare) = 0 Then
+            ws.Cells(sheetRow, PE_COL_EQUIPMENT).ClearContents
+            ws.Cells(sheetRow, PE_COL_PROCESS_TYPE).ClearContents
+        Else
+            ClearInvalidProcessTypeForRow ws, sheetRow
+        End If
+    End If
+
+    ApplyEquipmentValidationForRow ws, sheetRow
+    ApplyProcessTypeValidationForRow ws, sheetRow
+End Sub
+
+Private Sub ClearInvalidEquipmentAndProcess(ByVal ws As Worksheet)
+    Dim rowIndex As Long
 
     For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
-        equipmentCode = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_EQUIPMENT).Value2))
-        If Len(equipmentCode) > 0 Then
-            If InStr(1, equipmentList, "," & UCase$(equipmentCode) & ",", vbTextCompare) = 0 Then
-                ws.Cells(rowIndex, PE_COL_EQUIPMENT).ClearContents
-                ws.Cells(rowIndex, PE_COL_PROCESS_TYPE).ClearContents
-            Else
-                ClearInvalidProcessTypeForRow ws, rowIndex
-            End If
-        End If
-        ApplyProcessTypeValidationForRow ws, rowIndex
+        ClearInvalidEquipmentAndProcessForRow ws, rowIndex
     Next rowIndex
 End Sub
 
@@ -848,6 +988,8 @@ Private Sub SyncOperationAssignments(ByVal basePartCode As String, ByVal ws As W
     Dim operKey As Variant
     Dim rowData As Variant
     Dim fieldValues As Object
+    Dim operSeq As String
+    Dim opLine As Long
 
     Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
     If tbl Is Nothing Then Exit Sub
@@ -857,31 +999,52 @@ Private Sub SyncOperationAssignments(ByVal basePartCode As String, ByVal ws As W
 
     For Each operKey In cacheRows.Keys
         If Not currentRows.Exists(operKey) Then
-            DeleteJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, CStr(operKey)
+            ParseOperationCacheKey CStr(operKey), operSeq, opLine
+            If TableHasColumn(tbl, COL_OP_LINE) Then
+                DeleteTripleJunctionRow tbl, _
+                    COL_BASE_PART_CODE, basePartCode, _
+                    COL_OPER_SEQ, operSeq, _
+                    COL_OP_LINE, CStr(opLine)
+            Else
+                DeleteJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq
+            End If
         End If
     Next operKey
 
     For Each operKey In currentRows.Keys
         rowData = currentRows(operKey)
+        operSeq = CStr(rowData(1))
+        opLine = ReadOpLineValue(rowData(2))
+
         Set fieldValues = NewFieldValuesDictionary()
         fieldValues(COL_BASE_PART_CODE) = basePartCode
-        fieldValues(COL_OPER_SEQ) = CStr(operKey)
-        fieldValues(COL_OPERATION_NAME) = CStr(rowData(1))
-        fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(IsActiveFlag(rowData(2)))
-        fieldValues(COL_NOTES) = CStr(rowData(3))
-        fieldValues(COL_EQUIPMENT_CODE) = CStr(rowData(4))
-        fieldValues(COL_PROCESS_TYPE_CODE) = CStr(rowData(5))
-        If TableHasColumn(tbl, COL_PROCESS_HOURS) Then fieldValues(COL_PROCESS_HOURS) = rowData(6)
-        If TableHasColumn(tbl, COL_MANUAL_AVG_EX) Then fieldValues(COL_MANUAL_AVG_EX) = rowData(7)
-        If TableHasColumn(tbl, COL_BATCH_SIZE) Then fieldValues(COL_BATCH_SIZE) = rowData(8)
+        fieldValues(COL_OPER_SEQ) = operSeq
+        If TableHasColumn(tbl, COL_OP_LINE) Then fieldValues(COL_OP_LINE) = opLine
+        fieldValues(COL_OPERATION_NAME) = CStr(rowData(3))
+        If TableHasColumn(tbl, COL_MADE_IN_FFA) Then fieldValues(COL_MADE_IN_FFA) = CStr(rowData(4))
+        fieldValues(COL_EQUIPMENT_CODE) = CStr(rowData(5))
+        fieldValues(COL_PROCESS_TYPE_CODE) = CStr(rowData(6))
+        If TableHasColumn(tbl, COL_PROCESS_HOURS) Then fieldValues(COL_PROCESS_HOURS) = rowData(7)
+        If TableHasColumn(tbl, COL_MANUAL_AVG_EX) Then fieldValues(COL_MANUAL_AVG_EX) = rowData(8)
+        If TableHasColumn(tbl, COL_BATCH_SIZE) Then fieldValues(COL_BATCH_SIZE) = rowData(9)
         If TableHasColumn(tbl, COL_SHOW_AVG_HOURS) Then
-            fieldValues(COL_SHOW_AVG_HOURS) = ActiveFlagToCellValue(IsActiveFlag(rowData(9)))
+            fieldValues(COL_SHOW_AVG_HOURS) = ActiveFlagToCellValue(IsActiveFlag(rowData(10)))
         End If
         If TableHasColumn(tbl, COL_SHOW_AVG_EX) Then
-            fieldValues(COL_SHOW_AVG_EX) = ActiveFlagToCellValue(IsActiveFlag(rowData(10)))
+            fieldValues(COL_SHOW_AVG_EX) = ActiveFlagToCellValue(IsActiveFlag(rowData(11)))
         End If
+        fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(IsActiveFlag(rowData(12)))
+        fieldValues(COL_NOTES) = CStr(rowData(13))
 
-        UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, CStr(operKey), fieldValues
+        If TableHasColumn(tbl, COL_OP_LINE) Then
+            UpsertTripleJunctionRow tbl, _
+                COL_BASE_PART_CODE, basePartCode, _
+                COL_OPER_SEQ, operSeq, _
+                COL_OP_LINE, CStr(opLine), _
+                fieldValues
+        Else
+            UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, fieldValues
+        End If
     Next operKey
 End Sub
 
@@ -921,9 +1084,9 @@ Private Sub WriteEditorCache(ByVal basePartCode As String)
     Next dashKey
 
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 1).Value = COL_OPER_SEQ
-    wsCache.Cells(CACHE_OPS_START_ROW - 1, 2).Value = COL_OPERATION_NAME
-    wsCache.Cells(CACHE_OPS_START_ROW - 1, 3).Value = COL_ACTIVE
-    wsCache.Cells(CACHE_OPS_START_ROW - 1, 4).Value = COL_NOTES
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 2).Value = COL_OP_LINE
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 3).Value = COL_OPERATION_NAME
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 4).Value = COL_MADE_IN_FFA
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 5).Value = COL_EQUIPMENT_CODE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 6).Value = COL_PROCESS_TYPE_CODE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 7).Value = COL_PROCESS_HOURS
@@ -931,22 +1094,26 @@ Private Sub WriteEditorCache(ByVal basePartCode As String)
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 9).Value = COL_BATCH_SIZE
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 10).Value = COL_SHOW_AVG_HOURS
     wsCache.Cells(CACHE_OPS_START_ROW - 1, 11).Value = COL_SHOW_AVG_EX
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 12).Value = COL_ACTIVE
+    wsCache.Cells(CACHE_OPS_START_ROW - 1, 13).Value = COL_NOTES
 
     Set opRows = ReadSheetOperationRows(wsEditor)
     sheetRow = CACHE_OPS_START_ROW
     For Each operKey In opRows.Keys
         rowData = opRows(operKey)
-        wsCache.Cells(sheetRow, 1).Value = CStr(operKey)
-        wsCache.Cells(sheetRow, 2).Value = rowData(1)
-        wsCache.Cells(sheetRow, 3).Value = rowData(2)
-        wsCache.Cells(sheetRow, 4).Value = rowData(3)
-        wsCache.Cells(sheetRow, 5).Value = rowData(4)
-        wsCache.Cells(sheetRow, 6).Value = rowData(5)
-        wsCache.Cells(sheetRow, 7).Value = rowData(6)
-        wsCache.Cells(sheetRow, 8).Value = rowData(7)
-        wsCache.Cells(sheetRow, 9).Value = rowData(8)
-        wsCache.Cells(sheetRow, 10).Value = rowData(9)
-        wsCache.Cells(sheetRow, 11).Value = rowData(10)
+        wsCache.Cells(sheetRow, 1).Value = CStr(rowData(1))
+        wsCache.Cells(sheetRow, 2).Value = rowData(2)
+        wsCache.Cells(sheetRow, 3).Value = rowData(3)
+        wsCache.Cells(sheetRow, 4).Value = rowData(4)
+        wsCache.Cells(sheetRow, 5).Value = rowData(5)
+        wsCache.Cells(sheetRow, 6).Value = rowData(6)
+        wsCache.Cells(sheetRow, 7).Value = rowData(7)
+        wsCache.Cells(sheetRow, 8).Value = rowData(8)
+        wsCache.Cells(sheetRow, 9).Value = rowData(9)
+        wsCache.Cells(sheetRow, 10).Value = rowData(10)
+        wsCache.Cells(sheetRow, 11).Value = rowData(11)
+        wsCache.Cells(sheetRow, 12).Value = rowData(12)
+        wsCache.Cells(sheetRow, 13).Value = rowData(13)
         sheetRow = sheetRow + 1
     Next operKey
 End Sub
@@ -962,10 +1129,6 @@ End Sub
 
 Private Function ReadCachedDashRows() As Object
     Set ReadCachedDashRows = ReadCacheSection(CACHE_DASH_START_ROW, 1, 4)
-End Function
-
-Private Function ReadCachedOperationRows() As Object
-    Set ReadCachedOperationRows = ReadCacheSection(CACHE_OPS_START_ROW, 1, CACHE_OPS_VALUE_COL_COUNT)
 End Function
 
 Private Function ReadCacheSection(ByVal startRow As Long, ByVal keyCol As Long, ByVal valueColCount As Long) As Object
@@ -1041,10 +1204,49 @@ ContinueDash:
     Set ReadSheetDashRows = rows
 End Function
 
+Private Function ReadCachedOperationRows() As Object
+    Dim wsCache As Worksheet
+    Dim rows As Object
+    Dim rowIndex As Long
+    Dim operSeq As String
+    Dim opLine As Long
+    Dim rowData As Variant
+    Dim valueIndex As Long
+
+    Set rows = CreateObject("Scripting.Dictionary")
+    rows.CompareMode = vbTextCompare
+
+    Set wsCache = GetCacheWorksheet()
+    If wsCache Is Nothing Then
+        Set ReadCachedOperationRows = rows
+        Exit Function
+    End If
+
+    rowIndex = CACHE_OPS_START_ROW
+    Do While Len(Trim$(CStr(NzBlank(wsCache.Cells(rowIndex, 1).Value2)))) > 0
+        operSeq = Trim$(CStr(NzBlank(wsCache.Cells(rowIndex, 1).Value2)))
+        opLine = ReadOpLineValue(wsCache.Cells(rowIndex, 2).Value2)
+
+        ReDim rowData(0 To CACHE_OPS_VALUE_COL_COUNT - 1)
+        rowData(1) = operSeq
+        rowData(2) = opLine
+        For valueIndex = 3 To CACHE_OPS_VALUE_COL_COUNT - 1
+            rowData(valueIndex) = wsCache.Cells(rowIndex, valueIndex).Value2
+        Next valueIndex
+
+        rows(BuildOperationCacheKey(operSeq, opLine)) = rowData
+        rowIndex = rowIndex + 1
+        If rowIndex > CACHE_OPS_START_ROW + 100 Then Exit Do
+    Loop
+
+    Set ReadCachedOperationRows = rows
+End Function
+
 Private Function ReadSheetOperationRows(ByVal ws As Worksheet) As Object
     Dim rows As Object
     Dim rowIndex As Long
     Dim operSeq As String
+    Dim opLine As Long
     Dim rowData As Variant
 
     Set rows = CreateObject("Scripting.Dictionary")
@@ -1054,32 +1256,58 @@ Private Function ReadSheetOperationRows(ByVal ws As Worksheet) As Object
         operSeq = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_SEQ).Value2))
         If Len(operSeq) = 0 Then GoTo ContinueOp
 
+        opLine = ReadOpLineValue(ws.Cells(rowIndex, PE_COL_OP_LINE).Value2)
+
         ReDim rowData(0 To CACHE_OPS_VALUE_COL_COUNT - 1)
-        rowData(1) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NAME).Value2))
-        rowData(2) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_OPER_ACTIVE).Value2)
-        rowData(3) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NOTES).Value2))
-        rowData(4) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_EQUIPMENT).Value2))
-        rowData(5) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_PROCESS_TYPE).Value2))
-        rowData(6) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_PROCESS_HOURS))
-        rowData(7) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_MANUAL_AVG_EX))
-        rowData(8) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_BATCH_SIZE))
-        rowData(9) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2)
-        rowData(10) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2)
-        ' Empty toggle cells default to True on save.
+        rowData(1) = operSeq
+        rowData(2) = opLine
+        rowData(3) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NAME).Value2))
+        rowData(4) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_MADE_IN_FFA).Value2))
+        rowData(5) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_EQUIPMENT).Value2))
+        rowData(6) = NormalizeCode(CStr(ws.Cells(rowIndex, PE_COL_PROCESS_TYPE).Value2))
+        rowData(7) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_PROCESS_HOURS))
+        rowData(8) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_MANUAL_AVG_EX))
+        rowData(9) = ReadOptionalNumericCell(ws.Cells(rowIndex, PE_COL_BATCH_SIZE))
+        rowData(10) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2)
+        rowData(11) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2)
+        rowData(12) = IsActiveFlag(ws.Cells(rowIndex, PE_COL_OPER_ACTIVE).Value2)
+        rowData(13) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NOTES).Value2))
+
         If IsEmpty(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2) _
             Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS).Value2)))) = 0 Then
-            rowData(9) = True
+            rowData(10) = True
         End If
         If IsEmpty(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2) _
             Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX).Value2)))) = 0 Then
-            rowData(10) = True
+            rowData(11) = True
         End If
-        rows(NormalizeOperSeqKey(operSeq)) = rowData
+
+        rows(BuildOperationCacheKey(operSeq, opLine)) = rowData
 
 ContinueOp:
     Next rowIndex
 
     Set ReadSheetOperationRows = rows
+End Function
+
+Private Function BuildOperationCacheKey(ByVal operSeq As String, ByVal opLine As Long) As String
+    BuildOperationCacheKey = NormalizeOperSeqKey(operSeq) & vbTab & CStr(opLine)
+End Function
+
+Private Sub ParseOperationCacheKey(ByVal cacheKey As String, ByRef operSeq As String, ByRef opLine As Long)
+    Dim parts As Variant
+
+    parts = Split(cacheKey, vbTab)
+    If UBound(parts) >= 0 Then
+        operSeq = CStr(parts(0))
+    Else
+        operSeq = vbNullString
+    End If
+    If UBound(parts) >= 1 Then
+        opLine = ReadOpLineValue(parts(1))
+    Else
+        opLine = 1
+    End If
 End Function
 
 Private Function ReadOptionalNumericCell(ByVal cell As Range) As Variant

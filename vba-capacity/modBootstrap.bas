@@ -63,9 +63,9 @@ Public Sub BootstrapCapacityTables()
         COL_BASE_PART_CODE, COL_DASH_CONDITION, COL_SEPARATOR, COL_ACTIVE, COL_NOTES)
 
     EnsureTable PART_OPERATIONS_SHEET_NAME, PART_OPERATIONS_TABLE_NAME, Array( _
-        COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OPERATION_NAME, COL_EQUIPMENT_CODE, _
-        COL_PROCESS_TYPE_CODE, COL_ACTIVE, COL_NOTES, COL_PROCESS_HOURS, COL_MANUAL_AVG_EX, _
-        COL_BATCH_SIZE, COL_SHOW_AVG_HOURS, COL_SHOW_AVG_EX)
+        COL_BASE_PART_CODE, COL_OPER_SEQ, COL_OP_LINE, COL_OPERATION_NAME, COL_MADE_IN_FFA, _
+        COL_EQUIPMENT_CODE, COL_PROCESS_TYPE_CODE, COL_PROCESS_HOURS, COL_MANUAL_AVG_EX, _
+        COL_BATCH_SIZE, COL_SHOW_AVG_HOURS, COL_SHOW_AVG_EX, COL_ACTIVE, COL_NOTES)
 
     currentStep = "EnsureCacheSheet"
     EnsureCacheSheet
@@ -570,11 +570,11 @@ Private Sub FormatPartEditorSheet()
     StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_OPS_COL_START, PE_OPS_LAST_COL, "Operations"
 
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ).Value = "Oper Seq"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OP_LINE).Value = "Op Line"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NAME).Value = "Operation Name"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_MADE_IN_FFA).Value = "Made In FFA"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_EQUIPMENT).Value = "Equipment"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_PROCESS_TYPE).Value = "Process Type"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = "Active"
-    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = "Notes"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_PROCESS_HOURS).Value = "Process Hours"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_MANUAL_AVG_EX).Value = "Avg Ex"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_BATCH_SIZE).Value = "Batch Size"
@@ -582,11 +582,13 @@ Private Sub FormatPartEditorSheet()
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_SHOW_AVG_EX).Value = "Show Avg Ex"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_HOURS).Value = "Avg Process Hours"
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_AVG_EX).Value = "Avg Ex (Calc)"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_ACTIVE).Value = "Active"
+    ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = "Notes"
     StyleTableHeaderRow ws.Range(ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ), ws.Cells(PE_OPS_HEADER_ROW, PE_OPS_LAST_COL))
 
     Set opsInputRange = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_NOTES))
     StyleEditableBlock opsInputRange
 
     ' User-entered numeric columns
@@ -599,6 +601,9 @@ Private Sub FormatPartEditorSheet()
     ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_BATCH_SIZE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_BATCH_SIZE)).NumberFormat = "0.####"
+    ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OP_LINE), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OP_LINE)).NumberFormat = "0"
 
     ' Default Show Avg toggles to True (in-cell Insert→Checkbox values).
     ws.Range( _
@@ -619,10 +624,10 @@ Private Sub FormatPartEditorSheet()
     ws.Columns("D").ColumnWidth = 12
     ws.Columns("E").ColumnWidth = 3
     ws.Columns("F").ColumnWidth = 10
-    ws.Columns("G").ColumnWidth = 16
-    ws.Columns("H").ColumnWidth = 12
+    ws.Columns("G").ColumnWidth = 8
+    ws.Columns("H").ColumnWidth = 16
     ws.Columns("I").ColumnWidth = 12
-    ws.Columns("J").ColumnWidth = 8
+    ws.Columns("J").ColumnWidth = 12
     ws.Columns("K").ColumnWidth = 12
     ws.Columns("L").ColumnWidth = 12
     ws.Columns("M").ColumnWidth = 10
@@ -631,11 +636,38 @@ Private Sub FormatPartEditorSheet()
     ws.Columns("P").ColumnWidth = 12
     ws.Columns("Q").ColumnWidth = 14
     ws.Columns("R").ColumnWidth = 12
+    ws.Columns("S").ColumnWidth = 8
+    ws.Columns("T").ColumnWidth = 14
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
     DeleteLegacyFloatingCheckboxes ws
+
+    ' Never fail PartEditor formatting if Insert→Checkbox ribbon command is unavailable.
+    On Error Resume Next
     EnsurePartEditorInCellCheckboxes ws
+    Err.Clear
+    On Error GoTo 0
+End Sub
+
+' Optional public entry point if checkbox formatting needs a re-run after layout.
+Public Sub ApplyPartEditorInCellCheckboxes()
+    Dim ws As Worksheet
+
+    On Error GoTo FailApply
+    Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
+    If ws Is Nothing Then
+        MsgBox "PartEditor sheet was not found. Run BootstrapCapacityTables first.", vbExclamation
+        Exit Sub
+    End If
+
+    DeleteLegacyFloatingCheckboxes ws
+    EnsurePartEditorInCellCheckboxes ws
+    MsgBox "PartEditor in-cell checkboxes applied (Insert → Checkbox formatting).", vbInformation
+    Exit Sub
+
+FailApply:
+    MsgBox "ApplyPartEditorInCellCheckboxes failed: " & Err.Description, vbExclamation
 End Sub
 
 Private Function MasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long) As Range
@@ -684,9 +716,9 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ws.Range("B3:G70").ClearContents
     ws.Range("B3:G70").Interior.ColorIndex = xlNone
     ws.Range("B3:G70").Borders.LineStyle = xlNone
-    ws.Range("F18:R70").ClearContents
-    ws.Range("F18:R70").Interior.ColorIndex = xlNone
-    ws.Range("F18:R70").Borders.LineStyle = xlNone
+    ws.Range("F18:T70").ClearContents
+    ws.Range("F18:T70").Interior.ColorIndex = xlNone
+    ws.Range("F18:T70").Borders.LineStyle = xlNone
     ws.Range("I5:M30").ClearContents
     ws.Range("I5:M30").Interior.ColorIndex = xlNone
     ws.Range("I5:M30").Borders.LineStyle = xlNone
@@ -779,6 +811,9 @@ Private Sub ApplyInCellCheckboxFormatting(ByVal targetRange As Range)
         "InsertCheckbox", _
         "CellCheckbox", _
         "SheetInsertCheckbox", _
+        "CellControlsCheckbox", _
+        "InsertCellControlsCheckbox", _
+        "ControlsInsertCheckbox", _
         "Checkbox")
 
     applied = False
