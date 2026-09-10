@@ -131,7 +131,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 
-`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present, adds the operations user columns if missing, and creates **ActiveX** checkboxes (Insert → Controls) for all true/false fields (master Active, dash Active, operation Active / Show Avg Hours / Show Avg Ex). Form Control checkboxes are not used.
+`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present, adds the operations user columns if missing, and applies **Insert → Checkbox** in-cell checkboxes (Microsoft 365) for all true/false fields (master Active, dash Active, operation Active / Show Avg Hours / Show Avg Ex). These are cell formatting (TRUE/FALSE values), not ActiveX or Form Control objects floating on the sheet.
 
 **Route Card** (columns B–D, from `tblRouteCard`): dash condition parsed from `ASSEMBLY NO`, plus `OPER SEQ` and `OPER CODE` for the loaded base part. Load `tblRouteCard` to a sheet as a ListObject.
 
@@ -164,7 +164,7 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 3. Matching uses the base part extracted from `ASSEMBLY NO` (text before `-` / letter separator) plus `OPER SEQ` equal to the operation row’s Oper Seq. Zero values are excluded from the average.
 4. Refresh linked data (`RefreshOperComps`, `RefreshAssyStnd`, or `RefreshAllLinkedData`) so the ListObjects are current before loading a part.
 
-Per-operation **Show Avg Hours** / **Show Avg Ex** ActiveX checkboxes control whether those calculated values are filled.
+Per-operation **Show Avg Hours** / **Show Avg Ex** in-cell checkboxes control whether those calculated values are filled.
 
 ## Linked query refresh
 
@@ -213,5 +213,5 @@ Run **`RefreshRouteCard`**.
 
 - **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
 - Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented. Specifically for PartEditor calc columns: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`.
-- Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so ActiveX checkboxes and the new operations columns appear.
+- Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so Insert→Checkbox in-cell checkboxes and the new operations columns appear. If checkbox formatting does not apply automatically, select the Active / Show Avg cells and use **Insert → Checkbox** once.
 - First data row is **row 4** on index sheets (headers on row 3).

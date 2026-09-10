@@ -141,12 +141,6 @@ Public Const PE_COL_AVG_HOURS As Long = 17
 Public Const PE_COL_AVG_EX As Long = 18
 Public Const PE_OPS_LAST_COL As Long = 18
 
-Public Const PE_CHK_MASTER_ACTIVE As String = "peChkMasterActive"
-Public Const PE_CHK_DASH_ACTIVE_PREFIX As String = "peChkDashActive_"
-Public Const PE_CHK_OPS_ACTIVE_PREFIX As String = "peChkOpsActive_"
-Public Const PE_CHK_OPS_SHOW_HOURS_PREFIX As String = "peChkOpsShowHours_"
-Public Const PE_CHK_OPS_SHOW_EX_PREFIX As String = "peChkOpsShowEx_"
-
 ' PartEditorCache hidden sheet layout.
 Public Const CACHE_BASE_PART_CELL As String = "A1"
 Public Const CACHE_DASH_START_ROW As Long = 3

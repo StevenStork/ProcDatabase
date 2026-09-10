@@ -600,7 +600,7 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_BATCH_SIZE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_BATCH_SIZE)).NumberFormat = "0.####"
 
-    ' Default Show Avg toggles to True (ActiveX checkboxes bind to these cells).
+    ' Default Show Avg toggles to True (in-cell Insert→Checkbox values).
     ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX)).Value = True
@@ -634,8 +634,8 @@ Private Sub FormatPartEditorSheet()
 
     FormatDashConditionTextColumn
     EnsurePartEditorButtons ws
-    DeleteLegacyAverageToggleCheckboxes ws
-    EnsurePartEditorActiveXCheckboxes ws
+    DeleteLegacyFloatingCheckboxes ws
+    EnsurePartEditorInCellCheckboxes ws
 End Sub
 
 Private Function MasterValueRange(ByVal ws As Worksheet, ByVal rowIndex As Long) As Range
@@ -677,7 +677,7 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     Next rowIndex
     On Error GoTo 0
 
-    DeleteLegacyAverageToggleCheckboxes ws
+    DeleteLegacyFloatingCheckboxes ws
 
     ws.Range("A2").ClearContents
     ws.Range("A70").ClearContents
@@ -695,82 +695,146 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ws.Range("J5:M30").Borders.LineStyle = xlNone
 End Sub
 
-' ActiveX checkboxes (Insert -> Controls), linked to TRUE/FALSE cells.
-' Not Form Controls (ws.CheckBoxes).
-Private Sub EnsurePartEditorActiveXCheckboxes(ByVal ws As Worksheet)
-    Dim rowIndex As Long
-    Dim index As Long
+' Microsoft 365 Insert → Checkbox: in-cell TRUE/FALSE formatting (not ActiveX / Form Controls).
+Private Sub EnsurePartEditorInCellCheckboxes(ByVal ws As Worksheet)
+    Dim masterActive As Range
+    Dim dashActive As Range
+    Dim opsActive As Range
+    Dim opsShowHours As Range
+    Dim opsShowEx As Range
 
-    EnsureActiveXCheckbox ws, PE_CHK_MASTER_ACTIVE, ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL)
+    On Error Resume Next
+    Set masterActive = ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL)
+    Set dashActive = ws.Range( _
+        ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH_ACTIVE), _
+        ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_ACTIVE))
+    Set opsActive = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_ACTIVE), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_ACTIVE))
+    Set opsShowHours = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_HOURS))
+    Set opsShowEx = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_EX), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_SHOW_AVG_EX))
+    On Error GoTo 0
 
-    For rowIndex = PE_DASH_DATA_START_ROW To PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1
-        index = rowIndex - PE_DASH_DATA_START_ROW + 1
-        EnsureActiveXCheckbox ws, PE_CHK_DASH_ACTIVE_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_DASH_ACTIVE)
-    Next rowIndex
+    PrepareBooleanCheckboxCells masterActive
+    PrepareBooleanCheckboxCells dashActive
+    PrepareBooleanCheckboxCells opsActive
+    PrepareBooleanCheckboxCells opsShowHours
+    PrepareBooleanCheckboxCells opsShowEx
 
-    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
-        index = rowIndex - PE_OPS_DATA_START_ROW + 1
-        EnsureActiveXCheckbox ws, PE_CHK_OPS_ACTIVE_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_OPER_ACTIVE)
-        EnsureActiveXCheckbox ws, PE_CHK_OPS_SHOW_HOURS_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_SHOW_AVG_HOURS)
-        EnsureActiveXCheckbox ws, PE_CHK_OPS_SHOW_EX_PREFIX & CStr(index), ws.Cells(rowIndex, PE_COL_SHOW_AVG_EX)
-    Next rowIndex
+    ApplyInCellCheckboxFormatting masterActive
+    ApplyInCellCheckboxFormatting dashActive
+    ApplyInCellCheckboxFormatting opsActive
+    ApplyInCellCheckboxFormatting opsShowHours
+    ApplyInCellCheckboxFormatting opsShowEx
+
+    ' Insert→Checkbox defaults cells to FALSE; restore intended defaults.
+    On Error Resume Next
+    masterActive.Value = True
+    opsShowHours.Value = True
+    opsShowEx.Value = True
+    On Error GoTo 0
 End Sub
 
-Private Sub EnsureActiveXCheckbox( _
-    ByVal ws As Worksheet, _
-    ByVal controlName As String, _
-    ByVal linkedCell As Range)
-
-    Dim ole As OLEObject
-    Dim boxSize As Double
+Private Sub PrepareBooleanCheckboxCells(ByVal targetRange As Range)
+    If targetRange Is Nothing Then Exit Sub
 
     On Error Resume Next
-    linkedCell.Validation.Delete
+    targetRange.Validation.Delete
+    targetRange.NumberFormat = "General"
+    targetRange.HorizontalAlignment = xlCenter
     On Error GoTo 0
+End Sub
 
-    ' Hide TRUE/FALSE text under the checkbox; Value2 still drives load/save.
-    linkedCell.NumberFormat = ";;;"
-    linkedCell.HorizontalAlignment = xlCenter
+Private Sub ApplyInCellCheckboxFormatting(ByVal targetRange As Range)
+    Dim previousSelection As Object
+    Dim msoIds As Variant
+    Dim idIndex As Long
+    Dim applied As Boolean
+    Dim priorScreenUpdating As Boolean
+    Dim priorEvents As Boolean
+    Dim priorDisplayAlerts As Boolean
+
+    If targetRange Is Nothing Then Exit Sub
+
+    priorScreenUpdating = Application.ScreenUpdating
+    priorEvents = Application.EnableEvents
+    priorDisplayAlerts = Application.DisplayAlerts
 
     On Error Resume Next
-    Set ole = ws.OLEObjects(controlName)
-    On Error GoTo 0
+    Set previousSelection = Application.Selection
 
-    boxSize = Application.WorksheetFunction.Min(linkedCell.Height - 2, 14)
-    If boxSize < 10 Then boxSize = 12
+    ' ExecuteMso needs an interactive sheet selection.
+    Application.ScreenUpdating = True
+    Application.EnableEvents = False
+    Application.DisplayAlerts = False
+    targetRange.Worksheet.Activate
+    targetRange.Select
 
-    If ole Is Nothing Then
-        Set ole = ws.OLEObjects.Add( _
-            ClassType:="Forms.CheckBox.1", _
-            Left:=linkedCell.Left + 2, _
-            Top:=linkedCell.Top + (linkedCell.Height - boxSize) / 2, _
-            Width:=boxSize + 2, _
-            Height:=boxSize)
-        ole.Name = controlName
-    Else
-        ole.Left = linkedCell.Left + 2
-        ole.Top = linkedCell.Top + (linkedCell.Height - boxSize) / 2
-        ole.Width = boxSize + 2
-        ole.Height = boxSize
+    msoIds = Array( _
+        "CheckboxInsert", _
+        "InsertCheckbox", _
+        "CellCheckbox", _
+        "SheetInsertCheckbox", _
+        "Checkbox")
+
+    applied = False
+    For idIndex = LBound(msoIds) To UBound(msoIds)
+        Err.Clear
+        Application.CommandBars.ExecuteMso CStr(msoIds(idIndex))
+        If Err.Number = 0 Then
+            applied = True
+            Exit For
+        End If
+    Next idIndex
+
+    ' Newer Excel builds may expose a Range helper; ignore if absent.
+    If Not applied Then
+        Err.Clear
+        CallByName targetRange, "InsertCheckbox", VbMethod
     End If
 
-    ole.Placement = xlMoveAndSize
-    On Error Resume Next
-    ole.Object.Caption = vbNullString
-    ole.LinkedCell = linkedCell.Address(RowAbsolute:=True, ColumnAbsolute:=True)
+    If Not previousSelection Is Nothing Then
+        If TypeName(previousSelection) = "Range" Then
+            previousSelection.Select
+        End If
+    End If
+
+    Application.ScreenUpdating = priorScreenUpdating
+    Application.EnableEvents = priorEvents
+    Application.DisplayAlerts = priorDisplayAlerts
     On Error GoTo 0
 End Sub
 
-Private Sub DeleteLegacyAverageToggleCheckboxes(ByVal ws As Worksheet)
+Private Sub DeleteLegacyFloatingCheckboxes(ByVal ws As Worksheet)
     Dim cb As Object
+    Dim ole As OLEObject
+    Dim oleIndex As Long
 
-    ' Remove Form Control checkboxes only (legacy avg toggles / old TRUE-FALSE UI).
+    ' Remove Form Control checkboxes (floating objects).
     On Error Resume Next
     ws.CheckBoxes("chkAvgProcessHours").Delete
     ws.CheckBoxes("chkAvgEx").Delete
     For Each cb In ws.CheckBoxes
         cb.Delete
     Next cb
+    On Error GoTo 0
+
+    ' Remove leftover ActiveX checkboxes from earlier PartEditor builds.
+    On Error Resume Next
+    For oleIndex = ws.OLEObjects.Count To 1 Step -1
+        Set ole = ws.OLEObjects(oleIndex)
+        If Not ole Is Nothing Then
+            If StrComp(ole.progID, "Forms.CheckBox.1", vbTextCompare) = 0 _
+                Or Left$(LCase$(ole.Name), 5) = "pechk" Then
+                ole.Delete
+            End If
+        End If
+        Set ole = Nothing
+    Next oleIndex
     On Error GoTo 0
 End Sub
 

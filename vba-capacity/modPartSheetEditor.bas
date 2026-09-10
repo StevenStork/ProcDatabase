@@ -1121,7 +1121,7 @@ Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL))
 
-    ' Restore ActiveX-linked defaults after clear.
+    ' Restore in-cell checkbox defaults after clear.
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
     ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_SHOW_AVG_HOURS), _
