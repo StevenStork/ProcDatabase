@@ -1,0 +1,292 @@
+' Paste into UserForm named frmPartEditor.
+' Main part-number editor: master record plus dash-condition assignments.
+
+Option Explicit
+
+Private Const FORM_WIDTH As Single = 480
+Private Const FORM_HEIGHT As Single = 400
+Private Const FORM_MARGIN As Single = 12
+Private Const BTN_WIDTH As Single = 76
+Private Const BTN_TOP As Single = 352
+Private Const BTN_0 As Single = 12
+Private Const BTN_1 As Single = 96
+Private Const BTN_2 As Single = 180
+Private Const BTN_3 As Single = 264
+Private Const BTN_CLOSE As Single = 392
+Private Const LIST_TOP As Single = 28
+Private Const LIST_HEIGHT As Single = 310
+Private Const EDIT_LEFT As Single = 195
+Private Const EDIT_WIDTH As Single = 265
+Private Const DASH_TOP As Single = 220
+Private Const DASH_LIST_HEIGHT As Single = 72
+
+Private mHandlers As Collection
+Private mEditingCode As String
+Private mPreselectedBasePart As String
+
+Public Sub PreselectBasePart(ByVal basePartCode As String)
+    mPreselectedBasePart = NormalizeCode(basePartCode)
+End Sub
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Part Number Editor"
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
+    Set mHandlers = CreateControlHandlers()
+    BuildControls
+    RefreshLookupCombos
+    LoadRecordList
+    ClearEditor
+    If Len(mPreselectedBasePart) > 0 Then
+        SelectListItemByCode GetControl(Me, "lstParts"), mPreselectedBasePart
+        LoadSelectedPart
+        mPreselectedBasePart = vbNullString
+    End If
+End Sub
+
+Private Sub BuildControls()
+    AddLabel Me, "Base Parts", FORM_MARGIN, 8, 120
+    AddListBox Me, "lstParts", FORM_MARGIN, LIST_TOP, 170, LIST_HEIGHT
+
+    AddLabel Me, "Base Part Code", EDIT_LEFT, 28, 110
+    AddTextBox Me, "txtCode", EDIT_LEFT, 44, EDIT_WIDTH
+
+    AddLabel Me, "Factory", EDIT_LEFT, 72, 110
+    AddComboBox Me, "cboFactory", EDIT_LEFT, 88, EDIT_WIDTH
+
+    AddCheckBox Me, "chkActive", "Active", EDIT_LEFT, 120
+    AddLabel Me, "Notes", EDIT_LEFT, 148, 110
+    AddTextBox Me, "txtNotes", EDIT_LEFT, 164, EDIT_WIDTH, 36
+
+    AddLabel Me, "Dash Conditions", EDIT_LEFT, DASH_TOP, 110
+    AddListBox Me, "lstDash", EDIT_LEFT, DASH_TOP + 16, EDIT_WIDTH, DASH_LIST_HEIGHT
+    AddTextBox Me, "txtDash", EDIT_LEFT, DASH_TOP + 94, 120
+    AddCommandButton Me, "cmdAddDash", "Add", EDIT_LEFT + 128, DASH_TOP + 92, 60
+    AddCommandButton Me, "cmdRemDash", "Remove", EDIT_LEFT + 194, DASH_TOP + 92, 60
+
+    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdOperations", "Operations", BTN_3, BTN_TOP, 88
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+
+    WireControlEvent mHandlers, GetControl(Me, "lstParts"), Me, "PartsClick", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdNew"), Me, "NewRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdSave"), Me, "SaveRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdDelete"), Me, "DeleteRecord", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdOperations"), Me, "OpenOperations", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdAddDash"), Me, "AddDash", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRemDash"), Me, "RemDash", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
+End Sub
+
+Public Sub HandleFormEvent(ByVal eventName As String)
+    Select Case eventName
+        Case "PartsClick": LoadSelectedPart
+        Case "NewRecord": ClearEditor
+        Case "SaveRecord": SaveCurrentPart
+        Case "DeleteRecord": DeleteCurrentPart
+        Case "OpenOperations": OpenOperationsEditor
+        Case "AddDash": AddDashCondition
+        Case "RemDash": RemoveDashCondition
+        Case "CloseForm": Unload Me
+    End Select
+End Sub
+
+Private Sub RefreshLookupCombos()
+    BindComboBoxFromTable GetControl(Me, "cboFactory"), FindTable(FACTORIES_TABLE_NAME), COL_FACTORY_CODE, COL_FACTORY_NAME, True
+End Sub
+
+Private Sub LoadRecordList()
+    BindListBoxFromArray GetControl(Me, "lstParts"), _
+        ListAllDisplayItems(FindTable(BASE_PARTS_TABLE_NAME), COL_BASE_PART_CODE, COL_BASE_PART_CODE, False)
+End Sub
+
+Private Sub LoadSelectedPart()
+    Dim tbl As ListObject
+    Dim codeValue As String
+    Dim listRowIndex As Long
+
+    codeValue = SelectedListCode(GetControl(Me, "lstParts"))
+    If Len(codeValue) = 0 Then Exit Sub
+
+    Set tbl = FindTable(BASE_PARTS_TABLE_NAME)
+    listRowIndex = FindListRowByKey(tbl, COL_BASE_PART_CODE, codeValue)
+    If listRowIndex = 0 Then Exit Sub
+
+    mEditingCode = codeValue
+    GetControl(Me, "txtCode").Text = codeValue
+    GetControl(Me, "txtCode").Enabled = False
+    SelectComboByCode GetControl(Me, "cboFactory"), CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
+    GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
+    GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
+
+    LoadDashList codeValue
+End Sub
+
+Private Sub LoadDashList(ByVal basePartCode As String)
+    BindListBoxFromArray GetControl(Me, "lstDash"), _
+        ListPartAssignmentCodes(FindTable(PART_DASH_CONDITIONS_TABLE_NAME), basePartCode, COL_DASH_CONDITION)
+End Sub
+
+Private Sub ClearEditor()
+    mEditingCode = vbNullString
+    GetControl(Me, "txtCode").Enabled = True
+    GetControl(Me, "txtCode").Text = vbNullString
+    GetControl(Me, "cboFactory").ListIndex = -1
+    GetControl(Me, "chkActive").Value = True
+    GetControl(Me, "txtNotes").Text = vbNullString
+    GetControl(Me, "txtDash").Text = vbNullString
+    BindListBoxFromArray GetControl(Me, "lstDash"), Empty
+    GetControl(Me, "lstParts").ListIndex = -1
+End Sub
+
+Private Sub SaveCurrentPart()
+    Dim tbl As ListObject
+    Dim factoryTbl As ListObject
+    Dim fieldValues As Object
+    Dim codeValue As String
+    Dim factoryCode As String
+    Dim excludeRow As Long
+
+    codeValue = NormalizeCode(GetControl(Me, "txtCode").Text)
+    If Not ValidateRequiredCode(codeValue, "Base Part Code") Then Exit Sub
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    If Not ValidateRequiredCode(factoryCode, "Factory") Then Exit Sub
+
+    Set factoryTbl = FindTable(FACTORIES_TABLE_NAME)
+    If Not ValidateForeignKeyExists(factoryTbl, COL_FACTORY_CODE, factoryCode, "Factory") Then Exit Sub
+
+    Set tbl = FindTable(BASE_PARTS_TABLE_NAME)
+    excludeRow = 0
+    If Len(mEditingCode) > 0 Then excludeRow = FindListRowByKey(tbl, COL_BASE_PART_CODE, mEditingCode)
+    If Not ValidateUniqueKey(tbl, COL_BASE_PART_CODE, codeValue, excludeRow) Then Exit Sub
+
+    Set fieldValues = NewFieldValuesDictionary()
+    fieldValues(COL_BASE_PART_CODE) = codeValue
+    fieldValues(COL_FACTORY_CODE) = factoryCode
+    fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
+    fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    UpsertRow tbl, COL_BASE_PART_CODE, codeValue, fieldValues
+    mEditingCode = codeValue
+    GetControl(Me, "txtCode").Enabled = False
+    LoadRecordList
+    SelectListItemByCode GetControl(Me, "lstParts"), codeValue
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub DeleteCurrentPart()
+    Dim tbl As ListObject
+    Dim codeValue As String
+
+    codeValue = NormalizeCode(GetControl(Me, "txtCode").Text)
+    If Len(codeValue) = 0 Then Exit Sub
+    If MsgBox("Delete base part '" & codeValue & "' and all assignments?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+    If BasePartHasAssignments(codeValue) Then
+        If MsgBox("This part still has dash conditions or operation rows. Delete them too?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+        DeleteAllPartAssignments codeValue
+    End If
+
+    Set tbl = FindTable(BASE_PARTS_TABLE_NAME)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteRowByKey tbl, COL_BASE_PART_CODE, codeValue
+    ClearEditor
+    LoadRecordList
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub OpenOperationsEditor()
+    Dim codeValue As String
+
+    codeValue = NormalizeCode(GetControl(Me, "txtCode").Text)
+    If Len(codeValue) = 0 Then
+        MsgBox "Save or select a base part first.", vbExclamation
+        Exit Sub
+    End If
+
+    frmPartOperationsAdmin.PreselectBasePart codeValue
+    frmPartOperationsAdmin.Show
+End Sub
+
+Private Sub AddDashCondition()
+    AddPartAssignment PART_DASH_CONDITIONS_TABLE_NAME, COL_DASH_CONDITION, NormalizeCode(GetControl(Me, "txtDash").Text), "Dash Condition"
+End Sub
+
+Private Sub RemoveDashCondition()
+    RemovePartAssignment PART_DASH_CONDITIONS_TABLE_NAME, COL_DASH_CONDITION, SelectedListCode(GetControl(Me, "lstDash"))
+End Sub
+
+Private Sub AddPartAssignment(ByVal tableName As String, ByVal valueColumn As String, ByVal codeValue As String, ByVal labelText As String)
+    Dim tbl As ListObject
+    Dim fieldValues As Object
+    Dim basePartCode As String
+
+    basePartCode = CurrentBasePartCode()
+    If Len(basePartCode) = 0 Then Exit Sub
+    If Not ValidateRequiredCode(codeValue, labelText) Then Exit Sub
+
+    Set tbl = FindTable(tableName)
+    If Not ValidateJunctionUnique(tbl, COL_BASE_PART_CODE, basePartCode, valueColumn, codeValue, 0) Then Exit Sub
+
+    Set fieldValues = NewFieldValuesDictionary()
+    fieldValues(COL_BASE_PART_CODE) = basePartCode
+    fieldValues(valueColumn) = codeValue
+    If TableHasColumn(tbl, COL_ACTIVE) Then fieldValues(COL_ACTIVE) = True
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, valueColumn, codeValue, fieldValues
+    LoadDashList basePartCode
+    GetControl(Me, "txtDash").Text = vbNullString
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub RemovePartAssignment(ByVal tableName As String, ByVal valueColumn As String, ByVal codeValue As String)
+    Dim tbl As ListObject
+    Dim basePartCode As String
+
+    basePartCode = CurrentBasePartCode()
+    If Len(basePartCode) = 0 Or Len(codeValue) = 0 Then Exit Sub
+
+    Set tbl = FindTable(tableName)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, valueColumn, codeValue
+    LoadDashList basePartCode
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub DeleteAllPartAssignments(ByVal basePartCode As String)
+    DeleteAssignmentsForPart FindTable(PART_DASH_CONDITIONS_TABLE_NAME), basePartCode
+    DeleteAssignmentsForPart FindTable(PART_OPERATIONS_TABLE_NAME), basePartCode
+End Sub
+
+Private Sub DeleteAssignmentsForPart(ByVal tbl As ListObject, ByVal basePartCode As String)
+    Dim rowIndex As Long
+
+    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
+    For rowIndex = tbl.ListRows.Count To 1 Step -1
+        If ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then
+            tbl.ListRows(rowIndex).Delete
+        End If
+    Next rowIndex
+End Sub
+
+Private Function CurrentBasePartCode() As String
+    CurrentBasePartCode = NormalizeCode(GetControl(Me, "txtCode").Text)
+    If Len(CurrentBasePartCode) = 0 Then
+        MsgBox "Save or select a base part first.", vbExclamation
+    End If
+End Function

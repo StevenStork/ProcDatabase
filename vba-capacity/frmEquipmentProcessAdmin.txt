@@ -1,0 +1,257 @@
+' Paste this entire file into the code window for UserForm named frmEquipmentProcessAdmin.
+
+Option Explicit
+
+Private Const FORM_WIDTH As Single = 560
+Private Const FORM_HEIGHT As Single = 390
+Private Const FORM_MARGIN As Single = 12
+Private Const BTN_WIDTH As Single = 76
+Private Const BTN_WIDE_WIDTH As Single = 88
+Private Const BTN_GAP As Single = 8
+Private Const BTN_TOP As Single = 322
+Private Const BTN_ADD_LEFT As Single = 12
+Private Const BTN_REMOVE_LEFT As Single = 108
+Private Const BTN_TOGGLE_LEFT As Single = 192
+Private Const BTN_REFRESH_LEFT As Single = 288
+Private Const BTN_CLOSE As Single = 472
+Private Const LIST_TOP As Single = 72
+Private Const LIST_HEIGHT As Single = 185
+Private Const LEFT_LIST_WIDTH As Single = 250
+Private Const RIGHT_LIST_LEFT As Single = 278
+
+Private mHandlers As Collection
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Assign Process Types to Equipment"
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
+
+    Set mHandlers = CreateControlHandlers()
+    BuildControls
+    RefreshCombos
+    LoadAssignedProcesses
+    LoadAvailableProcesses
+End Sub
+
+Private Sub BuildControls()
+    AddLabel Me, "Equipment", FORM_MARGIN, 8, 80
+    AddComboBox Me, "cboEquipment", FORM_MARGIN, 24, 320
+
+    AddLabel Me, "Available Process Types", FORM_MARGIN, 56, 160
+    AddListBox Me, "lstAvailable", FORM_MARGIN, LIST_TOP, LEFT_LIST_WIDTH, LIST_HEIGHT, True
+
+    AddLabel Me, "Assigned Processes", RIGHT_LIST_LEFT, 56, 160
+    AddListBox Me, "lstAssigned", RIGHT_LIST_LEFT, LIST_TOP, LEFT_LIST_WIDTH, LIST_HEIGHT
+
+    AddCheckBox Me, "chkActive", "Active", FORM_MARGIN, 268
+    AddLabel Me, "Notes", 100, 268, 40
+    AddTextBox Me, "txtNotes", 100, 284, 430, 24
+
+    AddCommandButton Me, "cmdAddSelected", "Add Selected", BTN_ADD_LEFT, BTN_TOP, BTN_WIDE_WIDTH
+    AddCommandButton Me, "cmdRemove", "Remove", BTN_REMOVE_LEFT, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdToggleActive", "Toggle Active", BTN_TOGGLE_LEFT, BTN_TOP, BTN_WIDE_WIDTH
+    AddCommandButton Me, "cmdRefresh", "Refresh", BTN_REFRESH_LEFT, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+
+    WireControlEvent mHandlers, GetControl(Me, "cboEquipment"), Me, "EquipmentChanged", "Change"
+    WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignedSelected", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdAddSelected"), Me, "AddSelected", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRemove"), Me, "RemoveSelected", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdToggleActive"), Me, "ToggleActive", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRefresh"), Me, "RefreshAll", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
+End Sub
+
+Public Sub HandleFormEvent(ByVal eventName As String)
+    Select Case eventName
+        Case "EquipmentChanged"
+            LoadAssignedProcesses
+            LoadAvailableProcesses
+        Case "AssignedSelected": LoadSelectedAssignment
+        Case "AddSelected": AddSelectedProcesses
+        Case "RemoveSelected": RemoveSelectedProcess
+        Case "ToggleActive": ToggleSelectedActive
+        Case "RefreshAll"
+            RefreshCombos
+            LoadAssignedProcesses
+            LoadAvailableProcesses
+        Case "CloseForm": Unload Me
+    End Select
+End Sub
+
+Private Sub RefreshCombos()
+    Dim equipmentTbl As ListObject
+
+    Set equipmentTbl = FindTable(EQUIPMENT_TABLE_NAME)
+    BindComboBoxFromTable GetControl(Me, "cboEquipment"), equipmentTbl, COL_EQUIPMENT_CODE, COL_EQUIPMENT_NAME, True
+End Sub
+
+Private Sub LoadAssignedProcesses()
+    Dim junctionTbl As ListObject
+    Dim equipmentCode As String
+    Dim items As Variant
+
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+    Set junctionTbl = FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+
+    If Len(equipmentCode) = 0 Then
+        BindListBoxFromArray GetControl(Me, "lstAssigned"), Empty
+        Exit Sub
+    End If
+
+    items = ListJunctionDisplayItems(junctionTbl, COL_EQUIPMENT_CODE, equipmentCode, COL_PROCESS_TYPE_CODE)
+    BindListBoxFromArray GetControl(Me, "lstAssigned"), items
+    ClearAssignmentEditor
+End Sub
+
+Private Sub LoadAvailableProcesses()
+    Dim processTbl As ListObject
+    Dim items As Variant
+
+    Set processTbl = FindTable(PROCESS_TYPES_TABLE_NAME)
+    items = ListAllDisplayItems(processTbl, COL_PROCESS_TYPE_CODE, COL_PROCESS_TYPE_NAME, True)
+    BindListBoxFromArray GetControl(Me, "lstAvailable"), items
+End Sub
+
+Private Sub LoadSelectedAssignment()
+    Dim junctionTbl As ListObject
+    Dim equipmentCode As String
+    Dim processCode As String
+    Dim listRowIndex As Long
+
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+    processCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+    If Len(equipmentCode) = 0 Or Len(processCode) = 0 Then Exit Sub
+
+    Set junctionTbl = FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+    listRowIndex = FindJunctionListRow(junctionTbl, COL_EQUIPMENT_CODE, equipmentCode, COL_PROCESS_TYPE_CODE, processCode)
+    If listRowIndex = 0 Then Exit Sub
+
+    GetControl(Me, "chkActive").Value = IsActiveFlag(GetCellValueByListRow(junctionTbl, listRowIndex, COL_ACTIVE))
+    GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(junctionTbl, listRowIndex, COL_NOTES)))
+End Sub
+
+Private Sub ClearAssignmentEditor()
+    GetControl(Me, "chkActive").Value = True
+    GetControl(Me, "txtNotes").Text = vbNullString
+    GetControl(Me, "lstAssigned").ListIndex = -1
+End Sub
+
+Private Sub AddSelectedProcesses()
+    Dim junctionTbl As ListObject
+    Dim equipmentTbl As ListObject
+    Dim processTbl As ListObject
+    Dim fieldValues As Object
+    Dim equipmentCode As String
+    Dim selectedCodes As Variant
+    Dim codeIndex As Long
+    Dim processCode As String
+    Dim addedCount As Long
+
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+    If Not ValidateRequiredCode(equipmentCode, "Equipment") Then Exit Sub
+
+    selectedCodes = SelectedListBoxCodes(GetControl(Me, "lstAvailable"))
+    If Not IsArrayAllocated(selectedCodes) Then
+        MsgBox "Select one or more process types to add.", vbExclamation
+        Exit Sub
+    End If
+
+    Set equipmentTbl = FindTable(EQUIPMENT_TABLE_NAME)
+    Set processTbl = FindTable(PROCESS_TYPES_TABLE_NAME)
+    Set junctionTbl = FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+
+    If Not ValidateForeignKeyExists(equipmentTbl, COL_EQUIPMENT_CODE, equipmentCode, "Equipment") Then Exit Sub
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+
+    For codeIndex = LBound(selectedCodes) To UBound(selectedCodes)
+        processCode = NormalizeCode(selectedCodes(codeIndex))
+        If Len(processCode) = 0 Then GoTo ContinueLoop
+
+        If Not ValidateForeignKeyExists(processTbl, COL_PROCESS_TYPE_CODE, processCode, "Process Type") Then GoTo ContinueLoop
+        If JunctionExists(junctionTbl, COL_EQUIPMENT_CODE, equipmentCode, COL_PROCESS_TYPE_CODE, processCode) Then GoTo ContinueLoop
+
+        Set fieldValues = NewFieldValuesDictionary()
+        fieldValues(COL_EQUIPMENT_CODE) = equipmentCode
+        fieldValues(COL_PROCESS_TYPE_CODE) = processCode
+        fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(CBool(GetControl(Me, "chkActive").Value))
+        fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
+
+        UpsertJunctionRow junctionTbl, COL_EQUIPMENT_CODE, equipmentCode, COL_PROCESS_TYPE_CODE, processCode, fieldValues
+        addedCount = addedCount + 1
+
+ContinueLoop:
+    Next codeIndex
+
+    LoadAssignedProcesses
+
+    If addedCount = 0 Then
+        MsgBox "No new process assignments were added.", vbInformation
+    End If
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub RemoveSelectedProcess()
+    Dim junctionTbl As ListObject
+    Dim equipmentCode As String
+    Dim processCode As String
+
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+    processCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+
+    If Len(equipmentCode) = 0 Or Len(processCode) = 0 Then
+        MsgBox "Select an assigned process to remove.", vbExclamation
+        Exit Sub
+    End If
+
+    If MsgBox("Remove process '" & processCode & "' from equipment '" & equipmentCode & "'?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+
+    Set junctionTbl = FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteJunctionRow junctionTbl, COL_EQUIPMENT_CODE, equipmentCode, COL_PROCESS_TYPE_CODE, processCode
+    ClearAssignmentEditor
+    LoadAssignedProcesses
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub ToggleSelectedActive()
+    Dim junctionTbl As ListObject
+    Dim equipmentCode As String
+    Dim processCode As String
+    Dim listRowIndex As Long
+    Dim currentActive As Boolean
+
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+    processCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+
+    If Len(equipmentCode) = 0 Or Len(processCode) = 0 Then
+        MsgBox "Select an assignment to toggle.", vbExclamation
+        Exit Sub
+    End If
+
+    Set junctionTbl = FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
+    listRowIndex = FindJunctionListRow(junctionTbl, COL_EQUIPMENT_CODE, equipmentCode, COL_PROCESS_TYPE_CODE, processCode)
+    If listRowIndex = 0 Then Exit Sub
+
+    currentActive = IsActiveFlag(GetCellValueByListRow(junctionTbl, listRowIndex, COL_ACTIVE))
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    SetCellValueByListRow junctionTbl, listRowIndex, COL_ACTIVE, ActiveFlagToCellValue(Not currentActive)
+    GetControl(Me, "chkActive").Value = Not currentActive
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Function IsArrayAllocated(ByVal arr As Variant) As Boolean
+    On Error Resume Next
+    IsArrayAllocated = IsArray(arr) And (UBound(arr) >= LBound(arr))
+    On Error GoTo 0
+End Function

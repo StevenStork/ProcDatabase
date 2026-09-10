@@ -1,0 +1,181 @@
+' Paste this entire file into the code window for UserForm named frmFactoryEquipmentAdmin.
+
+Option Explicit
+
+Private Const FORM_WIDTH As Single = 520
+Private Const FORM_HEIGHT As Single = 330
+Private Const FORM_MARGIN As Single = 12
+Private Const BTN_WIDTH As Single = 76
+Private Const BTN_TOP As Single = 268
+Private Const BTN_0 As Single = 12
+Private Const BTN_1 As Single = 96
+Private Const BTN_2 As Single = 180
+Private Const BTN_CLOSE As Single = 432
+Private Const LEFT_PANEL_WIDTH As Single = 230
+Private Const RIGHT_PANEL_LEFT As Single = 270
+Private Const LIST_HEIGHT As Single = 210
+
+Private mHandlers As Collection
+
+Private Sub UserForm_Initialize()
+    Me.Caption = "Assign Equipment to Factories"
+    ConfigureFormSize Me, FORM_WIDTH, FORM_HEIGHT
+
+    Set mHandlers = CreateControlHandlers()
+    BuildControls
+    RefreshCombos
+    LoadAssignments
+End Sub
+
+Private Sub BuildControls()
+    AddLabel Me, "Factory", FORM_MARGIN, 8, 80
+    AddComboBox Me, "cboFactory", FORM_MARGIN, 24, LEFT_PANEL_WIDTH
+
+    AddLabel Me, "Equipment", FORM_MARGIN, 56, 80
+    AddComboBox Me, "cboEquipment", FORM_MARGIN, 72, LEFT_PANEL_WIDTH
+
+    AddLabel Me, "Notes", FORM_MARGIN, 104, 80
+    AddTextBox Me, "txtNotes", FORM_MARGIN, 120, LEFT_PANEL_WIDTH, 60
+
+    AddLabel Me, "Assigned Equipment", RIGHT_PANEL_LEFT, 8, 160
+    AddListBox Me, "lstAssigned", RIGHT_PANEL_LEFT, 24, 225, LIST_HEIGHT
+
+    AddCommandButton Me, "cmdAdd", "Add", BTN_0, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdRemove", "Remove", BTN_1, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdRefresh", "Refresh", BTN_2, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+
+    WireControlEvent mHandlers, GetControl(Me, "cboFactory"), Me, "FactoryChanged", "Change"
+    WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignmentSelected", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdAdd"), Me, "AddAssignment", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRemove"), Me, "RemoveAssignment", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdRefresh"), Me, "RefreshAll", "Click"
+    WireControlEvent mHandlers, GetControl(Me, "cmdClose"), Me, "CloseForm", "Click"
+End Sub
+
+Public Sub HandleFormEvent(ByVal eventName As String)
+    Select Case eventName
+        Case "FactoryChanged": LoadAssignments
+        Case "AssignmentSelected": LoadSelectedAssignment
+        Case "AddAssignment": SaveAssignment
+        Case "RemoveAssignment": RemoveSelectedAssignment
+        Case "RefreshAll": RefreshCombos: LoadAssignments
+        Case "CloseForm": Unload Me
+    End Select
+End Sub
+
+Private Sub RefreshCombos()
+    Dim factoryTbl As ListObject
+    Dim equipmentTbl As ListObject
+
+    Set factoryTbl = FindTable(FACTORIES_TABLE_NAME)
+    Set equipmentTbl = FindTable(EQUIPMENT_TABLE_NAME)
+
+    BindComboBoxFromTable GetControl(Me, "cboFactory"), factoryTbl, COL_FACTORY_CODE, COL_FACTORY_NAME, True
+    BindComboBoxFromTable GetControl(Me, "cboEquipment"), equipmentTbl, COL_EQUIPMENT_CODE, COL_EQUIPMENT_NAME, True
+End Sub
+
+Private Sub LoadAssignments()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim items As Variant
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+
+    If Len(factoryCode) = 0 Then
+        BindListBoxFromArray GetControl(Me, "lstAssigned"), Empty
+        Exit Sub
+    End If
+
+    items = ListJunctionDisplayItems(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE)
+    BindListBoxFromArray GetControl(Me, "lstAssigned"), items
+    ClearAssignmentEditor
+End Sub
+
+Private Sub LoadSelectedAssignment()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim equipmentCode As String
+    Dim listRowIndex As Long
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+    If Len(factoryCode) = 0 Or Len(equipmentCode) = 0 Then Exit Sub
+
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    listRowIndex = FindJunctionListRow(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode)
+    If listRowIndex = 0 Then Exit Sub
+
+    SelectComboByCode GetControl(Me, "cboEquipment"), equipmentCode
+    GetControl(Me, "txtNotes").Text = CStr(Nz(GetCellValueByListRow(junctionTbl, listRowIndex, COL_NOTES)))
+End Sub
+
+Private Sub ClearAssignmentEditor()
+    GetControl(Me, "cboEquipment").ListIndex = -1
+    GetControl(Me, "txtNotes").Text = vbNullString
+    GetControl(Me, "lstAssigned").ListIndex = -1
+End Sub
+
+Private Sub SaveAssignment()
+    Dim junctionTbl As ListObject
+    Dim factoryTbl As ListObject
+    Dim equipmentTbl As ListObject
+    Dim fieldValues As Object
+    Dim factoryCode As String
+    Dim equipmentCode As String
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedComboCode(GetControl(Me, "cboEquipment"))
+
+    If Not ValidateRequiredCode(factoryCode, "Factory") Then Exit Sub
+    If Not ValidateRequiredCode(equipmentCode, "Equipment") Then Exit Sub
+
+    Set factoryTbl = FindTable(FACTORIES_TABLE_NAME)
+    Set equipmentTbl = FindTable(EQUIPMENT_TABLE_NAME)
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+
+    If Not ValidateForeignKeyExists(factoryTbl, COL_FACTORY_CODE, factoryCode, "Factory") Then Exit Sub
+    If Not ValidateForeignKeyExists(equipmentTbl, COL_EQUIPMENT_CODE, equipmentCode, "Equipment") Then Exit Sub
+    If Not ValidateJunctionUnique(junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode, 0) Then Exit Sub
+
+    Set fieldValues = NewFieldValuesDictionary()
+    fieldValues(COL_FACTORY_CODE) = factoryCode
+    fieldValues(COL_EQUIPMENT_CODE) = equipmentCode
+    fieldValues(COL_NOTES) = Trim$(GetControl(Me, "txtNotes").Text)
+
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    UpsertJunctionRow junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode, fieldValues
+    LoadAssignments
+    SelectListItemByCode GetControl(Me, "lstAssigned"), equipmentCode
+
+CleanUp:
+    OptimizeExcel False
+End Sub
+
+Private Sub RemoveSelectedAssignment()
+    Dim junctionTbl As ListObject
+    Dim factoryCode As String
+    Dim equipmentCode As String
+
+    factoryCode = SelectedComboCode(GetControl(Me, "cboFactory"))
+    equipmentCode = SelectedListCode(GetControl(Me, "lstAssigned"))
+
+    If Len(factoryCode) = 0 Or Len(equipmentCode) = 0 Then
+        MsgBox "Select an assigned equipment row to remove.", vbExclamation
+        Exit Sub
+    End If
+
+    If MsgBox("Remove equipment '" & equipmentCode & "' from factory '" & factoryCode & "'?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
+
+    Set junctionTbl = FindTable(FACTORY_EQUIPMENT_TABLE_NAME)
+    On Error GoTo CleanUp
+    OptimizeExcel True
+    DeleteJunctionRow junctionTbl, COL_FACTORY_CODE, factoryCode, COL_EQUIPMENT_CODE, equipmentCode
+    ClearAssignmentEditor
+    LoadAssignments
+
+CleanUp:
+    OptimizeExcel False
+End Sub
