@@ -145,14 +145,15 @@ Private Function AverageNumericForMatch( _
         Exit Function
     End If
 
-    assemblyValues = ColumnValues(tbl.ListColumns(COL_ASSEMBLY_NO))
-    opSequenceValues = ColumnValues(tbl.ListColumns(COL_OPER_SEQ_SOURCE))
-    metricValues = ColumnValues(tbl.ListColumns(valueColumnName))
+    assemblyValues = ListColumnValues2D(tbl, COL_ASSEMBLY_NO)
+    opSequenceValues = ListColumnValues2D(tbl, COL_OPER_SEQ_SOURCE)
+    metricValues = ListColumnValues2D(tbl, valueColumnName)
+    If Not IsArray(assemblyValues) Or Not IsArray(opSequenceValues) Or Not IsArray(metricValues) Then Exit Function
     rowCount = UBound(assemblyValues, 1)
 
     For rowIndex = 1 To rowCount
-        assemblyNo = Trim$(CStr(NzBlank(assemblyValues(rowIndex, 1))))
-        rowOpSequence = Trim$(CStr(NzBlank(opSequenceValues(rowIndex, 1))))
+        assemblyNo = Trim$(CStr(Nz(assemblyValues(rowIndex, 1))))
+        rowOpSequence = Trim$(CStr(Nz(opSequenceValues(rowIndex, 1))))
 
         If Len(assemblyNo) > 0 And OpSequencesMatch(rowOpSequence, opSequence) Then
             rowBasePart = BasePartFromAssemblyNo(assemblyNo)
@@ -168,20 +169,6 @@ Private Function AverageNumericForMatch( _
 
     If matchCount > 0 Then
         AverageNumericForMatch = totalValue / matchCount
-    End If
-End Function
-
-Private Function ColumnValues(ByVal col As ListColumn) As Variant
-    Dim values As Variant
-    Dim result(1 To 1, 1 To 1) As Variant
-
-    values = col.DataBodyRange.Value2
-
-    If IsArray(values) Then
-        ColumnValues = values
-    Else
-        result(1, 1) = values
-        ColumnValues = result
     End If
 End Function
 
@@ -207,14 +194,4 @@ Private Function TryGetNonZeroNumeric(ByVal rawValue As Variant, ByRef numericVa
     If numericValue = 0 Then Exit Function
 
     TryGetNonZeroNumeric = True
-End Function
-
-Private Function NzBlank(ByVal value As Variant) As Variant
-    If IsError(value) Then
-        NzBlank = vbNullString
-    ElseIf IsEmpty(value) Or IsNull(value) Then
-        NzBlank = vbNullString
-    Else
-        NzBlank = value
-    End If
 End Function

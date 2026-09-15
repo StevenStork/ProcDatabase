@@ -4,8 +4,6 @@ Option Explicit
 
 Private Const FORM_WIDTH As Single = 520
 Private Const FORM_HEIGHT As Single = 360
-Private Const FORM_MARGIN As Single = 12
-Private Const BTN_WIDTH As Single = 76
 Private Const BTN_TOP As Single = 310
 Private Const BTN_0 As Single = 12
 Private Const BTN_1 As Single = 96
@@ -50,10 +48,10 @@ Private Sub BuildControls()
     AddLabel Me, "Notes", EDIT_LEFT, 184, 80
     AddTextBox Me, "txtNotes", EDIT_LEFT, 200, 240, 60
 
-    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "cboPart"), Me, "PartChanged", "Change"
     WireControlEvent mHandlers, GetControl(Me, "lstOperations"), Me, "OperationClick", "Click"

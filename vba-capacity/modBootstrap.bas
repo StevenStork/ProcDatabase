@@ -363,13 +363,7 @@ Private Sub CopyListColumnValues(ByVal sourceCol As ListColumn, ByVal targetCol 
 End Sub
 
 Private Function IsBlankCellValueLocal(ByVal rawValue As Variant) As Boolean
-    If IsError(rawValue) Then
-        IsBlankCellValueLocal = True
-    ElseIf IsEmpty(rawValue) Or IsNull(rawValue) Then
-        IsBlankCellValueLocal = True
-    Else
-        IsBlankCellValueLocal = (Len(Trim$(CStr(rawValue))) = 0)
-    End If
+    IsBlankCellValueLocal = (Len(Trim$(CStr(Nz(rawValue)))) = 0)
 End Function
 
 Private Sub FormatAdminSheet()
@@ -1009,25 +1003,8 @@ Private Sub DeleteWorksheetButton(ByVal ws As Worksheet, ByVal buttonName As Str
 End Sub
 
 Private Sub FormatDashConditionTextColumn()
-    Dim tbl As ListObject
-    Dim col As ListColumn
-
-    Set tbl = FindTable(PART_DASH_CONDITIONS_TABLE_NAME)
-    If tbl Is Nothing Then Exit Sub
-    If Not TableHasColumn(tbl, COL_DASH_CONDITION) Then Exit Sub
-
-    Set col = tbl.ListColumns(COL_DASH_CONDITION)
-    col.Range.NumberFormat = "@"
-    If Not col.DataBodyRange Is Nothing Then
-        col.DataBodyRange.NumberFormat = "@"
-    End If
+    FormatListColumnAsText FindTable(PART_DASH_CONDITIONS_TABLE_NAME), COL_DASH_CONDITION
 End Sub
-
-Private Function FindWorksheetByName(ByVal sheetName As String) As Worksheet
-    On Error Resume Next
-    Set FindWorksheetByName = ThisWorkbook.Worksheets(sheetName)
-    On Error GoTo 0
-End Function
 
 Private Sub CompactAllCapacityTables()
     DeleteEmptyTableRows FindTable(FACTORIES_TABLE_NAME)

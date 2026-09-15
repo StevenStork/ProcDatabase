@@ -31,13 +31,10 @@ End Sub
 Public Sub ShowPartEditor()
     Dim ws As Worksheet
 
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(PART_EDITOR_SHEET_NAME)
-    On Error GoTo 0
-
+    Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then
         BootstrapCapacityTables
-        Set ws = ThisWorkbook.Worksheets(PART_EDITOR_SHEET_NAME)
+        Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     End If
 
     ws.Activate

@@ -4,8 +4,6 @@ Option Explicit
 
 Private Const FORM_WIDTH As Single = 500
 Private Const FORM_HEIGHT As Single = 345
-Private Const FORM_MARGIN As Single = 12
-Private Const BTN_WIDTH As Single = 76
 Private Const BTN_TOP As Single = 268
 Private Const BTN_0 As Single = 12
 Private Const BTN_1 As Single = 96
@@ -43,10 +41,10 @@ Private Sub BuildControls()
     AddLabel Me, "Notes", EDIT_LEFT, 152, 100
     AddTextBox Me, "txtNotes", EDIT_LEFT, 168, 260, 70
 
-    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "lstRecords"), Me, "RecordsClick", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdNew"), Me, "NewRecord", "Click"
@@ -147,7 +145,6 @@ End Sub
 Private Sub DeleteCurrentRecord()
     Dim tbl As ListObject
     Dim codeValue As String
-    Dim junctionTbl As ListObject
 
     codeValue = NormalizeCode(GetControl(Me, "txtCode").Text)
     If Len(codeValue) = 0 Then
@@ -157,12 +154,9 @@ Private Sub DeleteCurrentRecord()
 
     If MsgBox("Delete process type '" & codeValue & "'?", vbQuestion + vbYesNo) <> vbYes Then Exit Sub
 
-    Set junctionTbl = FindTable(EQUIPMENT_PROCESSES_TABLE_NAME)
-    If Not junctionTbl Is Nothing Then
-        If JunctionTableHasProcessType(junctionTbl, codeValue) Then
-            MsgBox "Remove equipment-process assignments before deleting this process type.", vbExclamation
-            Exit Sub
-        End If
+    If TableColumnHasValue(FindTable(EQUIPMENT_PROCESSES_TABLE_NAME), COL_PROCESS_TYPE_CODE, codeValue) Then
+        MsgBox "Remove equipment-process assignments before deleting this process type.", vbExclamation
+        Exit Sub
     End If
 
     Set tbl = FindTable(PROCESS_TYPES_TABLE_NAME)
@@ -175,24 +169,3 @@ Private Sub DeleteCurrentRecord()
 CleanUp:
     OptimizeExcel False
 End Sub
-
-Private Function JunctionTableHasProcessType(ByVal junctionTbl As ListObject, ByVal processTypeCode As String) As Boolean
-    Dim filterValues As Variant
-    Dim rowIndex As Long
-
-    JunctionTableHasProcessType = False
-    If junctionTbl.DataBodyRange Is Nothing Then Exit Function
-
-    filterValues = junctionTbl.ListColumns(COL_PROCESS_TYPE_CODE).DataBodyRange.Value2
-    If Not IsArray(filterValues) Then
-        JunctionTableHasProcessType = ValuesMatchCode(filterValues, processTypeCode)
-        Exit Function
-    End If
-
-    For rowIndex = 1 To UBound(filterValues, 1)
-        If ValuesMatchCode(filterValues(rowIndex, 1), processTypeCode) Then
-            JunctionTableHasProcessType = True
-            Exit Function
-        End If
-    Next rowIndex
-End Function

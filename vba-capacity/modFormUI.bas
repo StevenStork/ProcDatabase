@@ -131,7 +131,7 @@ Public Function AddCommandButton( _
     cmd.Left = leftPos
     cmd.Top = topPos
     cmd.Width = widthPos
-    cmd.Height = 24
+    cmd.Height = FORM_BUTTON_HEIGHT
 
     Set AddCommandButton = cmd
 End Function
@@ -161,19 +161,11 @@ Private Function UniqueControlName(ByVal prefix As String) As String
 End Function
 
 Public Function SelectedComboCode(ByVal comboBox As Object) As String
-    If comboBox.ListIndex < 0 Then
-        SelectedComboCode = vbNullString
-    Else
-        SelectedComboCode = ExtractCodeFromDisplayItem(CStr(comboBox.List(comboBox.ListIndex)))
-    End If
+    SelectedComboCode = SelectedControlCode(comboBox)
 End Function
 
 Public Function SelectedListCode(ByVal listBox As Object) As String
-    If listBox.ListIndex < 0 Then
-        SelectedListCode = vbNullString
-    Else
-        SelectedListCode = ExtractCodeFromDisplayItem(CStr(listBox.List(listBox.ListIndex)))
-    End If
+    SelectedListCode = SelectedControlCode(listBox)
 End Function
 
 Public Function SelectedListText(ByVal listBox As Object) As String
@@ -185,29 +177,32 @@ Public Function SelectedListText(ByVal listBox As Object) As String
 End Function
 
 Public Sub SelectListItemByCode(ByVal listBox As Object, ByVal codeValue As String)
-    Dim itemIndex As Long
-
-    For itemIndex = 0 To listBox.ListCount - 1
-        If ValuesMatchCode(ExtractCodeFromDisplayItem(CStr(listBox.List(itemIndex))), codeValue) Then
-            listBox.ListIndex = itemIndex
-            Exit Sub
-        End If
-    Next itemIndex
-
-    listBox.ListIndex = -1
+    SelectControlItemByCode listBox, codeValue
 End Sub
 
 Public Sub SelectComboByCode(ByVal comboBox As Object, ByVal codeValue As String)
+    SelectControlItemByCode comboBox, codeValue
+End Sub
+
+Private Function SelectedControlCode(ByVal listControl As Object) As String
+    If listControl.ListIndex < 0 Then
+        SelectedControlCode = vbNullString
+    Else
+        SelectedControlCode = ExtractCodeFromDisplayItem(CStr(listControl.List(listControl.ListIndex)))
+    End If
+End Function
+
+Private Sub SelectControlItemByCode(ByVal listControl As Object, ByVal codeValue As String)
     Dim itemIndex As Long
 
-    For itemIndex = 0 To comboBox.ListCount - 1
-        If ValuesMatchCode(ExtractCodeFromDisplayItem(CStr(comboBox.List(itemIndex))), codeValue) Then
-            comboBox.ListIndex = itemIndex
+    For itemIndex = 0 To listControl.ListCount - 1
+        If ValuesMatchCode(ExtractCodeFromDisplayItem(CStr(listControl.List(itemIndex))), codeValue) Then
+            listControl.ListIndex = itemIndex
             Exit Sub
         End If
     Next itemIndex
 
-    comboBox.ListIndex = -1
+    listControl.ListIndex = -1
 End Sub
 
 Public Function SelectedListBoxCodes(ByVal listBox As Object) As Variant
@@ -233,10 +228,4 @@ Public Function SelectedListBoxCodes(ByVal listBox As Object) As Variant
     End If
 
     SelectedListBoxCodes = selectedCodes
-End Function
-
-Public Function IsArrayAllocated(ByVal arr As Variant) As Boolean
-    On Error Resume Next
-    IsArrayAllocated = IsArray(arr) And (UBound(arr) >= LBound(arr))
-    On Error GoTo 0
 End Function

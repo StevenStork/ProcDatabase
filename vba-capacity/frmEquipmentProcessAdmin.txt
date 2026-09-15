@@ -4,10 +4,7 @@ Option Explicit
 
 Private Const FORM_WIDTH As Single = 560
 Private Const FORM_HEIGHT As Single = 390
-Private Const FORM_MARGIN As Single = 12
-Private Const BTN_WIDTH As Single = 76
 Private Const BTN_WIDE_WIDTH As Single = 88
-Private Const BTN_GAP As Single = 8
 Private Const BTN_TOP As Single = 322
 Private Const BTN_ADD_LEFT As Single = 12
 Private Const BTN_REMOVE_LEFT As Single = 108
@@ -47,10 +44,10 @@ Private Sub BuildControls()
     AddTextBox Me, "txtNotes", 100, 284, 430, 24
 
     AddCommandButton Me, "cmdAddSelected", "Add Selected", BTN_ADD_LEFT, BTN_TOP, BTN_WIDE_WIDTH
-    AddCommandButton Me, "cmdRemove", "Remove", BTN_REMOVE_LEFT, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdRemove", "Remove", BTN_REMOVE_LEFT, BTN_TOP, FORM_BUTTON_WIDTH
     AddCommandButton Me, "cmdToggleActive", "Toggle Active", BTN_TOGGLE_LEFT, BTN_TOP, BTN_WIDE_WIDTH
-    AddCommandButton Me, "cmdRefresh", "Refresh", BTN_REFRESH_LEFT, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdRefresh", "Refresh", BTN_REFRESH_LEFT, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "cboEquipment"), Me, "EquipmentChanged", "Change"
     WireControlEvent mHandlers, GetControl(Me, "lstAssigned"), Me, "AssignedSelected", "Click"
@@ -249,9 +246,3 @@ Private Sub ToggleSelectedActive()
 CleanUp:
     OptimizeExcel False
 End Sub
-
-Private Function IsArrayAllocated(ByVal arr As Variant) As Boolean
-    On Error Resume Next
-    IsArrayAllocated = IsArray(arr) And (UBound(arr) >= LBound(arr))
-    On Error GoTo 0
-End Function

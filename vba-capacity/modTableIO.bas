@@ -10,6 +10,7 @@ Public Function FindTable(ByVal tableName As String) As ListObject
     Dim tbl As ListObject
 
     For Each ws In ThisWorkbook.Worksheets
+        Set tbl = Nothing
         On Error Resume Next
         Set tbl = ws.ListObjects(tableName)
         On Error GoTo 0
@@ -43,6 +44,137 @@ Fail:
     TableColumnIndex = 0
 End Function
 
+Public Function FindWorksheetByName(ByVal sheetName As String) As Worksheet
+    On Error Resume Next
+    Set FindWorksheetByName = ThisWorkbook.Worksheets(sheetName)
+    On Error GoTo 0
+End Function
+
+' Always returns a 2-D array (rows x 1) or Empty when the table/column has no data.
+Public Function ListColumnValues2D(ByVal tbl As ListObject, ByVal columnName As String) As Variant
+    Dim values As Variant
+    Dim wrapped(1 To 1, 1 To 1) As Variant
+
+    If tbl Is Nothing Then Exit Function
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+    If Not TableHasColumn(tbl, columnName) Then Exit Function
+
+    values = tbl.ListColumns(columnName).DataBodyRange.Value2
+    If IsArray(values) Then
+        ListColumnValues2D = values
+    Else
+        wrapped(1, 1) = values
+        ListColumnValues2D = wrapped
+    End If
+End Function
+
+Public Function TableColumnHasValue( _
+    ByVal tbl As ListObject, _
+    ByVal columnName As String, _
+    ByVal matchValue As String) As Boolean
+
+    Dim columnValues As Variant
+    Dim rowIndex As Long
+
+    columnValues = ListColumnValues2D(tbl, columnName)
+    If Not IsArray(columnValues) Then Exit Function
+
+    For rowIndex = 1 To UBound(columnValues, 1)
+        If ValuesMatchCode(columnValues(rowIndex, 1), matchValue) Then
+            TableColumnHasValue = True
+            Exit Function
+        End If
+    Next rowIndex
+End Function
+
+Public Sub FormatListColumnAsText(ByVal tbl As ListObject, ByVal columnName As String)
+    Dim col As ListColumn
+
+    If tbl Is Nothing Then Exit Sub
+    If Not TableHasColumn(tbl, columnName) Then Exit Sub
+
+    Set col = tbl.ListColumns(columnName)
+    col.Range.NumberFormat = "@"
+    If Not col.DataBodyRange Is Nothing Then col.DataBodyRange.NumberFormat = "@"
+End Sub
+
+Public Function ListActiveKeyCodes(ByVal tbl As ListObject, ByVal keyColumnName As String) As Variant
+    Dim items() As String
+    Dim itemCount As Long
+    Dim keyValues As Variant
+    Dim rowIndex As Long
+    Dim codeValue As String
+
+    itemCount = 0
+    ReDim items(0 To -1)
+
+    keyValues = ListColumnValues2D(tbl, keyColumnName)
+    If Not IsArray(keyValues) Then
+        ListActiveKeyCodes = items
+        Exit Function
+    End If
+
+    For rowIndex = 1 To UBound(keyValues, 1)
+        codeValue = NormalizeCode(keyValues(rowIndex, 1))
+        If Len(codeValue) = 0 Then GoTo ContinueActiveKey
+        If TableHasColumn(tbl, COL_ACTIVE) Then
+            If Not IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(rowIndex).Index, COL_ACTIVE)) Then GoTo ContinueActiveKey
+        End If
+
+        If itemCount = 0 Then
+            ReDim items(0 To 0)
+        Else
+            ReDim Preserve items(0 To itemCount)
+        End If
+        items(itemCount) = codeValue
+        itemCount = itemCount + 1
+
+ContinueActiveKey:
+    Next rowIndex
+
+    ListActiveKeyCodes = items
+End Function
+
+Public Sub DeleteRowsMatchingKey( _
+    ByVal tbl As ListObject, _
+    ByVal keyColumnName As String, _
+    ByVal keyValue As String)
+
+    Dim rowIndex As Long
+
+    If tbl Is Nothing Then Exit Sub
+    If tbl.DataBodyRange Is Nothing Then Exit Sub
+
+    For rowIndex = tbl.ListRows.Count To 1 Step -1
+        If ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, keyColumnName), keyValue) Then
+            tbl.ListRows(rowIndex).Delete
+        End If
+    Next rowIndex
+End Sub
+
+Private Sub ApplyFieldValuesToListRow(ByVal tbl As ListObject, ByVal listRowIndex As Long, ByVal fieldValues As Object)
+    Dim colName As Variant
+
+    For Each colName In fieldValues.Keys
+        SetCellValueByListRow tbl, listRowIndex, CStr(colName), fieldValues(colName)
+    Next colName
+End Sub
+
+Private Sub BindControlFromItems(ByVal listControl As Object, ByVal items As Variant)
+    Dim itemIndex As Long
+
+    listControl.Clear
+    If IsEmpty(items) Then Exit Sub
+    If Not IsArrayAllocated(items) Then Exit Sub
+    If UBound(items) < LBound(items) Then Exit Sub
+
+    For itemIndex = LBound(items) To UBound(items)
+        If Len(items(itemIndex)) > 0 Then
+            listControl.AddItem items(itemIndex)
+        End If
+    Next itemIndex
+End Sub
+
 Public Function FindListRowByKey( _
     ByVal tbl As ListObject, _
     ByVal keyColumnName As String, _
@@ -53,17 +185,8 @@ Public Function FindListRowByKey( _
     Dim rowCount As Long
 
     FindListRowByKey = 0
-    If tbl Is Nothing Then Exit Function
-    If tbl.DataBodyRange Is Nothing Then Exit Function
-    If Not TableHasColumn(tbl, keyColumnName) Then Exit Function
-
-    keyValues = tbl.ListColumns(keyColumnName).DataBodyRange.Value2
-    If Not IsArray(keyValues) Then
-        If ValuesMatchCode(keyValues, keyValue) Then
-            FindListRowByKey = tbl.ListRows(1).Index
-        End If
-        Exit Function
-    End If
+    keyValues = ListColumnValues2D(tbl, keyColumnName)
+    If Not IsArray(keyValues) Then Exit Function
 
     rowCount = UBound(keyValues, 1)
     For rowIndex = 1 To rowCount
@@ -89,18 +212,9 @@ Public Function FindJunctionListRow( _
     Dim rowCount As Long
 
     FindJunctionListRow = 0
-    If tbl Is Nothing Then Exit Function
-    If tbl.DataBodyRange Is Nothing Then Exit Function
-
-    key1Values = tbl.ListColumns(key1ColumnName).DataBodyRange.Value2
-    key2Values = tbl.ListColumns(key2ColumnName).DataBodyRange.Value2
-
-    If Not IsArray(key1Values) Then
-        If ValuesMatchCode(key1Values, key1Value) And ValuesMatchCode(key2Values, key2Value) Then
-            FindJunctionListRow = tbl.ListRows(1).Index
-        End If
-        Exit Function
-    End If
+    key1Values = ListColumnValues2D(tbl, key1ColumnName)
+    key2Values = ListColumnValues2D(tbl, key2ColumnName)
+    If Not IsArray(key1Values) Or Not IsArray(key2Values) Then Exit Function
 
     rowCount = UBound(key1Values, 1)
     For rowIndex = 1 To rowCount
@@ -138,24 +252,10 @@ Public Function FindTripleJunctionListRow( _
     Dim rowCount As Long
 
     FindTripleJunctionListRow = 0
-    If tbl Is Nothing Then Exit Function
-    If tbl.DataBodyRange Is Nothing Then Exit Function
-    If Not TableHasColumn(tbl, key1ColumnName) Then Exit Function
-    If Not TableHasColumn(tbl, key2ColumnName) Then Exit Function
-    If Not TableHasColumn(tbl, key3ColumnName) Then Exit Function
-
-    key1Values = tbl.ListColumns(key1ColumnName).DataBodyRange.Value2
-    key2Values = tbl.ListColumns(key2ColumnName).DataBodyRange.Value2
-    key3Values = tbl.ListColumns(key3ColumnName).DataBodyRange.Value2
-
-    If Not IsArray(key1Values) Then
-        If ValuesMatchCode(key1Values, key1Value) _
-            And ValuesMatchCode(key2Values, key2Value) _
-            And ValuesMatchCode(key3Values, key3Value) Then
-            FindTripleJunctionListRow = tbl.ListRows(1).Index
-        End If
-        Exit Function
-    End If
+    key1Values = ListColumnValues2D(tbl, key1ColumnName)
+    key2Values = ListColumnValues2D(tbl, key2ColumnName)
+    key3Values = ListColumnValues2D(tbl, key3ColumnName)
+    If Not IsArray(key1Values) Or Not IsArray(key2Values) Or Not IsArray(key3Values) Then Exit Function
 
     rowCount = UBound(key1Values, 1)
     For rowIndex = 1 To rowCount
@@ -197,7 +297,6 @@ Public Sub UpsertTripleJunctionRow( _
     ByVal fieldValues As Object)
 
     Dim listRowIndex As Long
-    Dim colName As Variant
 
     listRowIndex = FindTripleJunctionListRow( _
         tbl, key1ColumnName, key1Value, key2ColumnName, key2Value, key3ColumnName, key3Value)
@@ -205,9 +304,7 @@ Public Sub UpsertTripleJunctionRow( _
         listRowIndex = GetOrCreateListRowIndex(tbl)
     End If
 
-    For Each colName In fieldValues.Keys
-        SetCellValueByListRow tbl, listRowIndex, CStr(colName), fieldValues(colName)
-    Next colName
+    ApplyFieldValuesToListRow tbl, listRowIndex, fieldValues
 End Sub
 
 Public Function GetCellValueByListRow(ByVal tbl As ListObject, ByVal listRowIndex As Long, ByVal columnName As String) As Variant
@@ -241,16 +338,13 @@ Public Sub UpsertRow( _
     ByVal fieldValues As Object)
 
     Dim listRowIndex As Long
-    Dim colName As Variant
 
     listRowIndex = FindListRowByKey(tbl, keyColumnName, keyValue)
     If listRowIndex = 0 Then
         listRowIndex = GetOrCreateListRowIndex(tbl)
     End If
 
-    For Each colName In fieldValues.Keys
-        SetCellValueByListRow tbl, listRowIndex, CStr(colName), fieldValues(colName)
-    Next colName
+    ApplyFieldValuesToListRow tbl, listRowIndex, fieldValues
 End Sub
 
 Public Sub DeleteRowByKey( _
@@ -290,16 +384,13 @@ Public Sub UpsertJunctionRow( _
     ByVal fieldValues As Object)
 
     Dim listRowIndex As Long
-    Dim colName As Variant
 
     listRowIndex = FindJunctionListRow(tbl, key1ColumnName, key1Value, key2ColumnName, key2Value)
     If listRowIndex = 0 Then
         listRowIndex = GetOrCreateListRowIndex(tbl)
     End If
 
-    For Each colName In fieldValues.Keys
-        SetCellValueByListRow tbl, listRowIndex, CStr(colName), fieldValues(colName)
-    Next colName
+    ApplyFieldValuesToListRow tbl, listRowIndex, fieldValues
 End Sub
 
 Public Function ListAllDisplayItems( _
@@ -320,43 +411,29 @@ Public Function ListAllDisplayItems( _
     itemCount = 0
     ReDim items(0 To 0)
 
-    If tbl Is Nothing Then
-        ListAllDisplayItems = items
-        Exit Function
-    End If
-
-    If tbl.DataBodyRange Is Nothing Then
-        ListAllDisplayItems = items
-        Exit Function
-    End If
-
-    keyValues = tbl.ListColumns(keyColumnName).DataBodyRange.Value2
-    displayValues = tbl.ListColumns(displayColumnName).DataBodyRange.Value2
-    If activeOnly And TableHasColumn(tbl, COL_ACTIVE) Then
-        activeValues = tbl.ListColumns(COL_ACTIVE).DataBodyRange.Value2
-    End If
-
+    keyValues = ListColumnValues2D(tbl, keyColumnName)
+    displayValues = ListColumnValues2D(tbl, displayColumnName)
     If Not IsArray(keyValues) Then
-        If Len(NormalizeCode(keyValues)) = 0 Then
-            ListAllDisplayItems = items
-            Exit Function
-        End If
-        If Not activeOnly Or IsActiveFlag(activeValues) Then
-            displayText = BuildDisplayItem(keyValues, displayValues)
-            AppendDisplayItem items, itemCount, displayText
-        End If
         ListAllDisplayItems = items
         Exit Function
+    End If
+
+    If activeOnly And TableHasColumn(tbl, COL_ACTIVE) Then
+        activeValues = ListColumnValues2D(tbl, COL_ACTIVE)
     End If
 
     rowCount = UBound(keyValues, 1)
     For rowIndex = 1 To rowCount
         If Len(NormalizeCode(keyValues(rowIndex, 1))) = 0 Then GoTo ContinueRow
-        If activeOnly Then
+        If activeOnly And IsArray(activeValues) Then
             If Not IsActiveFlag(activeValues(rowIndex, 1)) Then GoTo ContinueRow
         End If
 
-        displayText = BuildDisplayItem(keyValues(rowIndex, 1), displayValues(rowIndex, 1))
+        If IsArray(displayValues) Then
+            displayText = BuildDisplayItem(keyValues(rowIndex, 1), displayValues(rowIndex, 1))
+        Else
+            displayText = BuildDisplayItem(keyValues(rowIndex, 1), vbNullString)
+        End If
         AppendDisplayItem items, itemCount, displayText
 
 ContinueRow:
@@ -381,23 +458,9 @@ Public Function ListJunctionDisplayItems( _
     itemCount = 0
     ReDim items(0 To 0)
 
-    If tbl Is Nothing Then
-        ListJunctionDisplayItems = items
-        Exit Function
-    End If
-
-    If tbl.DataBodyRange Is Nothing Then
-        ListJunctionDisplayItems = items
-        Exit Function
-    End If
-
-    filterValues = tbl.ListColumns(filterColumnName).DataBodyRange.Value2
-    displayValues = tbl.ListColumns(displayColumnName).DataBodyRange.Value2
-
+    filterValues = ListColumnValues2D(tbl, filterColumnName)
+    displayValues = ListColumnValues2D(tbl, displayColumnName)
     If Not IsArray(filterValues) Then
-        If ValuesMatchCode(filterValues, filterValue) Then
-            AppendDisplayItem items, itemCount, CStr(Nz(displayValues))
-        End If
         ListJunctionDisplayItems = items
         Exit Function
     End If
@@ -405,7 +468,9 @@ Public Function ListJunctionDisplayItems( _
     rowCount = UBound(filterValues, 1)
     For rowIndex = 1 To rowCount
         If ValuesMatchCode(filterValues(rowIndex, 1), filterValue) Then
-            AppendDisplayItem items, itemCount, CStr(Nz(displayValues(rowIndex, 1)))
+            If IsArray(displayValues) Then
+                AppendDisplayItem items, itemCount, CStr(Nz(displayValues(rowIndex, 1)))
+            End If
         End If
     Next rowIndex
 
@@ -470,12 +535,6 @@ Private Sub AppendDisplayItem(ByRef items() As String, ByRef itemCount As Long, 
     itemCount = itemCount + 1
 End Sub
 
-Private Function IsArrayAllocated(ByVal arr As Variant) As Boolean
-    On Error Resume Next
-    IsArrayAllocated = IsArray(arr) And (UBound(arr) >= LBound(arr))
-    On Error GoTo 0
-End Function
-
 Public Sub BindComboBoxFromTable( _
     ByVal comboBox As Object, _
     ByVal tbl As ListObject, _
@@ -483,36 +542,11 @@ Public Sub BindComboBoxFromTable( _
     ByVal displayColumnName As String, _
     ByVal activeOnly As Boolean)
 
-    Dim items As Variant
-    Dim itemIndex As Long
-
-    comboBox.Clear
-    items = ListAllDisplayItems(tbl, keyColumnName, displayColumnName, activeOnly)
-
-    If Not IsArrayAllocated(items) Then Exit Sub
-    If UBound(items) < LBound(items) Then Exit Sub
-
-    For itemIndex = LBound(items) To UBound(items)
-        If Len(items(itemIndex)) > 0 Then
-            comboBox.AddItem items(itemIndex)
-        End If
-    Next itemIndex
+    BindControlFromItems comboBox, ListAllDisplayItems(tbl, keyColumnName, displayColumnName, activeOnly)
 End Sub
 
 Public Sub BindListBoxFromArray(ByVal listBox As Object, ByVal items As Variant)
-    Dim itemIndex As Long
-
-    listBox.Clear
-
-    If IsEmpty(items) Then Exit Sub
-    If Not IsArrayAllocated(items) Then Exit Sub
-    If UBound(items) < LBound(items) Then Exit Sub
-
-    For itemIndex = LBound(items) To UBound(items)
-        If Len(items(itemIndex)) > 0 Then
-            listBox.AddItem items(itemIndex)
-        End If
-    Next itemIndex
+    BindControlFromItems listBox, items
 End Sub
 
 Public Function NewFieldValuesDictionary() As Object

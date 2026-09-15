@@ -408,12 +408,7 @@ Private Sub WriteDashConditionText( _
 End Sub
 
 Private Sub EnsureDashConditionTextFormat(ByVal dashTbl As ListObject)
-    Dim col As ListColumn
-
-    If Not TableHasColumn(dashTbl, COL_DASH_CONDITION) Then Exit Sub
-    Set col = dashTbl.ListColumns(COL_DASH_CONDITION)
-    col.Range.NumberFormat = "@"
-    If Not col.DataBodyRange Is Nothing Then col.DataBodyRange.NumberFormat = "@"
+    FormatListColumnAsText dashTbl, COL_DASH_CONDITION
 End Sub
 
 Private Function IsDigitCharacter(ByVal character As String) As Boolean
@@ -440,23 +435,5 @@ Public Function JunctionTableHasValue( _
     ByVal filterColumnName As String, _
     ByVal filterValue As String) As Boolean
 
-    Dim filterValues As Variant
-    Dim rowIndex As Long
-
-    JunctionTableHasValue = False
-    If junctionTbl Is Nothing Then Exit Function
-    If junctionTbl.DataBodyRange Is Nothing Then Exit Function
-
-    filterValues = junctionTbl.ListColumns(filterColumnName).DataBodyRange.Value2
-    If Not IsArray(filterValues) Then
-        JunctionTableHasValue = ValuesMatchCode(filterValues, filterValue)
-        Exit Function
-    End If
-
-    For rowIndex = 1 To UBound(filterValues, 1)
-        If ValuesMatchCode(filterValues(rowIndex, 1), filterValue) Then
-            JunctionTableHasValue = True
-            Exit Function
-        End If
-    Next rowIndex
+    JunctionTableHasValue = TableColumnHasValue(junctionTbl, filterColumnName, filterValue)
 End Function

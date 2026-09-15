@@ -5,8 +5,6 @@ Option Explicit
 
 Private Const FORM_WIDTH As Single = 480
 Private Const FORM_HEIGHT As Single = 400
-Private Const FORM_MARGIN As Single = 12
-Private Const BTN_WIDTH As Single = 76
 Private Const BTN_TOP As Single = 352
 Private Const BTN_0 As Single = 12
 Private Const BTN_1 As Single = 96
@@ -63,11 +61,11 @@ Private Sub BuildControls()
     AddCommandButton Me, "cmdAddDash", "Add", EDIT_LEFT + 128, DASH_TOP + 92, 60
     AddCommandButton Me, "cmdRemDash", "Remove", EDIT_LEFT + 194, DASH_TOP + 92, 60
 
-    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, BTN_WIDTH
-    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdNew", "New", BTN_0, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdSave", "Save", BTN_1, BTN_TOP, FORM_BUTTON_WIDTH
+    AddCommandButton Me, "cmdDelete", "Delete", BTN_2, BTN_TOP, FORM_BUTTON_WIDTH
     AddCommandButton Me, "cmdOperations", "Operations", BTN_3, BTN_TOP, 88
-    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, BTN_WIDTH
+    AddCommandButton Me, "cmdClose", "Close", BTN_CLOSE, BTN_TOP, FORM_BUTTON_WIDTH
 
     WireControlEvent mHandlers, GetControl(Me, "lstParts"), Me, "PartsClick", "Click"
     WireControlEvent mHandlers, GetControl(Me, "cmdNew"), Me, "NewRecord", "Click"
@@ -269,19 +267,8 @@ CleanUp:
 End Sub
 
 Private Sub DeleteAllPartAssignments(ByVal basePartCode As String)
-    DeleteAssignmentsForPart FindTable(PART_DASH_CONDITIONS_TABLE_NAME), basePartCode
-    DeleteAssignmentsForPart FindTable(PART_OPERATIONS_TABLE_NAME), basePartCode
-End Sub
-
-Private Sub DeleteAssignmentsForPart(ByVal tbl As ListObject, ByVal basePartCode As String)
-    Dim rowIndex As Long
-
-    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
-    For rowIndex = tbl.ListRows.Count To 1 Step -1
-        If ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then
-            tbl.ListRows(rowIndex).Delete
-        End If
-    Next rowIndex
+    DeleteRowsMatchingKey FindTable(PART_DASH_CONDITIONS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode
+    DeleteRowsMatchingKey FindTable(PART_OPERATIONS_TABLE_NAME), COL_BASE_PART_CODE, basePartCode
 End Sub
 
 Private Function CurrentBasePartCode() As String

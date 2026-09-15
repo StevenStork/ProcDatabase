@@ -27,11 +27,36 @@ Public Function IsActiveFlag(ByVal rawValue As Variant) As Boolean
 End Function
 
 Public Function ActiveFlagToCellValue(ByVal isActive As Boolean) As Variant
-    If isActive Then
-        ActiveFlagToCellValue = True
-    Else
-        ActiveFlagToCellValue = False
+    ActiveFlagToCellValue = isActive
+End Function
+
+Public Function IsArrayAllocated(ByVal arr As Variant) As Boolean
+    On Error Resume Next
+    IsArrayAllocated = IsArray(arr) And (UBound(arr) >= LBound(arr))
+    On Error GoTo 0
+End Function
+
+Public Function CountAllocatedItems(ByVal arr As Variant) As Long
+    If IsArrayAllocated(arr) Then
+        CountAllocatedItems = UBound(arr) - LBound(arr) + 1
     End If
+End Function
+
+Public Function JoinStringArray(ByVal items As Variant, ByVal separator As String) As String
+    Dim itemIndex As Long
+    Dim result As String
+
+    If Not IsArrayAllocated(items) Then Exit Function
+
+    For itemIndex = LBound(items) To UBound(items)
+        If Len(CStr(items(itemIndex))) = 0 Then GoTo ContinueJoin
+        If Len(result) > 0 Then result = result & separator
+        result = result & CStr(items(itemIndex))
+
+ContinueJoin:
+    Next itemIndex
+
+    JoinStringArray = result
 End Function
 
 Public Function ValidateRequiredCode(ByVal codeValue As String, ByVal fieldLabel As String) As Boolean

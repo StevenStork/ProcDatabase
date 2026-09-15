@@ -237,18 +237,18 @@ Private Sub LoadMasterFields(ByVal ws As Worksheet, ByVal basePartCode As String
 
     If TableHasColumn(tbl, COL_PART_NAME) Then
         SafeClearCellOrMerge ws.Cells(PE_ROW_NAME, PE_VALUE_COL)
-        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_PART_NAME)))
+        ws.Cells(PE_ROW_NAME, PE_VALUE_COL).Value = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_PART_NAME)))
     Else
         SafeClearCellOrMerge ws.Cells(PE_ROW_NAME, PE_VALUE_COL)
     End If
-    ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
+    ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_FACTORY_CODE)))
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = IsActiveFlag(GetCellValueByListRow(tbl, listRowIndex, COL_ACTIVE))
     If TableHasColumn(tbl, COL_PRODUCT_LINE) Then
-        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).Value = CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_PRODUCT_LINE)))
+        ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL).Value = CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_PRODUCT_LINE)))
     Else
         SafeClearCellOrMerge ws.Cells(PE_ROW_PRODUCT_LINE, PE_VALUE_COL)
     End If
-    WriteEditorNotes ws, CStr(NzBlank(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
+    WriteEditorNotes ws, CStr(Nz(GetCellValueByListRow(tbl, listRowIndex, COL_NOTES)))
 End Sub
 
 Private Sub LoadDashRows(ByVal ws As Worksheet, ByVal basePartCode As String)
@@ -276,12 +276,12 @@ Private Sub LoadDashRows(ByVal ws As Worksheet, ByVal basePartCode As String)
 
         Set dashCell = ws.Cells(sheetRow, PE_COL_DASH)
         dashCell.NumberFormat = "@"
-        dashCell.Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_DASH_CONDITION)))
+        dashCell.Value = CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_DASH_CONDITION)))
         If TableHasColumn(tbl, COL_SEPARATOR) Then
-            ws.Cells(sheetRow, PE_COL_SEPARATOR).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_SEPARATOR)))
+            ws.Cells(sheetRow, PE_COL_SEPARATOR).Value = CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_SEPARATOR)))
         End If
         ws.Cells(sheetRow, PE_COL_DASH_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
-        ws.Cells(sheetRow, PE_COL_DASH_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
+        ws.Cells(sheetRow, PE_COL_DASH_NOTES).Value = CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
 
         sheetRow = sheetRow + 1
         loadedCount = loadedCount + 1
@@ -323,7 +323,7 @@ Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     ' Count matching rows first so we can allocate once.
     matchCount = 0
     For rowIndex = 1 To tbl.ListRows.Count
-        assemblyNo = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
+        assemblyNo = Trim$(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
         If Len(assemblyNo) = 0 Then GoTo ContinueCount
         SplitAssemblyNoWithSeparator assemblyNo, rowBasePart, separator, dashCondition
         If ValuesMatchCode(NormalizeCode(rowBasePart), basePartCode) Then matchCount = matchCount + 1
@@ -336,14 +336,14 @@ ContinueCount:
 
     matchIndex = 0
     For rowIndex = 1 To tbl.ListRows.Count
-        assemblyNo = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
+        assemblyNo = Trim$(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_ASSEMBLY_NO))))
         If Len(assemblyNo) = 0 Then GoTo ContinueFill
 
         SplitAssemblyNoWithSeparator assemblyNo, rowBasePart, separator, dashCondition
         rowBasePart = NormalizeCode(rowBasePart)
         If Not ValuesMatchCode(rowBasePart, basePartCode) Then GoTo ContinueFill
 
-        operSeq = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ_SOURCE))))
+        operSeq = Trim$(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ_SOURCE))))
         operCode = vbNullString
         If hasOperCode Then
             operCode = GetListRowCellText(tbl, rowIndex, COL_OPER_CODE_SOURCE)
@@ -431,7 +431,7 @@ Private Function GetListRowCellText( _
     If Len(textValue) > 0 Then
         GetListRowCellText = textValue
     Else
-        GetListRowCellText = Trim$(CStr(NzBlank(cell.Value2)))
+        GetListRowCellText = Trim$(CStr(Nz(cell.Value2)))
     End If
     Exit Function
 
@@ -502,7 +502,7 @@ ContinueCollect:
         rowIndex = CLng(matchRows(sortIndex, 1))
         If loadedCount >= PE_OPS_MAX_ROWS Then Exit For
 
-        operSeq = Trim$(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ))))
+        operSeq = Trim$(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ))))
         opLine = ReadOpLineValue(GetCellValueByListRow(tbl, rowIndex, COL_OP_LINE))
 
         ws.Cells(sheetRow, PE_COL_OPER_SEQ).Value = operSeq
@@ -513,20 +513,20 @@ ContinueCollect:
 
         madeInFfa = vbNullString
         If TableHasColumn(tbl, COL_MADE_IN_FFA) Then
-            madeInFfa = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_MADE_IN_FFA))))
+            madeInFfa = NormalizeCode(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_MADE_IN_FFA))))
         End If
         If Len(madeInFfa) = 0 Then madeInFfa = partFactory
         ws.Cells(sheetRow, PE_COL_MADE_IN_FFA).Value = madeInFfa
 
         equipmentCode = vbNullString
         If TableHasColumn(tbl, COL_EQUIPMENT_CODE) Then
-            equipmentCode = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_EQUIPMENT_CODE))))
+            equipmentCode = NormalizeCode(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_EQUIPMENT_CODE))))
         End If
         ws.Cells(sheetRow, PE_COL_EQUIPMENT).Value = equipmentCode
 
         processTypeCode = vbNullString
         If TableHasColumn(tbl, COL_PROCESS_TYPE_CODE) Then
-            processTypeCode = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_PROCESS_TYPE_CODE))))
+            processTypeCode = NormalizeCode(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_PROCESS_TYPE_CODE))))
         End If
         ws.Cells(sheetRow, PE_COL_PROCESS_TYPE).Value = processTypeCode
 
@@ -565,7 +565,7 @@ ContinueCollect:
         ws.Cells(sheetRow, PE_COL_USE_AVG_EX).Value = showAvgEx
 
         ws.Cells(sheetRow, PE_COL_OPER_ACTIVE).Value = IsActiveFlag(GetCellValueByListRow(tbl, rowIndex, COL_ACTIVE))
-        ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value = CStr(NzBlank(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
+        ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value = CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_NOTES)))
 
         ApplyAveragesForOperationRow ws, sheetRow, basePartCode
 
@@ -602,8 +602,8 @@ Private Sub SortOperationListRows(ByVal tbl As ListObject, ByRef matchRows As Va
         For j = i + 1 To matchCount
             leftRow = CLng(matchRows(i, 1))
             rightRow = CLng(matchRows(j, 1))
-            leftSeq = NormalizeOperSeqKey(CStr(NzBlank(GetCellValueByListRow(tbl, leftRow, COL_OPER_SEQ))))
-            rightSeq = NormalizeOperSeqKey(CStr(NzBlank(GetCellValueByListRow(tbl, rightRow, COL_OPER_SEQ))))
+            leftSeq = NormalizeOperSeqKey(CStr(Nz(GetCellValueByListRow(tbl, leftRow, COL_OPER_SEQ))))
+            rightSeq = NormalizeOperSeqKey(CStr(Nz(GetCellValueByListRow(tbl, rightRow, COL_OPER_SEQ))))
             leftLine = ReadOpLineValue(GetCellValueByListRow(tbl, leftRow, COL_OP_LINE))
             rightLine = ReadOpLineValue(GetCellValueByListRow(tbl, rightRow, COL_OP_LINE))
 
@@ -884,7 +884,7 @@ Private Function BuildEquipmentValidationList(ByVal factoryCode As String) As St
 
     For rowIndex = 1 To junctionTbl.ListRows.Count
         If Not ValuesMatchCode(GetCellValueByListRow(junctionTbl, rowIndex, COL_FACTORY_CODE), factoryCode) Then GoTo ContinueEquip
-        equipmentCode = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(junctionTbl, rowIndex, COL_EQUIPMENT_CODE))))
+        equipmentCode = NormalizeCode(CStr(Nz(GetCellValueByListRow(junctionTbl, rowIndex, COL_EQUIPMENT_CODE))))
         If Len(equipmentCode) = 0 Then GoTo ContinueEquip
         If seen.Exists(equipmentCode) Then GoTo ContinueEquip
 
@@ -930,7 +930,7 @@ Private Function BuildProcessTypeValidationList(ByVal equipmentCode As String) A
             If Not IsActiveFlag(GetCellValueByListRow(junctionTbl, rowIndex, COL_ACTIVE)) Then GoTo ContinueProcess
         End If
 
-        processCode = NormalizeCode(CStr(NzBlank(GetCellValueByListRow(junctionTbl, rowIndex, COL_PROCESS_TYPE_CODE))))
+        processCode = NormalizeCode(CStr(Nz(GetCellValueByListRow(junctionTbl, rowIndex, COL_PROCESS_TYPE_CODE))))
         If Len(processCode) = 0 Then GoTo ContinueProcess
         If seen.Exists(processCode) Then GoTo ContinueProcess
 
@@ -1278,8 +1278,8 @@ Private Function ReadCachedOperationRows() As Object
     End If
 
     rowIndex = CACHE_OPS_START_ROW
-    Do While Len(Trim$(CStr(NzBlank(wsCache.Cells(rowIndex, 1).Value2)))) > 0
-        operSeq = Trim$(CStr(NzBlank(wsCache.Cells(rowIndex, 1).Value2)))
+    Do While Len(Trim$(CStr(Nz(wsCache.Cells(rowIndex, 1).Value2)))) > 0
+        operSeq = Trim$(CStr(Nz(wsCache.Cells(rowIndex, 1).Value2)))
         opLine = ReadOpLineValue(wsCache.Cells(rowIndex, 2).Value2)
 
         ReDim rowData(0 To CACHE_OPS_VALUE_COL_COUNT - 1)
@@ -1333,11 +1333,11 @@ Private Function ReadSheetOperationRows(ByVal ws As Worksheet) As Object
         rowData(13) = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_NOTES).Value2))
 
         If IsEmpty(ws.Cells(rowIndex, PE_COL_USE_AVG_HOURS).Value2) _
-            Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_USE_AVG_HOURS).Value2)))) = 0 Then
+            Or Len(Trim$(CStr(Nz(ws.Cells(rowIndex, PE_COL_USE_AVG_HOURS).Value2)))) = 0 Then
             rowData(10) = True
         End If
         If IsEmpty(ws.Cells(rowIndex, PE_COL_USE_AVG_EX).Value2) _
-            Or Len(Trim$(CStr(NzBlank(ws.Cells(rowIndex, PE_COL_USE_AVG_EX).Value2)))) = 0 Then
+            Or Len(Trim$(CStr(Nz(ws.Cells(rowIndex, PE_COL_USE_AVG_EX).Value2)))) = 0 Then
             rowData(11) = True
         End If
 
@@ -1508,38 +1508,7 @@ Private Sub ApplyFactoryValidation(ByVal ws As Worksheet)
 End Sub
 
 Private Function BuildFactoryValidationList() As String
-    Dim tbl As ListObject
-    Dim codes As Variant
-    Dim rowIndex As Long
-    Dim rowCount As Long
-    Dim codeValue As String
-    Dim result As String
-
-    Set tbl = FindTable(FACTORIES_TABLE_NAME)
-    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Function
-
-    codes = tbl.ListColumns(COL_FACTORY_CODE).DataBodyRange.Value2
-    If Not IsArray(codes) Then
-        codeValue = NormalizeCode(codes)
-        If Len(codeValue) > 0 And IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(1).Index, COL_ACTIVE)) Then
-            BuildFactoryValidationList = codeValue
-        End If
-        Exit Function
-    End If
-
-    rowCount = UBound(codes, 1)
-    For rowIndex = 1 To rowCount
-        codeValue = NormalizeCode(codes(rowIndex, 1))
-        If Len(codeValue) = 0 Then GoTo ContinueFactory
-        If Not IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(rowIndex).Index, COL_ACTIVE)) Then GoTo ContinueFactory
-
-        If Len(result) > 0 Then result = result & ","
-        result = result & codeValue
-
-ContinueFactory:
-    Next rowIndex
-
-    BuildFactoryValidationList = result
+    BuildFactoryValidationList = JoinStringArray(ListActiveKeyCodes(FindTable(FACTORIES_TABLE_NAME), COL_FACTORY_CODE), ",")
 End Function
 
 Private Function ReadEditorActiveFlag(ByVal ws As Worksheet) As Boolean
@@ -1569,23 +1538,9 @@ Private Sub EnsureCacheSheetExists()
 End Sub
 
 Private Function GetPartEditorWorksheet() As Worksheet
-    On Error Resume Next
-    Set GetPartEditorWorksheet = ThisWorkbook.Worksheets(PART_EDITOR_SHEET_NAME)
-    On Error GoTo 0
+    Set GetPartEditorWorksheet = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
 End Function
 
 Private Function GetCacheWorksheet() As Worksheet
-    On Error Resume Next
-    Set GetCacheWorksheet = ThisWorkbook.Worksheets(PART_EDITOR_CACHE_SHEET_NAME)
-    On Error GoTo 0
-End Function
-
-Private Function NzBlank(ByVal value As Variant) As Variant
-    If IsError(value) Then
-        NzBlank = vbNullString
-    ElseIf IsEmpty(value) Or IsNull(value) Then
-        NzBlank = vbNullString
-    Else
-        NzBlank = value
-    End If
+    Set GetCacheWorksheet = FindWorksheetByName(PART_EDITOR_CACHE_SHEET_NAME)
 End Function

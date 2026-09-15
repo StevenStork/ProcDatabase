@@ -93,16 +93,16 @@ Public Const PE_STATUS_ROW As Long = 7
 Public Const PE_ROW_FACTORY As Long = 8
 Public Const PE_ROW_ACTIVE As Long = 9
 Public Const PE_ROW_PRODUCT_LINE As Long = 10
-Public Const PE_NOTES_LABEL_ROW As Long = 11
-Public Const PE_NOTES_LABEL_ROW_END As Long = 16
 Public Const PE_NOTES_VALUE_ROW As Long = 11
 Public Const PE_NOTES_VALUE_ROW_END As Long = 16
-Public Const PE_NOTES_VALUE_COL_START As Long = 3
-Public Const PE_NOTES_VALUE_COL_END As Long = 7
+Public Const PE_NOTES_LABEL_ROW As Long = PE_NOTES_VALUE_ROW
+Public Const PE_NOTES_LABEL_ROW_END As Long = PE_NOTES_VALUE_ROW_END
+Public Const PE_NOTES_VALUE_COL_START As Long = PE_VALUE_COL
+Public Const PE_NOTES_VALUE_COL_END As Long = PE_VALUE_COL_END
 Public Const PE_BUTTON_ROW As Long = 3
 
-Public Const PE_STATUS_LABEL_COL As Long = 2
-Public Const PE_STATUS_VALUE_COL As Long = 3
+Public Const PE_STATUS_LABEL_COL As Long = PE_LABEL_COL
+Public Const PE_STATUS_VALUE_COL As Long = PE_VALUE_COL
 
 Public Const PE_DASH_SECTION_ROW As Long = 5
 Public Const PE_DASH_HEADER_ROW As Long = 6
@@ -156,6 +156,7 @@ Public Const CACHE_OPS_VALUE_COL_COUNT As Long = 14
 Public Const CACHE_VALIDATION_EQUIP_COL As Long = 20
 Public Const CACHE_VALIDATION_PROCESS_COL As Long = 21
 
+' Shared UserForm layout. Forms should use these names; do not redeclare them locally.
 Public Const FORM_MARGIN As Single = 12
 Public Const FORM_BUTTON_HEIGHT As Single = 26
 Public Const FORM_BUTTON_WIDTH As Single = 76

@@ -221,6 +221,7 @@ Run **`RefreshRouteCard`**.
 
 ## Notes
 
+- Form layout uses `FORM_MARGIN`, `FORM_BUTTON_WIDTH`, `FORM_BUTTON_HEIGHT`, and `FORM_BUTTON_GAP` from `modConstants`. Do not redeclare those names in UserForm code.
 - **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
 - Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented. Specifically for PartEditor calc columns: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`.
 - Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so Insert→Checkbox in-cell checkboxes and the new operations columns appear. If checkbox formatting does not apply automatically, select the Active / Use Avg cells and use **Insert → Checkbox** once.

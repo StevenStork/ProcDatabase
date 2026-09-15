@@ -104,72 +104,11 @@ Fail:
 End Sub
 
 Public Function CountActiveFactoryCodes() As Long
-    Dim tbl As ListObject
-    Dim codes As Variant
-    Dim rowIndex As Long
-    Dim rowCount As Long
-    Dim codeValue As String
-
-    Set tbl = FindTable(FACTORIES_TABLE_NAME)
-    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Function
-
-    codes = tbl.ListColumns(COL_FACTORY_CODE).DataBodyRange.Value2
-    If Not IsArray(codes) Then
-        codeValue = NormalizeCode(codes)
-        If Len(codeValue) > 0 Then
-            If IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(1).Index, COL_ACTIVE)) Then
-                CountActiveFactoryCodes = 1
-            End If
-        End If
-        Exit Function
-    End If
-
-    rowCount = UBound(codes, 1)
-    For rowIndex = 1 To rowCount
-        codeValue = NormalizeCode(codes(rowIndex, 1))
-        If Len(codeValue) = 0 Then GoTo ContinueRow
-        If Not IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(rowIndex).Index, COL_ACTIVE)) Then GoTo ContinueRow
-        CountActiveFactoryCodes = CountActiveFactoryCodes + 1
-
-ContinueRow:
-    Next rowIndex
+    CountActiveFactoryCodes = CountAllocatedItems(ListActiveKeyCodes(FindTable(FACTORIES_TABLE_NAME), COL_FACTORY_CODE))
 End Function
 
 Public Function BuildActiveFactoryCodeList() As String
-    Dim tbl As ListObject
-    Dim codes As Variant
-    Dim rowIndex As Long
-    Dim rowCount As Long
-    Dim codeValue As String
-    Dim result As String
-
-    Set tbl = FindTable(FACTORIES_TABLE_NAME)
-    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Function
-
-    codes = tbl.ListColumns(COL_FACTORY_CODE).DataBodyRange.Value2
-    If Not IsArray(codes) Then
-        codeValue = NormalizeCode(codes)
-        If Len(codeValue) > 0 Then
-            If IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(1).Index, COL_ACTIVE)) Then
-                BuildActiveFactoryCodeList = codeValue
-            End If
-        End If
-        Exit Function
-    End If
-
-    rowCount = UBound(codes, 1)
-    For rowIndex = 1 To rowCount
-        codeValue = NormalizeCode(codes(rowIndex, 1))
-        If Len(codeValue) = 0 Then GoTo ContinueRow
-        If Not IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(rowIndex).Index, COL_ACTIVE)) Then GoTo ContinueRow
-
-        If Len(result) > 0 Then result = result & ", "
-        result = result & codeValue
-
-ContinueRow:
-    Next rowIndex
-
-    BuildActiveFactoryCodeList = result
+    BuildActiveFactoryCodeList = JoinStringArray(ListActiveKeyCodes(FindTable(FACTORIES_TABLE_NAME), COL_FACTORY_CODE), ", ")
 End Function
 
 Public Function BuildAssemblyNumberListFromRCCP() As String
@@ -190,20 +129,17 @@ Public Function BuildAssemblyNumberListFromRCCP() As String
     If tbl.DataBodyRange Is Nothing Then Exit Function
     If Not TableHasColumn(tbl, COL_ASSEMBLY_NO) Then Exit Function
 
-    assemblyValues = tbl.ListColumns(COL_ASSEMBLY_NO).DataBodyRange.Value2
-    If Not IsArray(assemblyValues) Then
-        assemblyNo = Trim$(CStr(NzBlank(assemblyValues)))
-        If Len(assemblyNo) > 0 Then uniqueAssemblies(assemblyNo) = assemblyNo
-    Else
-        rowCount = UBound(assemblyValues, 1)
-        For rowIndex = 1 To rowCount
-            assemblyNo = Trim$(CStr(NzBlank(assemblyValues(rowIndex, 1))))
-            If Len(assemblyNo) = 0 Then GoTo ContinueAssembly
-            If Not uniqueAssemblies.Exists(assemblyNo) Then uniqueAssemblies.Add assemblyNo, assemblyNo
+    assemblyValues = ListColumnValues2D(tbl, COL_ASSEMBLY_NO)
+    If Not IsArray(assemblyValues) Then Exit Function
+
+    rowCount = UBound(assemblyValues, 1)
+    For rowIndex = 1 To rowCount
+        assemblyNo = Trim$(CStr(Nz(assemblyValues(rowIndex, 1))))
+        If Len(assemblyNo) = 0 Then GoTo ContinueAssembly
+        If Not uniqueAssemblies.Exists(assemblyNo) Then uniqueAssemblies.Add assemblyNo, assemblyNo
 
 ContinueAssembly:
-        Next rowIndex
-    End If
+    Next rowIndex
 
     For Each assemblyKey In uniqueAssemblies.Keys
         If Len(result) > 0 Then result = result & ", "
@@ -451,16 +387,6 @@ End Function
 
 Private Function EscapeSqlSingleQuotes(ByVal textValue As String) As String
     EscapeSqlSingleQuotes = Replace(textValue, "'", "''")
-End Function
-
-Private Function NzBlank(ByVal value As Variant) As Variant
-    If IsError(value) Then
-        NzBlank = vbNullString
-    ElseIf IsEmpty(value) Or IsNull(value) Then
-        NzBlank = vbNullString
-    Else
-        NzBlank = value
-    End If
 End Function
 
 Private Function GetWorkbookConnection(ByVal connectionName As String) As WorkbookConnection
