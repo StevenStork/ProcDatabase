@@ -1,0 +1,243 @@
+# Factory Capacity Database (VBA)
+
+Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipment, process-type, and part-number master data in related tables for a future capacity model.
+
+## Workbook sheets
+
+### Capacity master data
+
+| Sheet | Table | Purpose |
+|---|---|---|
+| Admin | — | Launch macros / buttons |
+| Factories | `FactoriesTbl` | Factory master |
+| Equipment | `EquipmentTbl` | Equipment master |
+| ProcessTypes | `ProcessTypesTbl` | Process type master |
+| FactoryEquipment | `FactoryEquipmentTbl` | Equipment at each factory |
+| EquipmentProcesses | `EquipmentProcessTbl` | Process types per equipment |
+
+### Part numbers (relational — no sheet per part)
+
+| Sheet | Table | Purpose |
+|---|---|---|
+| **Parts** | `BasePartsTbl` | Master index of all base parts (`Name`, `FactoryCode`, `ProductLine`, …) |
+| **PartEditor** | — | Load/edit workspace for one part at a time |
+| PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part (`Separator`, `Active`) |
+| PartOperations | `PartOperationsTbl` | Operations per base part (`OperSeq`, `OpLine`, Made In FFA, equipment, process type, times, avg toggles) |
+| PartAverages | `PartAveragesTbl` | Hidden lookup of Avg Process Hours / Avg Ex per base part + oper seq (rebuilt on refresh) |
+| PartEditorCache | — | Hidden cache for sheet editor save diff (auto-created) |
+
+### Linked source queries (connection-only)
+
+Power Query connections — load as **connection only** when possible. Table names match connection names:
+
+| Connection / table | Purpose |
+|---|---|
+| `tblRouteCard` | Route card operations |
+| `tblAssyStnd` | Assembly standards (fallback process hours) |
+| `tblOperComps` | Operation completions (primary process hours) |
+| `tblTimeYield` | Process time / yield (`Avg 180 Day Ex`, `Avg 90 Day Ex`) |
+| `tblRCCP` | Active assembly master (for future refresh pipeline) |
+
+```mermaid
+erDiagram
+    FactoriesTbl ||--o{ BasePartsTbl : builds_at
+    BasePartsTbl ||--o{ PartDashConditionsTbl : has
+    BasePartsTbl ||--o{ PartOperationsTbl : defines
+    FactoriesTbl ||--o{ FactoryEquipmentTbl : has
+    EquipmentTbl ||--o{ FactoryEquipmentTbl : assigned
+    EquipmentTbl ||--o{ EquipmentProcessTbl : supports
+    ProcessTypesTbl ||--o{ EquipmentProcessTbl : assigned
+    tblOperComps --> PartAveragesTbl : avg_hours
+    tblAssyStnd --> PartAveragesTbl : avg_hours_fallback
+    tblTimeYield --> PartAveragesTbl : avg_ex
+    PartAveragesTbl --> PartEditor : lookup
+```
+
+## VBA modules to add
+
+### Standard modules
+
+| File | Module name |
+|---|---|
+| `modConstants.bas` | modConstants |
+| `modTableIO.bas` | modTableIO |
+| `modValidation.bas` | modValidation |
+| `modBootstrap.bas` | modBootstrap |
+| `modExcelOptimize.bas` | modExcelOptimize |
+| `modFormUI.bas` | modFormUI |
+| `modFormLauncher.bas` | modFormLauncher |
+| `modPartIO.bas` | modPartIO |
+| `modAverages.bas` | modAverages |
+| `modPartSheetEditor.bas` | modPartSheetEditor |
+
+### Class module
+
+| File | Class name |
+|---|---|
+| `clsFormControlHandler.cls` | clsFormControlHandler |
+
+### UserForms (optional — sheet editor is primary)
+
+| UserForm name | Paste file | Purpose |
+|---|---|---|
+| `frmFactoryAdmin` | `frmFactoryAdmin.txt` | Factories |
+| `frmEquipmentAdmin` | `frmEquipmentAdmin.txt` | Equipment |
+| `frmProcessTypeAdmin` | `frmProcessTypeAdmin.txt` | Process types |
+| `frmFactoryEquipmentAdmin` | `frmFactoryEquipmentAdmin.txt` | Factory-equipment links |
+| `frmEquipmentProcessAdmin` | `frmEquipmentProcessAdmin.txt` | Equipment-process links |
+| `frmPartEditor` | `frmPartEditor.txt` | Legacy popup part editor |
+| `frmPartOperationsAdmin` | `frmPartOperationsAdmin.txt` | Operations per part |
+
+Paste each `.txt` file into a blank UserForm with the matching `(Name)`.
+
+### ThisWorkbook
+
+Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
+
+## Setup steps
+
+1. Save the workbook as **`FactoryCapacity.xlsm`**.
+2. Import/paste all standard modules, class module, and UserForms (optional).
+3. Paste `ThisWorkbook.txt`.
+4. Add Power Query connections (`tblRouteCard`, `tblOperComps`, `tblRCCP`, `tblTimeYield`, `tblAssyStnd`) as connection-only.
+5. Run **`BootstrapCapacityTables`** once.
+6. Wire **Admin**, **Parts**, and **PartEditor** buttons:
+
+| Button caption | Macro |
+|---|---|
+| Manage Factories | `ShowFactoryAdmin` |
+| Manage Equipment | `ShowEquipmentAdmin` |
+| Manage Process Types | `ShowProcessTypeAdmin` |
+| Assign Equipment to Factories | `ShowFactoryEquipmentAdmin` |
+| Assign Processes to Equipment | `ShowEquipmentProcessAdmin` |
+| Open Part Editor sheet | `ShowPartEditor` |
+| Load Part (PartEditor C3) | `LoadPartToEditor` |
+| Save Part (PartEditor) | `SavePartFromEditor` |
+| Clear Part Editor | `ClearPartEditor` |
+| Open Part from Parts index | `OpenPartEditorFromPartsIndex` |
+| Refresh RCCP | `RefreshRCCP` |
+| Refresh Oper Completions | `RefreshOperComps` |
+| Refresh Assembly Standards | `RefreshAssyStnd` |
+| Refresh Route Card | `RefreshRouteCard` |
+| Refresh Time Yield | `RefreshTimeYield` |
+| Refresh all linked data | `RefreshAllLinkedData` |
+| Rebuild part averages | `RebuildPartAverages` |
+| Part Operations (form) | `ShowPartOperationsAdmin` |
+| Rebuild Tables | `BootstrapCapacityTables` |
+
+## Part editor workflow (sheet-based)
+
+1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
+2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
+3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** are looked up from hidden `PartAveragesTbl` (not recalculated per row).
+4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Use **Op Line** (`1`, `2`, …) for multiple equipment/time rows that share the same **Oper Seq**. Enter **Oper Code** as text (leading zeros preserved). Pick **Made In FFA** (factory codes), then **Equipment** (filtered by that factory) and **Process Type**. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed. **Use Avg Hours** / **Use Avg Ex** are preference flags (calculated averages are always shown). **Active** and **Notes** are the rightmost ops columns. Status messages appear in **C7**.
+5. The **Operations** table starts at 30 rows and the **Route Card** table starts at 40. Loading a part with more lines grows that table (plus a few spare rows), and typing in the last couple of operation or route-card rows adds more. Loading a smaller part or clicking **Clear** shrinks back toward those defaults. A safety cap of 500 rows applies.
+6. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
+
+Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
+
+`BootstrapCapacityTables` formats PartEditor and creates the **Load Part**, **Save Part**, and **Clear** buttons on the sheet. It also drops the legacy **StatusDate** column from `BasePartsTbl` if present, adds the operations user columns if missing, and applies **Insert → Checkbox** in-cell checkboxes (Microsoft 365) for all true/false fields (master Active, dash Active, operation Active / Use Avg Hours / Use Avg Ex). These are cell formatting (TRUE/FALSE values), not ActiveX or Form Control objects floating on the sheet.
+
+**Route Card** (columns B–D, from `tblRouteCard`): dash condition parsed from `ASSEMBLY NO`, plus `OPER SEQ` and `OPER CODE` for the loaded base part. Load `tblRouteCard` to a sheet as a ListObject.
+
+### Operations columns (PartEditor)
+
+| Column | Source | Notes |
+|---|---|---|
+| **Oper Seq** | User / table | Operation sequence |
+| **Op Line** | User / table (`OpLine`) | Sub-line for multiple rows with the same Oper Seq; defaults to `1` |
+| **Oper Code** | User / table (`OperCode`) | Text format; leading zeros preserved |
+| **Made In FFA** | User / table (`MadeInFFA`) | Dropdown of factory codes; equipment list filters by this factory |
+| **Equipment** | User / table | Filtered by Made In FFA (else part factory) |
+| **Process Type** | User / table | Filtered by equipment |
+| **Process Hours** | User entry → `PartOperationsTbl.ProcessHours` | Manual override / planning value |
+| **Avg Ex** | User entry → `PartOperationsTbl.ManualAvgEx` | Manual override (not the calculated avg) |
+| **Batch Size** | User entry → `PartOperationsTbl.BatchSize` | User-entered batch size |
+| **Use Avg Hours** | User / table (`UseAvgHours`) | Preference flag; does not hide calculated hours |
+| **Use Avg Ex** | User / table (`UseAvgEx`) | Preference flag; does not hide calculated Avg Ex |
+| **Avg Process Hours** | `PartAveragesTbl` | Always shown when Oper Seq is set and a stored average exists |
+| **Avg Ex (Calc)** | `PartAveragesTbl` | Always shown when Oper Seq is set and a stored average exists |
+| **Active** | User / table | Far-right checkbox column |
+| **Notes** | User / table | Far-right notes column |
+
+### Average calculations (`modAverages`)
+
+Averages are **not** scanned from the linked queries each time a part is loaded. They are stored on the hidden **PartAverages** sheet (`PartAveragesTbl`) and rebuilt when source data is refreshed.
+
+| Column | Source | Logic |
+|---|---|---|
+| **Avg Process Hours** | `tblOperComps` → `tblAssyStnd` | Average non-zero `LABOR HPS (HOURS)` for base part + `OPER SEQ`; fallback to average non-zero `RUN TIME (HOURS)` |
+| **Avg Ex (Calc)** | `tblTimeYield` | Average non-zero `Avg 180 Day Ex`; fallback to `Avg 90 Day Ex` |
+
+**What must be in place for averages to calculate:**
+
+1. Load these Power Query results to worksheets as **ListObjects** (connection-only is not enough for VBA `FindTable`):
+   - `tblOperComps` (preferred for process hours) and/or `tblAssyStnd` (fallback)
+   - `tblTimeYield` (for Avg Ex)
+2. Required columns on those tables:
+   - Shared keys: `ASSEMBLY NO`, `OPER SEQ`
+   - Hours: `LABOR HPS (HOURS)` on `tblOperComps`; `RUN TIME (HOURS)` on `tblAssyStnd`
+   - Ex factors: `Avg 180 Day Ex`, `Avg 90 Day Ex` on `tblTimeYield`
+3. Matching uses the base part extracted from `ASSEMBLY NO` (text before `-` / letter separator) plus `OPER SEQ` equal to the operation row’s Oper Seq. Zero values are excluded from the average.
+4. Refresh linked data so `PartAveragesTbl` is rebuilt:
+   - `RefreshOperComps`, `RefreshAssyStnd`, or `RefreshTimeYield` (each rebuilds the averages table after that query refresh)
+   - `RefreshAllLinkedData` (RCCP → OperComps → AssyStnd → RouteCard → TimeYield, then one averages rebuild)
+   - `RebuildPartAverages` to rebuild from whatever is already on the sheets without refreshing queries
+5. PartEditor looks up `BasePartCode` + `OperSeq` in `PartAveragesTbl`. If that table is empty on first load, VBA rebuilds it once from the source ListObjects.
+
+Per-operation **Use Avg Hours** / **Use Avg Ex** flags are stored preferences. Calculated **Avg Process Hours** / **Avg Ex (Calc)** always populate when Oper Seq has a matching row in `PartAveragesTbl`.
+
+## Linked query refresh
+
+### RCCP (`tblRCCP`)
+
+The **#"Filtered FFAs"** step must read factory codes from `FactoriesTbl` instead of hard-coded FFAs. Paste the replacement step from [`PowerQuery/pqRCCP-FilteredFFAs.txt`](../PowerQuery/pqRCCP-FilteredFFAs.txt).
+
+Run **`RefreshRCCP`**. The query filters `[FFA]` to active `FactoryCode` values. No VBA rewrites that filter on each refresh.
+
+After the query refresh, VBA syncs **`PartDashConditionsTbl`**:
+
+- Assemblies in `tblRCCP` that are missing from the dash table are **added** as Active (with `Separator` and leading zeros preserved in `DashCondition`).
+- Dash rows present in the table but **not** in `tblRCCP` are marked **Inactive** (not deleted).
+
+Parsing supports `BASE-DASH` and letter separators such as `BASEA01` (`Separator` = `A`, `DashCondition` = `01`). Uses `Base PN: Text` from RCCP when present.
+
+**Important:** load `tblRCCP` to a sheet as a ListObject (hidden is fine). Connection-only alone cannot supply assembly numbers to the next step.
+
+### Oper Completions (`tblOperComps`)
+
+No full M rewrite required. Keep an `@ffa = '...'` parameter in the Source SQL. **`RefreshOperComps`** uses the same active `FactoryCode` list as RCCP, rewrites `@ffa` **only when that list changed**, then refreshes. See [`PowerQuery/pqOperComps-FFA.txt`](../PowerQuery/pqOperComps-FFA.txt).
+
+`tblOperComps` may stay connection-only. Unchanged `@ffa` avoids Power Query permission prompts on every refresh.
+
+### Assembly Standards (`tblAssyStnd`)
+
+1. **`@ffa`** — same VBA update-on-change pattern as OperComps. See [`PowerQuery/pqAssyStnd-FFA.txt`](../PowerQuery/pqAssyStnd-FFA.txt).
+2. **`#"Filter Assemblies"`** — after Source, keep only rows whose `ASSEMBLY NO` appears in `tblRCCP`. Paste from [`PowerQuery/pqAssyStnd-FilterAssemblies.txt`](../PowerQuery/pqAssyStnd-FilterAssemblies.txt). Requires `tblRCCP` as a workbook ListObject.
+
+Run **`RefreshAssyStnd`** (or use combined refresh after RCCP).
+
+### Route Card (`tblRouteCard`)
+
+Same pattern as Assembly Standards:
+
+1. **`@ffa`** — update-on-change from FactoriesTbl. See [`PowerQuery/pqRouteCard-FFA.txt`](../PowerQuery/pqRouteCard-FFA.txt).
+2. **`#"Filter Assemblies"`** — after Source, filter to `tblRCCP` assemblies. Paste from [`PowerQuery/pqRouteCard-FilterAssemblies.txt`](../PowerQuery/pqRouteCard-FilterAssemblies.txt).
+
+Run **`RefreshRouteCard`**.
+
+### Time Yield (`tblTimeYield`)
+
+Load `tblTimeYield` to a sheet as a ListObject. **`RefreshTimeYield`** refreshes that query, then rebuilds `PartAveragesTbl`.
+
+### Combined
+
+**`RefreshAllLinkedData`** runs RCCP → OperComps → AssyStnd → RouteCard → TimeYield, then rebuilds hidden `PartAveragesTbl` once.
+
+## Notes
+
+- Form layout uses `FORM_MARGIN`, `FORM_BUTTON_WIDTH`, `FORM_BUTTON_HEIGHT`, and `FORM_BUTTON_GAP` from `modConstants`. Do not redeclare those names in UserForm code.
+- **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
+- Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to rebuild. Connection-only queries need a refresh target sheet. Specifically: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`. PartEditor then reads `PartAveragesTbl` rather than those sources.
+- Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so Insert→Checkbox in-cell checkboxes and the new operations columns appear. If checkbox formatting does not apply automatically, select the Active / Use Avg cells and use **Insert → Checkbox** once.
+- First data row is **row 4** on index sheets (headers on row 3).

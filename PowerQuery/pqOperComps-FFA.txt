@@ -1,0 +1,21 @@
+' tblOperComps — update @ffa only when FactoriesTbl codes change.
+'
+' Keep a Source SQL parameter like:
+'
+'   @ffa = 'EA, EB',
+'
+' RefreshOperComps (VBA):
+'   1. Builds the same active FactoryCode list used by tblRCCP / FactoriesTbl.
+'   2. Compares it to the current @ffa quoted value.
+'   3. Rewrites @ffa ONLY when the list changed (reduces Power Query permission prompts).
+'   4. Always refreshes the query data.
+'
+' Leave @assembly_number / @assembly_number_list alone for this table.
+'
+' Prerequisites:
+'   - FactoriesTbl has active FactoryCode rows (same codes RCCP FFA filter uses).
+'   - Source SQL contains literal @ffa = '...' with single quotes.
+'   - tblOperComps may remain connection-only.
+'
+' Admin button macro: RefreshOperComps
+' Combined later via: RefreshAllLinkedData
