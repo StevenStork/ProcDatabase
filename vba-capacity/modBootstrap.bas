@@ -69,6 +69,8 @@ Public Sub BootstrapCapacityTables()
 
     currentStep = "EnsureCacheSheet"
     EnsureCacheSheet
+    currentStep = "EnsurePartAveragesInfrastructure"
+    EnsurePartAveragesInfrastructure
     currentStep = "CompactAllCapacityTables"
     CompactAllCapacityTables
 
@@ -194,6 +196,31 @@ Private Sub EnsureCacheSheet()
 
     ws.Visible = xlSheetVeryHidden
     ws.Range(CACHE_BASE_PART_CELL).Value = vbNullString
+End Sub
+
+Public Sub EnsurePartAveragesInfrastructure()
+    Dim ws As Worksheet
+
+    EnsureSheet PART_AVERAGES_SHEET_NAME, "Part Averages"
+    Set ws = FindWorksheetByName(PART_AVERAGES_SHEET_NAME)
+    If Not ws Is Nothing Then ws.Visible = xlSheetHidden
+
+    EnsureTable PART_AVERAGES_SHEET_NAME, PART_AVERAGES_TABLE_NAME, Array( _
+        COL_BASE_PART_CODE, COL_OPER_SEQ, COL_AVG_PROCESS_HOURS, COL_AVG_EX)
+
+    Set ws = FindWorksheetByName(PART_AVERAGES_SHEET_NAME)
+    If ws Is Nothing Then Exit Sub
+
+    If Len(Trim$(CStr(Nz(ws.Range("A2").Value2)))) = 0 Then
+        ws.Range("A2").Value = "Rebuilt when tblOperComps, tblAssyStnd, or tblTimeYield is refreshed."
+    End If
+    ws.Range("A2").Font.Italic = True
+    ws.Range("A2").Font.Color = RGB(90, 90, 90)
+    ws.Columns("A").ColumnWidth = 18
+    ws.Columns("B").ColumnWidth = 12
+    ws.Columns("C").ColumnWidth = 18
+    ws.Columns("D").ColumnWidth = 12
+    ws.Visible = xlSheetVeryHidden
 End Sub
 
 Private Sub EnsureTable(ByVal sheetName As String, ByVal tableName As String, ByVal headers As Variant)
@@ -388,9 +415,11 @@ Private Sub FormatAdminSheet()
     ws.Range("A16").Value = "RefreshOperComps"
     ws.Range("A17").Value = "RefreshAssyStnd"
     ws.Range("A18").Value = "RefreshRouteCard"
-    ws.Range("A19").Value = "RefreshAllLinkedData"
-    ws.Range("A20").Value = "FormatPartEditorLayout"
-    ws.Range("A21").Value = "BootstrapCapacityTables"
+    ws.Range("A19").Value = "RefreshTimeYield"
+    ws.Range("A20").Value = "RefreshAllLinkedData"
+    ws.Range("A21").Value = "RebuildPartAverages"
+    ws.Range("A22").Value = "FormatPartEditorLayout"
+    ws.Range("A23").Value = "BootstrapCapacityTables"
     ws.Columns("A").ColumnWidth = 36
 End Sub
 

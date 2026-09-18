@@ -23,6 +23,7 @@ Paste-ready VBA for a new Excel workbook (`.xlsm`) that stores factory, equipmen
 | **PartEditor** | — | Load/edit workspace for one part at a time |
 | PartDashConditions | `PartDashConditionsTbl` | Dash conditions per base part (`Separator`, `Active`) |
 | PartOperations | `PartOperationsTbl` | Operations per base part (`OperSeq`, `OpLine`, Made In FFA, equipment, process type, times, avg toggles) |
+| PartAverages | `PartAveragesTbl` | Hidden lookup of Avg Process Hours / Avg Ex per base part + oper seq (rebuilt on refresh) |
 | PartEditorCache | — | Hidden cache for sheet editor save diff (auto-created) |
 
 ### Linked source queries (connection-only)
@@ -46,9 +47,10 @@ erDiagram
     EquipmentTbl ||--o{ FactoryEquipmentTbl : assigned
     EquipmentTbl ||--o{ EquipmentProcessTbl : supports
     ProcessTypesTbl ||--o{ EquipmentProcessTbl : assigned
-    tblOperComps --> PartEditor : avg_hours
-    tblAssyStnd --> PartEditor : avg_hours_fallback
-    tblTimeYield --> PartEditor : avg_ex
+    tblOperComps --> PartAveragesTbl : avg_hours
+    tblAssyStnd --> PartAveragesTbl : avg_hours_fallback
+    tblTimeYield --> PartAveragesTbl : avg_ex
+    PartAveragesTbl --> PartEditor : lookup
 ```
 
 ## VBA modules to add
@@ -117,7 +119,9 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 | Refresh Oper Completions | `RefreshOperComps` |
 | Refresh Assembly Standards | `RefreshAssyStnd` |
 | Refresh Route Card | `RefreshRouteCard` |
+| Refresh Time Yield | `RefreshTimeYield` |
 | Refresh all linked data | `RefreshAllLinkedData` |
+| Rebuild part averages | `RebuildPartAverages` |
 | Part Operations (form) | `ShowPartOperationsAdmin` |
 | Rebuild Tables | `BootstrapCapacityTables` |
 
@@ -125,7 +129,7 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 
 1. Add factories and parts in **Parts** (`BasePartsTbl`) or create them via the editor on save.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
-3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** always populate inline per `OperSeq` when linked average tables are available.
+3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** are looked up from hidden `PartAveragesTbl` (not recalculated per row).
 4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Use **Op Line** (`1`, `2`, …) for multiple equipment/time rows that share the same **Oper Seq**. Enter **Oper Code** as text (leading zeros preserved). Pick **Made In FFA** (factory codes), then **Equipment** (filtered by that factory) and **Process Type**. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed. **Use Avg Hours** / **Use Avg Ex** are preference flags (calculated averages are always shown). **Active** and **Notes** are the rightmost ops columns. Status messages appear in **C7**.
 5. The **Operations** table starts at 30 rows and the **Route Card** table starts at 40. Loading a part with more lines grows that table (plus a few spare rows), and typing in the last couple of operation or route-card rows adds more. Loading a smaller part or clicking **Clear** shrinks back toward those defaults. A safety cap of 500 rows applies.
 6. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
@@ -151,12 +155,14 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 | **Batch Size** | User entry → `PartOperationsTbl.BatchSize` | User-entered batch size |
 | **Use Avg Hours** | User / table (`UseAvgHours`) | Preference flag; does not hide calculated hours |
 | **Use Avg Ex** | User / table (`UseAvgEx`) | Preference flag; does not hide calculated Avg Ex |
-| **Avg Process Hours** | Calculated | Always shown when Oper Seq is set and source data exists |
-| **Avg Ex (Calc)** | Calculated | Always shown when Oper Seq is set and source data exists |
+| **Avg Process Hours** | `PartAveragesTbl` | Always shown when Oper Seq is set and a stored average exists |
+| **Avg Ex (Calc)** | `PartAveragesTbl` | Always shown when Oper Seq is set and a stored average exists |
 | **Active** | User / table | Far-right checkbox column |
 | **Notes** | User / table | Far-right notes column |
 
 ### Average calculations (`modAverages`)
+
+Averages are **not** scanned from the linked queries each time a part is loaded. They are stored on the hidden **PartAverages** sheet (`PartAveragesTbl`) and rebuilt when source data is refreshed.
 
 | Column | Source | Logic |
 |---|---|---|
@@ -173,9 +179,13 @@ Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
    - Hours: `LABOR HPS (HOURS)` on `tblOperComps`; `RUN TIME (HOURS)` on `tblAssyStnd`
    - Ex factors: `Avg 180 Day Ex`, `Avg 90 Day Ex` on `tblTimeYield`
 3. Matching uses the base part extracted from `ASSEMBLY NO` (text before `-` / letter separator) plus `OPER SEQ` equal to the operation row’s Oper Seq. Zero values are excluded from the average.
-4. Refresh linked data (`RefreshOperComps`, `RefreshAssyStnd`, or `RefreshAllLinkedData`) so the ListObjects are current before loading a part.
+4. Refresh linked data so `PartAveragesTbl` is rebuilt:
+   - `RefreshOperComps`, `RefreshAssyStnd`, or `RefreshTimeYield` (each rebuilds the averages table after that query refresh)
+   - `RefreshAllLinkedData` (RCCP → OperComps → AssyStnd → RouteCard → TimeYield, then one averages rebuild)
+   - `RebuildPartAverages` to rebuild from whatever is already on the sheets without refreshing queries
+5. PartEditor looks up `BasePartCode` + `OperSeq` in `PartAveragesTbl`. If that table is empty on first load, VBA rebuilds it once from the source ListObjects.
 
-Per-operation **Use Avg Hours** / **Use Avg Ex** flags are stored preferences. Calculated **Avg Process Hours** / **Avg Ex (Calc)** always populate when Oper Seq and linked source tables are available.
+Per-operation **Use Avg Hours** / **Use Avg Ex** flags are stored preferences. Calculated **Avg Process Hours** / **Avg Ex (Calc)** always populate when Oper Seq has a matching row in `PartAveragesTbl`.
 
 ## Linked query refresh
 
@@ -216,14 +226,18 @@ Same pattern as Assembly Standards:
 
 Run **`RefreshRouteCard`**.
 
+### Time Yield (`tblTimeYield`)
+
+Load `tblTimeYield` to a sheet as a ListObject. **`RefreshTimeYield`** refreshes that query, then rebuilds `PartAveragesTbl`.
+
 ### Combined
 
-**`RefreshAllLinkedData`** currently runs RCCP → OperComps → AssyStnd → RouteCard. More queries will be added here later.
+**`RefreshAllLinkedData`** runs RCCP → OperComps → AssyStnd → RouteCard → TimeYield, then rebuilds hidden `PartAveragesTbl` once.
 
 ## Notes
 
 - Form layout uses `FORM_MARGIN`, `FORM_BUTTON_WIDTH`, `FORM_BUTTON_HEIGHT`, and `FORM_BUTTON_GAP` from `modConstants`. Do not redeclare those names in UserForm code.
 - **One sheet per part is not used.** All parts live in tables; **PartEditor** is the edit workspace.
-- Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to calculate. Connection-only queries need a refresh target sheet until parameterized refresh is implemented. Specifically for PartEditor calc columns: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`.
+- Linked tables must exist as ListObjects on a sheet (visible or hidden) for averages to rebuild. Connection-only queries need a refresh target sheet. Specifically: `tblOperComps` and/or `tblAssyStnd`, plus `tblTimeYield`. PartEditor then reads `PartAveragesTbl` rather than those sources.
 - Re-run **`BootstrapCapacityTables`** (or **`FormatPartEditorLayout`**) after pulling these VBA updates so Insert→Checkbox in-cell checkboxes and the new operations columns appear. If checkbox formatting does not apply automatically, select the Active / Use Avg cells and use **Insert → Checkbox** once.
 - First data row is **row 4** on index sheets (headers on row 3).

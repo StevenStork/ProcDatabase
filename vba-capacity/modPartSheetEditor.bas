@@ -1680,15 +1680,6 @@ Private Function ReadEditorActiveFlag(ByVal ws As Worksheet) As Boolean
     ReadEditorActiveFlag = IsActiveFlag(ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value2)
 End Function
 
-Private Function NormalizeOperSeqKey(ByVal operSeq As String) As String
-    operSeq = Trim$(operSeq)
-    If IsNumeric(operSeq) Then
-        NormalizeOperSeqKey = CStr(CLng(CDbl(operSeq)))
-    Else
-        NormalizeOperSeqKey = operSeq
-    End If
-End Function
-
 Private Sub SetEditorStatus(ByVal ws As Worksheet, ByVal statusText As String)
     ws.Cells(PE_STATUS_ROW, PE_STATUS_VALUE_COL).Value = statusText
 End Sub

@@ -3,7 +3,7 @@ Option Explicit
 
 '==============================================================================
 ' Refresh linked Power Query connections (tblRCCP, tblOperComps, tblAssyStnd,
-' tblRouteCard).
+' tblRouteCard, tblTimeYield) and rebuild hidden PartAveragesTbl.
 '
 ' tblRCCP FFA filter is driven inside Power Query by FactoriesTbl — see
 ' PowerQuery/pqRCCP-FilteredFFAs.txt for the #"Filtered FFAs" M step.
@@ -45,31 +45,90 @@ Fail:
 End Sub
 
 Public Sub RefreshOperComps()
-    RefreshQueryWithFfaParameter LINKED_OPER_COMPS_TABLE, "tblOperComps"
+    RefreshQueryWithFfaParameter LINKED_OPER_COMPS_TABLE, "tblOperComps", True, True
 End Sub
 
 Public Sub RefreshAssyStnd()
-    RefreshQueryWithFfaParameter LINKED_ASSY_STND_TABLE, "tblAssyStnd"
+    RefreshQueryWithFfaParameter LINKED_ASSY_STND_TABLE, "tblAssyStnd", True, True
 End Sub
 
 Public Sub RefreshRouteCard()
-    RefreshQueryWithFfaParameter LINKED_ROUTE_CARD_TABLE, "tblRouteCard"
+    RefreshQueryWithFfaParameter LINKED_ROUTE_CARD_TABLE, "tblRouteCard", False, True
+End Sub
+
+Public Sub RefreshTimeYield()
+    Dim errNumber As Long
+    Dim errDescription As String
+    Dim rowCount As Long
+
+    On Error GoTo Fail
+    OptimizeExcel True
+    RefreshLinkedQuery LINKED_TIME_YIELD_TABLE
+    rowCount = RebuildPartAveragesTable()
+    OptimizeExcel False
+    MsgBox "tblTimeYield refreshed and part averages rebuilt (" & CStr(rowCount) & " rows).", vbInformation
+    Exit Sub
+
+Fail:
+    errNumber = Err.Number
+    errDescription = Err.Description
+    If Len(Trim$(errDescription)) = 0 Then errDescription = "(no description)"
+    On Error Resume Next
+    OptimizeExcel False
+    On Error GoTo 0
+    MsgBox "Could not refresh tblTimeYield: " & errDescription, vbExclamation
 End Sub
 
 ' Combined refresh button (extend as more queries are wired).
 ' RCCP first so #"Filter Assemblies" steps see current assemblies.
+' Part averages rebuild once at the end from OperComps, AssyStnd, and TimeYield.
 Public Sub RefreshAllLinkedData()
+    Dim rowCount As Long
+    Dim timeYieldNote As String
+    Dim errDescription As String
+
     RefreshRCCP
-    RefreshOperComps
-    RefreshAssyStnd
-    RefreshRouteCard
+    RefreshQueryWithFfaParameter LINKED_OPER_COMPS_TABLE, "tblOperComps", False, False
+    RefreshQueryWithFfaParameter LINKED_ASSY_STND_TABLE, "tblAssyStnd", False, False
+    RefreshQueryWithFfaParameter LINKED_ROUTE_CARD_TABLE, "tblRouteCard", False, False
+
+    On Error Resume Next
+    RefreshLinkedQuery LINKED_TIME_YIELD_TABLE
+    If Err.Number <> 0 Then
+        timeYieldNote = vbCrLf & "tblTimeYield was not refreshed: " & Err.Description
+        Err.Clear
+    End If
+    On Error GoTo 0
+
+    On Error GoTo FailAverages
+    OptimizeExcel True
+    rowCount = RebuildPartAveragesTable()
+    OptimizeExcel False
+
+    MsgBox "Linked data refresh finished. Part averages rebuilt (" & CStr(rowCount) & " rows)." & timeYieldNote, vbInformation
+    Exit Sub
+
+FailAverages:
+    errDescription = Err.Description
+    On Error Resume Next
+    OptimizeExcel False
+    On Error GoTo 0
+    If Len(Trim$(errDescription)) = 0 Then errDescription = "(no description)"
+    MsgBox "Linked data refresh finished, but part averages rebuild failed: " & errDescription & timeYieldNote, vbExclamation
 End Sub
 
-Private Sub RefreshQueryWithFfaParameter(ByVal queryName As String, ByVal displayName As String)
+Private Sub RefreshQueryWithFfaParameter( _
+    ByVal queryName As String, _
+    ByVal displayName As String, _
+    ByVal rebuildAverages As Boolean, _
+    ByVal showMessage As Boolean)
+
     Dim ffaList As String
     Dim currentFfa As String
     Dim ffaCount As Long
     Dim formulaUpdated As Boolean
+    Dim averageNote As String
+    Dim rowCount As Long
 
     ffaList = BuildActiveFactoryCodeList()
     ffaCount = CountCommaSeparatedItems(ffaList)
@@ -89,12 +148,18 @@ Private Sub RefreshQueryWithFfaParameter(ByVal queryName As String, ByVal displa
     End If
 
     RefreshLinkedQuery queryName
+    If rebuildAverages Then
+        rowCount = RebuildPartAveragesTable()
+        averageNote = vbCrLf & "Part averages rebuilt (" & CStr(rowCount) & " rows)."
+    End If
     OptimizeExcel False
 
+    If Not showMessage Then Exit Sub
+
     If formulaUpdated Then
-        MsgBox displayName & " @ffa updated to '" & ffaList & "' and refreshed.", vbInformation
+        MsgBox displayName & " @ffa updated to '" & ffaList & "' and refreshed." & averageNote, vbInformation
     Else
-        MsgBox displayName & " refreshed ( @ffa unchanged: '" & ffaList & "' ).", vbInformation
+        MsgBox displayName & " refreshed ( @ffa unchanged: '" & ffaList & "' )." & averageNote, vbInformation
     End If
     Exit Sub
 

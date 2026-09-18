@@ -567,6 +567,20 @@ Public Function OpSequencesMatch(ByVal leftValue As Variant, ByVal rightValue As
     End If
 End Function
 
+' Numeric sequences collapse to a long integer string so 010 and 10 match.
+Public Function NormalizeOperSeqKey(ByVal operSeq As Variant) As String
+    Dim textValue As String
+
+    textValue = Trim$(CStr(Nz(operSeq)))
+    If Len(textValue) = 0 Then
+        NormalizeOperSeqKey = vbNullString
+    ElseIf IsNumeric(textValue) Then
+        NormalizeOperSeqKey = CStr(CLng(CDbl(textValue)))
+    Else
+        NormalizeOperSeqKey = textValue
+    End If
+End Function
+
 Private Function BuildDisplayItem(ByVal keyValue As Variant, ByVal displayValue As Variant) As String
     Dim codeText As String
     Dim nameText As String

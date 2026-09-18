@@ -17,6 +17,7 @@ Public Const PART_EDITOR_SHEET_NAME As String = "PartEditor"
 Public Const PART_EDITOR_CACHE_SHEET_NAME As String = "PartEditorCache"
 Public Const PART_DASH_CONDITIONS_SHEET_NAME As String = "PartDashConditions"
 Public Const PART_OPERATIONS_SHEET_NAME As String = "PartOperations"
+Public Const PART_AVERAGES_SHEET_NAME As String = "PartAverages"
 
 Public Const FACTORIES_TABLE_NAME As String = "FactoriesTbl"
 Public Const EQUIPMENT_TABLE_NAME As String = "EquipmentTbl"
@@ -27,6 +28,7 @@ Public Const EQUIPMENT_PROCESSES_TABLE_NAME As String = "EquipmentProcessTbl"
 Public Const BASE_PARTS_TABLE_NAME As String = "BasePartsTbl"
 Public Const PART_DASH_CONDITIONS_TABLE_NAME As String = "PartDashConditionsTbl"
 Public Const PART_OPERATIONS_TABLE_NAME As String = "PartOperationsTbl"
+Public Const PART_AVERAGES_TABLE_NAME As String = "PartAveragesTbl"
 
 ' Linked Power Query tables (connection-only; ListObject when loaded to a sheet).
 Public Const LINKED_ROUTE_CARD_TABLE As String = "tblRouteCard"
