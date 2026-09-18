@@ -176,14 +176,6 @@ Private Function BasePartFromAssemblyNo(ByVal assemblyNo As String) As String
     SplitAssemblyNo assemblyNo, BasePartFromAssemblyNo, vbNullString
 End Function
 
-Private Function OpSequencesMatch(ByVal leftValue As String, ByVal rightValue As String) As Boolean
-    If IsNumeric(leftValue) And IsNumeric(rightValue) Then
-        OpSequencesMatch = (CDbl(leftValue) = CDbl(rightValue))
-    Else
-        OpSequencesMatch = ValuesMatchCode(leftValue, rightValue)
-    End If
-End Function
-
 Private Function TryGetNonZeroNumeric(ByVal rawValue As Variant, ByRef numericValue As Double) As Boolean
     If IsError(rawValue) Then Exit Function
     If IsEmpty(rawValue) Or IsNull(rawValue) Then Exit Function

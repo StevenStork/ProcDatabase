@@ -189,7 +189,7 @@ Public Sub DeleteRowsMatchingKey( _
     Next rowIndex
 End Sub
 
-Private Sub ApplyFieldValuesToListRow(ByVal tbl As ListObject, ByVal listRowIndex As Long, ByVal fieldValues As Object)
+Public Sub ApplyFieldValuesToListRow(ByVal tbl As ListObject, ByVal listRowIndex As Long, ByVal fieldValues As Object)
     Dim colName As Variant
 
     For Each colName In fieldValues.Keys
@@ -546,6 +546,25 @@ End Function
 
 Public Function ValuesMatchCode(ByVal leftValue As Variant, ByVal rightValue As Variant) As Boolean
     ValuesMatchCode = (StrComp(NormalizeCode(leftValue), NormalizeCode(rightValue), vbTextCompare) = 0)
+End Function
+
+Public Function OpSequencesMatch(ByVal leftValue As Variant, ByVal rightValue As Variant) As Boolean
+    Dim leftText As String
+    Dim rightText As String
+
+    leftText = Trim$(CStr(Nz(leftValue)))
+    rightText = Trim$(CStr(Nz(rightValue)))
+
+    If Len(leftText) = 0 Or Len(rightText) = 0 Then
+        OpSequencesMatch = False
+        Exit Function
+    End If
+
+    If IsNumeric(leftText) And IsNumeric(rightText) Then
+        OpSequencesMatch = (CDbl(leftText) = CDbl(rightText))
+    Else
+        OpSequencesMatch = ValuesMatchCode(leftText, rightText)
+    End If
 End Function
 
 Private Function BuildDisplayItem(ByVal keyValue As Variant, ByVal displayValue As Variant) As String

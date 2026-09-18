@@ -589,8 +589,6 @@ Private Sub FormatPartEditorSheet()
     ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_CODE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_CODE)).NumberFormat = "@"
-
-    ' User-entered numeric columns
     ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_PROCESS_HOURS), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_PROCESS_HOURS)).NumberFormat = "0.####"
@@ -604,10 +602,7 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OP_LINE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OP_LINE)).NumberFormat = "0"
 
-    ' Default Use Avg toggles to True (in-cell Insert→Checkbox values).
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_EX)).Value = True
+    ' Use Avg flags stay blank on empty operation rows; Load/Save fill True/False only when a row has data.
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
 
     Set avgRange = ws.Range( _
@@ -762,11 +757,12 @@ Private Sub EnsurePartEditorInCellCheckboxes(ByVal ws As Worksheet)
     ApplyInCellCheckboxFormatting opsShowHours
     ApplyInCellCheckboxFormatting opsShowEx
 
-    ' Insert→Checkbox defaults cells to FALSE; restore intended defaults.
+    ' Insert→Checkbox defaults cells to FALSE; keep master Active True and leave
+    ' Use Avg Hours/Ex blank until that operation row has other data.
     On Error Resume Next
     masterActive.Value = True
-    opsShowHours.Value = True
-    opsShowEx.Value = True
+    opsShowHours.ClearContents
+    opsShowEx.ClearContents
     On Error GoTo 0
 End Sub
 

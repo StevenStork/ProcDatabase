@@ -125,6 +125,7 @@ Public Sub SavePartFromEditor()
     SyncDashAssignments basePartCode, ws
     currentStep = "SyncOperationAssignments"
     SyncOperationAssignments basePartCode, ws
+    SyncOperationRowDefaults ws
     currentStep = "WriteEditorCache"
     WriteEditorCache basePartCode
 
@@ -471,10 +472,16 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     Dim partFactory As String
 
     Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
-    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
+    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then
+        SyncOperationRowDefaults ws
+        Exit Sub
+    End If
 
-    operSeqValues = tbl.ListColumns(COL_OPER_SEQ).DataBodyRange.Value2
-    If Not IsArray(operSeqValues) Then Exit Sub
+    operSeqValues = ListColumnValues2D(tbl, COL_OPER_SEQ)
+    If Not IsArray(operSeqValues) Then
+        SyncOperationRowDefaults ws
+        Exit Sub
+    End If
 
     rowCount = UBound(operSeqValues, 1)
     partFactory = NormalizeCode(CStr(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value2))
@@ -490,7 +497,10 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
 ContinueCollect:
     Next rowIndex
 
-    If matchCount = 0 Then Exit Sub
+    If matchCount = 0 Then
+        SyncOperationRowDefaults ws
+        Exit Sub
+    End If
 
     ' Sort by Oper Seq then Op Line.
     SortOperationListRows tbl, matchRows, matchCount
@@ -572,6 +582,8 @@ ContinueCollect:
         sheetRow = sheetRow + 1
         loadedCount = loadedCount + 1
     Next sortIndex
+
+    SyncOperationRowDefaults ws
 End Sub
 
 Private Function ReadOperationCodeFromRow(ByVal tbl As ListObject, ByVal rowIndex As Long) As String
@@ -666,6 +678,7 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Dim opsEquipment As Range
     Dim opsMadeInFfa As Range
     Dim opsSeq As Range
+    Dim opsBlock As Range
     Dim changedRow As Long
     Dim basePartCode As String
 
@@ -683,6 +696,9 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Set opsSeq = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_SEQ))
+    Set opsBlock = ws.Range( _
+        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
+        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL))
 
     On Error GoTo CleanUp
     Application.EnableEvents = False
@@ -697,6 +713,7 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
         changedRow = Intersect(Target, opsMadeInFfa).Row
         ApplyEquipmentValidationForRow ws, changedRow
         ClearInvalidEquipmentAndProcessForRow ws, changedRow
+        SyncOperationRowDefaultsForRow ws, changedRow
         GoTo CleanUp
     End If
 
@@ -704,20 +721,69 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
         changedRow = Intersect(Target, opsEquipment).Row
         ApplyProcessTypeValidationForRow ws, changedRow
         ClearInvalidProcessTypeForRow ws, changedRow
+        SyncOperationRowDefaultsForRow ws, changedRow
         GoTo CleanUp
     End If
 
-    If Not Intersect(Target, opsSeq) Is Nothing Then
+    If Not Intersect(Target, opsBlock) Is Nothing Then
         basePartCode = NormalizeCode(CStr(ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).Value2))
-        changedRow = Target.Row
-        If changedRow >= PE_OPS_DATA_START_ROW And changedRow <= PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1 Then
-            ApplyAveragesForOperationRow ws, changedRow, basePartCode
-        End If
+        For changedRow = Intersect(Target, opsBlock).Row To Intersect(Target, opsBlock).Row + Intersect(Target, opsBlock).Rows.Count - 1
+            If changedRow >= PE_OPS_DATA_START_ROW And changedRow <= PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1 Then
+                SyncOperationRowDefaultsForRow ws, changedRow
+                If Not Intersect(Target, opsSeq) Is Nothing Then
+                    If Not Intersect(ws.Cells(changedRow, PE_COL_OPER_SEQ), opsSeq) Is Nothing Then
+                        ApplyAveragesForOperationRow ws, changedRow, basePartCode
+                    End If
+                End If
+            End If
+        Next changedRow
     End If
 
 CleanUp:
     Application.EnableEvents = True
 End Sub
+
+Private Sub SyncOperationRowDefaults(ByVal ws As Worksheet)
+    Dim rowIndex As Long
+
+    If ws Is Nothing Then Exit Sub
+    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+        SyncOperationRowDefaultsForRow ws, rowIndex
+    Next rowIndex
+End Sub
+
+Private Sub SyncOperationRowDefaultsForRow(ByVal ws As Worksheet, ByVal sheetRow As Long)
+    If OperationEditorRowHasData(ws, sheetRow) Then
+        If IsBlankCellValue(ws.Cells(sheetRow, PE_COL_OP_LINE).Value2) Then
+            ws.Cells(sheetRow, PE_COL_OP_LINE).Value = 1
+        End If
+        If IsBlankCellValue(ws.Cells(sheetRow, PE_COL_USE_AVG_HOURS).Value2) Then
+            ws.Cells(sheetRow, PE_COL_USE_AVG_HOURS).Value = True
+        End If
+        If IsBlankCellValue(ws.Cells(sheetRow, PE_COL_USE_AVG_EX).Value2) Then
+            ws.Cells(sheetRow, PE_COL_USE_AVG_EX).Value = True
+        End If
+    Else
+        ws.Cells(sheetRow, PE_COL_USE_AVG_HOURS).ClearContents
+        ws.Cells(sheetRow, PE_COL_USE_AVG_EX).ClearContents
+        If IsBlankCellValue(ws.Cells(sheetRow, PE_COL_OPER_SEQ).Value2) Then
+            ws.Cells(sheetRow, PE_COL_OP_LINE).ClearContents
+        End If
+    End If
+End Sub
+
+Private Function OperationEditorRowHasData(ByVal ws As Worksheet, ByVal sheetRow As Long) As Boolean
+    OperationEditorRowHasData = _
+        Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_OPER_SEQ).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_OPER_CODE).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_MADE_IN_FFA).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_EQUIPMENT).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_PROCESS_TYPE).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_PROCESS_HOURS).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_MANUAL_AVG_EX).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_BATCH_SIZE).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_OPER_NOTES).Value2)
+End Function
 
 Private Sub ApplyAveragesForOperationRow(ByVal ws As Worksheet, ByVal sheetRow As Long, ByVal basePartCode As String)
     Dim operSeq As String
@@ -995,33 +1061,49 @@ End Sub
 
 Private Sub SyncOperationAssignments(ByVal basePartCode As String, ByVal ws As Worksheet)
     Dim tbl As ListObject
-    Dim cacheRows As Object
     Dim currentRows As Object
+    Dim seenKeys As Object
     Dim operKey As Variant
     Dim rowData As Variant
     Dim fieldValues As Object
     Dim operSeq As String
     Dim opLine As Long
+    Dim listRowIndex As Long
+    Dim rowIndex As Long
+    Dim storedSeq As String
+    Dim storedLine As Long
+    Dim storedKey As String
 
     Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
     If tbl Is Nothing Then Exit Sub
 
-    Set cacheRows = ReadCachedOperationRows()
     Set currentRows = ReadSheetOperationRows(ws)
+    Set seenKeys = CreateObject("Scripting.Dictionary")
+    seenKeys.CompareMode = vbTextCompare
 
-    For Each operKey In cacheRows.Keys
-        If Not currentRows.Exists(operKey) Then
-            ParseOperationCacheKey CStr(operKey), operSeq, opLine
+    ' Drop stale rows and extra copies for this part, keeping one row per current key.
+    If Not tbl.DataBodyRange Is Nothing Then
+        For rowIndex = tbl.ListRows.Count To 1 Step -1
+            If Not ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then GoTo ContinueDeleteOp
+
+            storedSeq = Trim$(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ))))
+            storedLine = 1
             If TableHasColumn(tbl, COL_OP_LINE) Then
-                DeleteTripleJunctionRow tbl, _
-                    COL_BASE_PART_CODE, basePartCode, _
-                    COL_OPER_SEQ, operSeq, _
-                    COL_OP_LINE, CStr(opLine)
-            Else
-                DeleteJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq
+                storedLine = ReadOpLineValue(GetCellValueByListRow(tbl, rowIndex, COL_OP_LINE))
             End If
-        End If
-    Next operKey
+            storedKey = BuildOperationCacheKey(storedSeq, storedLine)
+
+            If Len(storedSeq) = 0 Or Not currentRows.Exists(storedKey) Then
+                tbl.ListRows(rowIndex).Delete
+            ElseIf seenKeys.Exists(storedKey) Then
+                tbl.ListRows(rowIndex).Delete
+            Else
+                seenKeys.Add storedKey, True
+            End If
+
+ContinueDeleteOp:
+        Next rowIndex
+    End If
 
     For Each operKey In currentRows.Keys
         rowData = currentRows(operKey)
@@ -1056,19 +1138,42 @@ Private Sub SyncOperationAssignments(ByVal basePartCode As String, ByVal ws As W
         fieldValues(COL_ACTIVE) = ActiveFlagToCellValue(IsActiveFlag(rowData(12)))
         fieldValues(COL_NOTES) = CStr(rowData(13))
 
-        If TableHasColumn(tbl, COL_OP_LINE) Then
-            UpsertTripleJunctionRow tbl, _
-                COL_BASE_PART_CODE, basePartCode, _
-                COL_OPER_SEQ, operSeq, _
-                COL_OP_LINE, CStr(opLine), _
-                fieldValues
-        Else
-            UpsertJunctionRow tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, fieldValues
-        End If
-
+        listRowIndex = FindOperationListRow(tbl, basePartCode, operSeq, opLine)
+        If listRowIndex = 0 Then listRowIndex = GetOrCreateListRowIndex(tbl)
+        ApplyFieldValuesToListRow tbl, listRowIndex, fieldValues
         WriteOperCodeText tbl, basePartCode, operSeq, opLine, CStr(rowData(3))
     Next operKey
 End Sub
+
+Private Function FindOperationListRow( _
+    ByVal tbl As ListObject, _
+    ByVal basePartCode As String, _
+    ByVal operSeq As String, _
+    ByVal opLine As Long) As Long
+
+    Dim rowIndex As Long
+    Dim storedLine As Long
+
+    FindOperationListRow = 0
+    If tbl Is Nothing Then Exit Function
+    If tbl.DataBodyRange Is Nothing Then Exit Function
+
+    For rowIndex = 1 To tbl.ListRows.Count
+        If Not ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then GoTo ContinueFindOp
+        If Not OpSequencesMatch(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ), operSeq) Then GoTo ContinueFindOp
+
+        storedLine = 1
+        If TableHasColumn(tbl, COL_OP_LINE) Then
+            storedLine = ReadOpLineValue(GetCellValueByListRow(tbl, rowIndex, COL_OP_LINE))
+        End If
+        If storedLine = opLine Then
+            FindOperationListRow = tbl.ListRows(rowIndex).Index
+            Exit Function
+        End If
+
+ContinueFindOp:
+    Next rowIndex
+End Function
 
 Private Sub WriteOperCodeText( _
     ByVal tbl As ListObject, _
@@ -1090,8 +1195,7 @@ Private Sub WriteOperCodeText( _
     End If
 
     If TableHasColumn(tbl, COL_OP_LINE) Then
-        listRowIndex = FindTripleJunctionListRow( _
-            tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq, COL_OP_LINE, CStr(opLine))
+        listRowIndex = FindOperationListRow(tbl, basePartCode, operSeq, opLine)
     Else
         listRowIndex = FindJunctionListRow(tbl, COL_BASE_PART_CODE, basePartCode, COL_OPER_SEQ, operSeq)
     End If
@@ -1411,11 +1515,9 @@ Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_CODE), _
         ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_CODE)), "@"
 
-    ' Restore in-cell checkbox defaults after clear.
+    ' Master Active stays True; Use Avg flags are filled only on rows that have operation data.
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_EX)).Value = True
+    SyncOperationRowDefaults ws
 End Sub
 
 Private Function EditorNotesRange(ByVal ws As Worksheet) As Range
