@@ -127,7 +127,8 @@ Paste `ThisWorkbook.txt` into the ThisWorkbook code module.
 2. Go to **PartEditor**, enter a base part or full assembly number in **C3**.
 3. Click **Load Part** (created by bootstrap) — master fields, dash conditions, route-card rows, and operations load onto the sheet. **Avg Process Hours** and **Avg Ex (Calc)** always populate inline per `OperSeq` when linked average tables are available.
 4. Edit cells directly (name, factory, active, product line, notes in **C11:G16**, dash rows from column **I**, route card on the left of operations, operation rows from column **F**). Use **Op Line** (`1`, `2`, …) for multiple equipment/time rows that share the same **Oper Seq**. Enter **Oper Code** as text (leading zeros preserved). Pick **Made In FFA** (factory codes), then **Equipment** (filtered by that factory) and **Process Type**. Enter user **Process Hours**, **Avg Ex**, and **Batch Size** when needed. **Use Avg Hours** / **Use Avg Ex** are preference flags (calculated averages are always shown). **Active** and **Notes** are the rightmost ops columns. Status messages appear in **C7**.
-5. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
+5. The **Operations** table starts at 30 rows and the **Route Card** table starts at 40. Loading a part with more lines grows that table (plus a few spare rows), and typing in the last couple of operation or route-card rows adds more. Loading a smaller part or clicking **Clear** shrinks back toward those defaults. A safety cap of 500 rows applies.
+6. Click **Save Part** — changes write back to `BasePartsTbl`, `PartDashConditionsTbl`, and `PartOperationsTbl`. A hidden **PartEditorCache** sheet tracks the last loaded state for add/update/delete diffing.
 
 Or select a row on **Parts** and run **`OpenPartEditorFromPartsIndex`**.
 

@@ -116,16 +116,24 @@ Public Const PE_COL_DASH_NOTES As Long = 12
 Public Const PE_ROUTE_SECTION_ROW As Long = 18
 Public Const PE_ROUTE_HEADER_ROW As Long = 19
 Public Const PE_ROUTE_DATA_START_ROW As Long = 20
-Public Const PE_ROUTE_MAX_ROWS As Long = 40
+Public Const PE_ROUTE_MAX_ROWS As Long = 40 ' Minimum formatted route-card rows (not a hard cap)
 Public Const PE_COL_ROUTE_DASH As Long = 2
 Public Const PE_COL_ROUTE_OPER_SEQ As Long = 3
 Public Const PE_COL_ROUTE_OPER_CODE As Long = 4
+Public Const PE_ROUTE_CAPACITY_NAME As String = "PE_RouteCapacity"
 
 Public Const PE_OPS_SECTION_ROW As Long = 18
 Public Const PE_OPS_HEADER_ROW As Long = 19
 Public Const PE_OPS_COL_START As Long = 6
 Public Const PE_OPS_DATA_START_ROW As Long = 20
-Public Const PE_OPS_MAX_ROWS As Long = 30
+Public Const PE_OPS_MAX_ROWS As Long = 30 ' Minimum formatted operations rows (not a hard cap)
+Public Const PE_OPS_CAPACITY_NAME As String = "PE_OpsCapacity"
+
+' Shared grow/shrink policy for Operations and Route Card blocks.
+Public Const PE_BLOCK_SPARE_ROWS As Long = 5
+Public Const PE_BLOCK_GROW_BY As Long = 10
+Public Const PE_BLOCK_GROW_TRIGGER_ROWS As Long = 2
+Public Const PE_EDITOR_ABSOLUTE_MAX_ROWS As Long = 500
 
 Public Const PE_BTN_LOAD_NAME As String = "btnPartEditorLoad"
 Public Const PE_BTN_SAVE_NAME As String = "btnPartEditorSave"

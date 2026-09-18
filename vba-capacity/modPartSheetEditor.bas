@@ -165,6 +165,9 @@ Public Sub ClearPartEditor()
     ws.Cells(PE_INPUT_ROW, PE_VALUE_COL).ClearContents
     currentStep = "ClearEditorDataRanges"
     ClearEditorDataRanges ws
+    currentStep = "ResetEditorCapacity"
+    EnsurePartEditorOpsCapacity ws, PE_OPS_MAX_ROWS, True
+    EnsurePartEditorRouteCapacity ws, PE_ROUTE_MAX_ROWS, True
     currentStep = "ClearEditorCache"
     ClearEditorCache
     currentStep = "SetEditorStatus"
@@ -315,9 +318,18 @@ Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     ClearRouteCardRange ws
 
     Set tbl = FindTable(LINKED_ROUTE_CARD_TABLE)
-    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then Exit Sub
-    If Not TableHasColumn(tbl, COL_ASSEMBLY_NO) Then Exit Sub
-    If Not TableHasColumn(tbl, COL_OPER_SEQ_SOURCE) Then Exit Sub
+    If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then
+        EnsurePartEditorRouteCapacity ws, PE_ROUTE_MAX_ROWS, True
+        Exit Sub
+    End If
+    If Not TableHasColumn(tbl, COL_ASSEMBLY_NO) Then
+        EnsurePartEditorRouteCapacity ws, PE_ROUTE_MAX_ROWS, True
+        Exit Sub
+    End If
+    If Not TableHasColumn(tbl, COL_OPER_SEQ_SOURCE) Then
+        EnsurePartEditorRouteCapacity ws, PE_ROUTE_MAX_ROWS, True
+        Exit Sub
+    End If
 
     hasOperCode = TableHasColumn(tbl, COL_OPER_CODE_SOURCE)
 
@@ -331,7 +343,10 @@ Private Sub LoadRouteCardRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
 ContinueCount:
     Next rowIndex
 
-    If matchCount = 0 Then Exit Sub
+    If matchCount = 0 Then
+        EnsurePartEditorRouteCapacity ws, PE_ROUTE_MAX_ROWS, True
+        Exit Sub
+    End If
 
     ReDim matchRows(1 To matchCount, 1 To 3)
 
@@ -359,7 +374,10 @@ ContinueFill:
     Next rowIndex
 
     matchCount = matchIndex
-    If matchCount = 0 Then Exit Sub
+    If matchCount = 0 Then
+        EnsurePartEditorRouteCapacity ws, PE_ROUTE_MAX_ROWS, True
+        Exit Sub
+    End If
 
     ' Sort by dash condition, then OPER SEQ.
     For sortIndex = 1 To matchCount - 1
@@ -379,10 +397,12 @@ ContinueFill:
         Next swapIndex
     Next sortIndex
 
+    EnsurePartEditorRouteCapacity ws, matchCount + PE_BLOCK_SPARE_ROWS, True
+
     sheetRow = PE_ROUTE_DATA_START_ROW
     loadedCount = 0
     For sortIndex = 1 To matchCount
-        If loadedCount >= PE_ROUTE_MAX_ROWS Then Exit For
+        If sheetRow > PartEditorRouteLastRow() Then Exit For
         ws.Cells(sheetRow, PE_COL_ROUTE_DASH).NumberFormat = "@"
         ws.Cells(sheetRow, PE_COL_ROUTE_DASH).Value = CStr(matchRows(sortIndex, 1))
         ws.Cells(sheetRow, PE_COL_ROUTE_OPER_SEQ).Value = CStr(matchRows(sortIndex, 2))
@@ -443,13 +463,13 @@ End Function
 Private Sub ClearRouteCardRange(ByVal ws As Worksheet)
     SafeClearRange ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE))
+        ws.Cells(PartEditorRouteLastRow(), PE_COL_ROUTE_OPER_CODE))
     SafeNumberFormat ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)), "@"
+        ws.Cells(PartEditorRouteLastRow(), PE_COL_ROUTE_DASH)), "@"
     SafeNumberFormat ws.Range( _
         ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_OPER_CODE), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)), "@"
+        ws.Cells(PartEditorRouteLastRow(), PE_COL_ROUTE_OPER_CODE)), "@"
 End Sub
 
 Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As String)
@@ -473,12 +493,14 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
 
     Set tbl = FindTable(PART_OPERATIONS_TABLE_NAME)
     If tbl Is Nothing Or tbl.DataBodyRange Is Nothing Then
+        EnsurePartEditorOpsCapacity ws, PE_OPS_MAX_ROWS, True
         SyncOperationRowDefaults ws
         Exit Sub
     End If
 
     operSeqValues = ListColumnValues2D(tbl, COL_OPER_SEQ)
     If Not IsArray(operSeqValues) Then
+        EnsurePartEditorOpsCapacity ws, PE_OPS_MAX_ROWS, True
         SyncOperationRowDefaults ws
         Exit Sub
     End If
@@ -486,11 +508,23 @@ Private Sub LoadOperationRows(ByVal ws As Worksheet, ByVal basePartCode As Strin
     rowCount = UBound(operSeqValues, 1)
     partFactory = NormalizeCode(CStr(ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL).Value2))
     matchCount = 0
-    ReDim matchRows(1 To PE_OPS_MAX_ROWS, 1 To 1)
 
     For rowIndex = 1 To rowCount
+        If ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then
+            matchCount = matchCount + 1
+        End If
+    Next rowIndex
+
+    If matchCount = 0 Then
+        EnsurePartEditorOpsCapacity ws, PE_OPS_MAX_ROWS, True
+        SyncOperationRowDefaults ws
+        Exit Sub
+    End If
+
+    ReDim matchRows(1 To matchCount, 1 To 1)
+    matchCount = 0
+    For rowIndex = 1 To rowCount
         If Not ValuesMatchCode(GetCellValueByListRow(tbl, rowIndex, COL_BASE_PART_CODE), basePartCode) Then GoTo ContinueCollect
-        If matchCount >= PE_OPS_MAX_ROWS Then Exit For
         matchCount = matchCount + 1
         matchRows(matchCount, 1) = rowIndex
 
@@ -498,19 +532,21 @@ ContinueCollect:
     Next rowIndex
 
     If matchCount = 0 Then
+        EnsurePartEditorOpsCapacity ws, PE_OPS_MAX_ROWS, True
         SyncOperationRowDefaults ws
         Exit Sub
     End If
 
     ' Sort by Oper Seq then Op Line.
     SortOperationListRows tbl, matchRows, matchCount
+    EnsurePartEditorOpsCapacity ws, matchCount + PE_BLOCK_SPARE_ROWS, True
 
     sheetRow = PE_OPS_DATA_START_ROW
     loadedCount = 0
 
     For sortIndex = 1 To matchCount
         rowIndex = CLng(matchRows(sortIndex, 1))
-        If loadedCount >= PE_OPS_MAX_ROWS Then Exit For
+        If sheetRow > PartEditorOpsLastRow() Then Exit For
 
         operSeq = Trim$(CStr(Nz(GetCellValueByListRow(tbl, rowIndex, COL_OPER_SEQ))))
         opLine = ReadOpLineValue(GetCellValueByListRow(tbl, rowIndex, COL_OP_LINE))
@@ -679,26 +715,35 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
     Dim opsMadeInFfa As Range
     Dim opsSeq As Range
     Dim opsBlock As Range
+    Dim routeBlock As Range
     Dim changedRow As Long
     Dim basePartCode As String
+    Dim opsLastRow As Long
+    Dim routeLastRow As Long
 
     If Target Is Nothing Then Exit Sub
     Set ws = Target.Worksheet
     If StrComp(ws.Name, PART_EDITOR_SHEET_NAME, vbTextCompare) <> 0 Then Exit Sub
 
+    opsLastRow = PartEditorOpsLastRow()
+    routeLastRow = PartEditorRouteLastRow()
+
     Set factoryCell = ws.Cells(PE_ROW_FACTORY, PE_VALUE_COL)
     Set opsEquipment = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_EQUIPMENT), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_EQUIPMENT))
+        ws.Cells(opsLastRow, PE_COL_EQUIPMENT))
     Set opsMadeInFfa = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MADE_IN_FFA), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MADE_IN_FFA))
+        ws.Cells(opsLastRow, PE_COL_MADE_IN_FFA))
     Set opsSeq = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_SEQ))
+        ws.Cells(opsLastRow, PE_COL_OPER_SEQ))
     Set opsBlock = ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL))
+        ws.Cells(opsLastRow, PE_OPS_LAST_COL))
+    Set routeBlock = ws.Range( _
+        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
+        ws.Cells(routeLastRow, PE_COL_ROUTE_OPER_CODE))
 
     On Error GoTo CleanUp
     Application.EnableEvents = False
@@ -714,6 +759,7 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
         ApplyEquipmentValidationForRow ws, changedRow
         ClearInvalidEquipmentAndProcessForRow ws, changedRow
         SyncOperationRowDefaultsForRow ws, changedRow
+        GrowPartEditorOpsIfNeeded ws, changedRow
         GoTo CleanUp
     End If
 
@@ -722,19 +768,30 @@ Public Sub HandlePartEditorSheetChange(ByVal Target As Range)
         ApplyProcessTypeValidationForRow ws, changedRow
         ClearInvalidProcessTypeForRow ws, changedRow
         SyncOperationRowDefaultsForRow ws, changedRow
+        GrowPartEditorOpsIfNeeded ws, changedRow
         GoTo CleanUp
     End If
 
     If Not Intersect(Target, opsBlock) Is Nothing Then
         basePartCode = NormalizeCode(CStr(ws.Cells(PE_BASE_PART_ROW, PE_VALUE_COL).Value2))
         For changedRow = Intersect(Target, opsBlock).Row To Intersect(Target, opsBlock).Row + Intersect(Target, opsBlock).Rows.Count - 1
-            If changedRow >= PE_OPS_DATA_START_ROW And changedRow <= PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1 Then
+            If changedRow >= PE_OPS_DATA_START_ROW And changedRow <= opsLastRow Then
                 SyncOperationRowDefaultsForRow ws, changedRow
                 If Not Intersect(Target, opsSeq) Is Nothing Then
                     If Not Intersect(ws.Cells(changedRow, PE_COL_OPER_SEQ), opsSeq) Is Nothing Then
                         ApplyAveragesForOperationRow ws, changedRow, basePartCode
                     End If
                 End If
+                GrowPartEditorOpsIfNeeded ws, changedRow
+            End If
+        Next changedRow
+        GoTo CleanUp
+    End If
+
+    If Not Intersect(Target, routeBlock) Is Nothing Then
+        For changedRow = Intersect(Target, routeBlock).Row To Intersect(Target, routeBlock).Row + Intersect(Target, routeBlock).Rows.Count - 1
+            If changedRow >= PE_ROUTE_DATA_START_ROW And changedRow <= routeLastRow Then
+                GrowPartEditorRouteIfNeeded ws, changedRow
             End If
         Next changedRow
     End If
@@ -747,7 +804,7 @@ Private Sub SyncOperationRowDefaults(ByVal ws As Worksheet)
     Dim rowIndex As Long
 
     If ws Is Nothing Then Exit Sub
-    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+    For rowIndex = PE_OPS_DATA_START_ROW To PartEditorOpsLastRow()
         SyncOperationRowDefaultsForRow ws, rowIndex
     Next rowIndex
 End Sub
@@ -810,20 +867,26 @@ Private Sub ApplyAveragesForOperationRow(ByVal ws As Worksheet, ByVal sheetRow A
 End Sub
 
 Public Sub ApplyOperationDropdowns(ByVal ws As Worksheet)
+    If ws Is Nothing Then Set ws = GetPartEditorWorksheet()
+    If ws Is Nothing Then Exit Sub
+
+    ApplyOperationDropdownsForRows ws, PE_OPS_DATA_START_ROW, PartEditorOpsLastRow()
+End Sub
+
+Private Sub ApplyOperationDropdownsForRows(ByVal ws As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long)
     Dim rowIndex As Long
     Dim madeInRange As Range
     Dim factoryCodes As String
 
-    If ws Is Nothing Then Set ws = GetPartEditorWorksheet()
-    If ws Is Nothing Then Exit Sub
+    If lastRow < firstRow Then Exit Sub
 
     factoryCodes = BuildFactoryValidationList()
     Set madeInRange = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MADE_IN_FFA), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MADE_IN_FFA))
+        ws.Cells(firstRow, PE_COL_MADE_IN_FFA), _
+        ws.Cells(lastRow, PE_COL_MADE_IN_FFA))
     ApplyListValidation madeInRange, factoryCodes
 
-    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+    For rowIndex = firstRow To lastRow
         ApplyEquipmentValidationForRow ws, rowIndex
         ApplyProcessTypeValidationForRow ws, rowIndex
     Next rowIndex
@@ -897,7 +960,7 @@ End Sub
 Private Sub ClearInvalidEquipmentAndProcess(ByVal ws As Worksheet)
     Dim rowIndex As Long
 
-    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+    For rowIndex = PE_OPS_DATA_START_ROW To PartEditorOpsLastRow()
         ClearInvalidEquipmentAndProcessForRow ws, rowIndex
     Next rowIndex
 End Sub
@@ -1322,7 +1385,7 @@ Private Function ReadCacheSection(ByVal startRow As Long, ByVal keyCol As Long, 
             rows(keyValue) = rowData
         End If
         rowIndex = rowIndex + 1
-        If rowIndex > startRow + 100 Then Exit Do
+        If rowIndex > startRow + PE_EDITOR_ABSOLUTE_MAX_ROWS Then Exit Do
     Loop
 
     Set ReadCacheSection = rows
@@ -1395,7 +1458,7 @@ Private Function ReadCachedOperationRows() As Object
 
         rows(BuildOperationCacheKey(operSeq, opLine)) = rowData
         rowIndex = rowIndex + 1
-        If rowIndex > CACHE_OPS_START_ROW + 100 Then Exit Do
+        If rowIndex > CACHE_OPS_START_ROW + PE_EDITOR_ABSOLUTE_MAX_ROWS Then Exit Do
     Loop
 
     Set ReadCachedOperationRows = rows
@@ -1411,7 +1474,7 @@ Private Function ReadSheetOperationRows(ByVal ws As Worksheet) As Object
     Set rows = CreateObject("Scripting.Dictionary")
     rows.CompareMode = vbTextCompare
 
-    For rowIndex = PE_OPS_DATA_START_ROW To PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1
+    For rowIndex = PE_OPS_DATA_START_ROW To PartEditorOpsLastRow()
         operSeq = Trim$(CStr(ws.Cells(rowIndex, PE_COL_OPER_SEQ).Value2))
         If Len(operSeq) = 0 Then GoTo ContinueOp
 
@@ -1510,10 +1573,10 @@ Private Sub ClearEditorDataRanges(ByVal ws As Worksheet)
 
     SafeClearRange ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_OPS_LAST_COL))
+        ws.Cells(PartEditorOpsLastRow(), PE_OPS_LAST_COL))
     SafeNumberFormat ws.Range( _
         ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_CODE), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_CODE)), "@"
+        ws.Cells(PartEditorOpsLastRow(), PE_COL_OPER_CODE)), "@"
 
     ' Master Active stays True; Use Avg flags are filled only on rows that have operation data.
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
@@ -1645,4 +1708,158 @@ End Function
 
 Private Function GetCacheWorksheet() As Worksheet
     Set GetCacheWorksheet = FindWorksheetByName(PART_EDITOR_CACHE_SHEET_NAME)
+End Function
+
+'==============================================================================
+' Operations / Route Card block capacity (grows past the default formatted size)
+'==============================================================================
+
+Public Function PartEditorOpsCapacity() As Long
+    PartEditorOpsCapacity = GetNamedCapacity(PE_OPS_CAPACITY_NAME, PE_OPS_MAX_ROWS)
+End Function
+
+Public Function PartEditorOpsLastRow() As Long
+    PartEditorOpsLastRow = PE_OPS_DATA_START_ROW + PartEditorOpsCapacity() - 1
+End Function
+
+Public Function PartEditorRouteCapacity() As Long
+    PartEditorRouteCapacity = GetNamedCapacity(PE_ROUTE_CAPACITY_NAME, PE_ROUTE_MAX_ROWS)
+End Function
+
+Public Function PartEditorRouteLastRow() As Long
+    PartEditorRouteLastRow = PE_ROUTE_DATA_START_ROW + PartEditorRouteCapacity() - 1
+End Function
+
+Public Sub EnsurePartEditorOpsCapacity(ByVal ws As Worksheet, ByVal neededRows As Long, Optional ByVal allowShrink As Boolean = False)
+    EnsurePartEditorBlockCapacity ws, True, neededRows, allowShrink
+End Sub
+
+Public Sub EnsurePartEditorRouteCapacity(ByVal ws As Worksheet, ByVal neededRows As Long, Optional ByVal allowShrink As Boolean = False)
+    EnsurePartEditorBlockCapacity ws, False, neededRows, allowShrink
+End Sub
+
+Private Sub EnsurePartEditorBlockCapacity( _
+    ByVal ws As Worksheet, _
+    ByVal isOps As Boolean, _
+    ByVal neededRows As Long, _
+    ByVal allowShrink As Boolean)
+
+    Dim minRows As Long
+    Dim startRow As Long
+    Dim currentCapacity As Long
+    Dim targetCapacity As Long
+    Dim oldLast As Long
+    Dim newLast As Long
+    Dim nameText As String
+
+    If ws Is Nothing Then Exit Sub
+
+    If isOps Then
+        minRows = PE_OPS_MAX_ROWS
+        startRow = PE_OPS_DATA_START_ROW
+        currentCapacity = PartEditorOpsCapacity()
+        nameText = PE_OPS_CAPACITY_NAME
+    Else
+        minRows = PE_ROUTE_MAX_ROWS
+        startRow = PE_ROUTE_DATA_START_ROW
+        currentCapacity = PartEditorRouteCapacity()
+        nameText = PE_ROUTE_CAPACITY_NAME
+    End If
+
+    If neededRows < minRows Then neededRows = minRows
+    If neededRows > PE_EDITOR_ABSOLUTE_MAX_ROWS Then neededRows = PE_EDITOR_ABSOLUTE_MAX_ROWS
+
+    targetCapacity = currentCapacity
+    If neededRows > currentCapacity Then
+        targetCapacity = neededRows
+    ElseIf allowShrink And neededRows < currentCapacity Then
+        targetCapacity = neededRows
+    End If
+
+    If targetCapacity = currentCapacity Then
+        SetNamedCapacity nameText, currentCapacity
+        Exit Sub
+    End If
+
+    oldLast = startRow + currentCapacity - 1
+    newLast = startRow + targetCapacity - 1
+    SetNamedCapacity nameText, targetCapacity
+
+    If targetCapacity > currentCapacity Then
+        If isOps Then
+            FormatPartEditorOpsRowRange ws, oldLast + 1, newLast
+            ApplyPartEditorOpsCheckboxesForRows ws, oldLast + 1, newLast
+            ApplyOperationDropdownsForRows ws, oldLast + 1, newLast
+        Else
+            FormatPartEditorRouteRowRange ws, oldLast + 1, newLast
+        End If
+    Else
+        If isOps Then
+            ClearPartEditorExtraOpsRows ws, newLast + 1, oldLast
+        Else
+            ClearPartEditorExtraRouteRows ws, newLast + 1, oldLast
+        End If
+    End If
+End Sub
+
+Private Function GetNamedCapacity(ByVal nameText As String, ByVal defaultValue As Long) As Long
+    Dim nm As Name
+    Dim rawValue As String
+    Dim parsedValue As Long
+
+    GetNamedCapacity = defaultValue
+    On Error Resume Next
+    Set nm = ThisWorkbook.Names(nameText)
+    On Error GoTo 0
+    If nm Is Nothing Then Exit Function
+
+    rawValue = Trim$(Replace(Replace(nm.RefersTo, "=", ""), ",", ""))
+    If Len(rawValue) = 0 Then Exit Function
+    If Not IsNumeric(rawValue) Then Exit Function
+
+    parsedValue = CLng(Val(rawValue))
+    If parsedValue < defaultValue Then parsedValue = defaultValue
+    If parsedValue > PE_EDITOR_ABSOLUTE_MAX_ROWS Then parsedValue = PE_EDITOR_ABSOLUTE_MAX_ROWS
+    GetNamedCapacity = parsedValue
+End Function
+
+Private Sub SetNamedCapacity(ByVal nameText As String, ByVal capacityValue As Long)
+    On Error Resume Next
+    ThisWorkbook.Names(nameText).Delete
+    If capacityValue < 1 Then capacityValue = 1
+    ThisWorkbook.Names.Add Name:=nameText, RefersTo:="=" & CStr(capacityValue)
+    On Error GoTo 0
+End Sub
+
+Private Sub GrowPartEditorOpsIfNeeded(ByVal ws As Worksheet, ByVal changedRow As Long)
+    Dim lastRow As Long
+    Dim triggerFrom As Long
+
+    lastRow = PartEditorOpsLastRow()
+    triggerFrom = lastRow - PE_BLOCK_GROW_TRIGGER_ROWS + 1
+    If triggerFrom < PE_OPS_DATA_START_ROW Then triggerFrom = PE_OPS_DATA_START_ROW
+    If changedRow < triggerFrom Or changedRow > lastRow Then Exit Sub
+    If Not OperationEditorRowHasData(ws, changedRow) Then Exit Sub
+
+    EnsurePartEditorOpsCapacity ws, PartEditorOpsCapacity() + PE_BLOCK_GROW_BY, False
+End Sub
+
+Private Sub GrowPartEditorRouteIfNeeded(ByVal ws As Worksheet, ByVal changedRow As Long)
+    Dim lastRow As Long
+    Dim triggerFrom As Long
+
+    lastRow = PartEditorRouteLastRow()
+    triggerFrom = lastRow - PE_BLOCK_GROW_TRIGGER_ROWS + 1
+    If triggerFrom < PE_ROUTE_DATA_START_ROW Then triggerFrom = PE_ROUTE_DATA_START_ROW
+    If changedRow < triggerFrom Or changedRow > lastRow Then Exit Sub
+    If Not RouteEditorRowHasData(ws, changedRow) Then Exit Sub
+
+    EnsurePartEditorRouteCapacity ws, PartEditorRouteCapacity() + PE_BLOCK_GROW_BY, False
+End Sub
+
+Private Function RouteEditorRowHasData(ByVal ws As Worksheet, ByVal sheetRow As Long) As Boolean
+    RouteEditorRowHasData = _
+        Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_ROUTE_DASH).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_ROUTE_OPER_SEQ).Value2) _
+        Or Not IsBlankCellValue(ws.Cells(sheetRow, PE_COL_ROUTE_OPER_CODE).Value2)
 End Function

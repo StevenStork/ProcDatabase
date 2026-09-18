@@ -430,12 +430,9 @@ End Sub
 
 Private Sub FormatPartEditorSheet()
     Dim ws As Worksheet
-    Dim avgRange As Range
     Dim dashInputRange As Range
-    Dim opsInputRange As Range
     Dim notesLabelRange As Range
     Dim notesValueRange As Range
-    Dim routeRange As Range
 
     Set ws = FindWorksheetByName(PART_EDITOR_SHEET_NAME)
     If ws Is Nothing Then
@@ -548,17 +545,7 @@ Private Sub FormatPartEditorSheet()
         ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_DASH), _
         ws.Cells(PE_ROUTE_HEADER_ROW, PE_COL_ROUTE_OPER_CODE))
 
-    Set routeRange = ws.Range( _
-        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE))
-    routeRange.Interior.Color = RGB(235, 238, 242)
-    routeRange.Borders.Color = RGB(190, 198, 210)
-    ws.Range( _
-        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_DASH), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_DASH)).NumberFormat = "@"
-    ws.Range( _
-        ws.Cells(PE_ROUTE_DATA_START_ROW, PE_COL_ROUTE_OPER_CODE), _
-        ws.Cells(PE_ROUTE_DATA_START_ROW + PE_ROUTE_MAX_ROWS - 1, PE_COL_ROUTE_OPER_CODE)).NumberFormat = "@"
+    FormatPartEditorRouteRowRange ws, PE_ROUTE_DATA_START_ROW, PartEditorRouteLastRow()
 
     ' Operations (row 18+, columns start at F)
     StyleSectionHeaderRange ws, PE_OPS_SECTION_ROW, PE_OPS_COL_START, PE_OPS_LAST_COL, "Operations"
@@ -580,37 +567,14 @@ Private Sub FormatPartEditorSheet()
     ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_NOTES).Value = "Notes"
     StyleTableHeaderRow ws.Range(ws.Cells(PE_OPS_HEADER_ROW, PE_COL_OPER_SEQ), ws.Cells(PE_OPS_HEADER_ROW, PE_OPS_LAST_COL))
 
-    Set opsInputRange = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_SEQ), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_NOTES))
-    StyleEditableBlock opsInputRange
-
-    ' Oper Code is text so leading zeros are preserved.
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_CODE), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_CODE)).NumberFormat = "@"
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_PROCESS_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_PROCESS_HOURS)).NumberFormat = "0.####"
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_MANUAL_AVG_EX), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_MANUAL_AVG_EX)).NumberFormat = "0.####"
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_BATCH_SIZE), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_BATCH_SIZE)).NumberFormat = "0.####"
-    ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OP_LINE), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OP_LINE)).NumberFormat = "0"
+    FormatPartEditorOpsRowRange ws, PE_OPS_DATA_START_ROW, PartEditorOpsLastRow()
 
     ' Use Avg flags stay blank on empty operation rows; Load/Save fill True/False only when a row has data.
     ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL).Value = True
 
-    Set avgRange = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_AVG_EX))
-    avgRange.Interior.Color = RGB(235, 238, 242)
-    avgRange.Borders.Color = RGB(190, 198, 210)
-    avgRange.NumberFormat = "0.####"
+    ' Persist current block sizes so later loads can grow from this baseline.
+    EnsurePartEditorOpsCapacity ws, PartEditorOpsCapacity(), False
+    EnsurePartEditorRouteCapacity ws, PartEditorRouteCapacity(), False
 
     ws.Columns("A").ColumnWidth = 3
     ws.Columns("B").ColumnWidth = 12
@@ -691,6 +655,13 @@ End Sub
 
 Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     Dim rowIndex As Long
+    Dim lastRow As Long
+    Dim identityRange As Range
+    Dim opsRange As Range
+
+    lastRow = 70
+    If PartEditorOpsLastRow() > lastRow Then lastRow = PartEditorOpsLastRow()
+    If PartEditorRouteLastRow() > lastRow Then lastRow = PartEditorRouteLastRow()
 
     On Error Resume Next
     ws.Range("B8:B16").UnMerge
@@ -706,13 +677,15 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     DeleteLegacyFloatingCheckboxes ws
 
     ws.Range("A2").ClearContents
-    ws.Range("A70").ClearContents
-    ws.Range("B3:G70").ClearContents
-    ws.Range("B3:G70").Interior.ColorIndex = xlNone
-    ws.Range("B3:G70").Borders.LineStyle = xlNone
-    ws.Range("F18:T70").ClearContents
-    ws.Range("F18:T70").Interior.ColorIndex = xlNone
-    ws.Range("F18:T70").Borders.LineStyle = xlNone
+    ws.Cells(lastRow, 1).ClearContents
+    Set identityRange = ws.Range(ws.Cells(3, 2), ws.Cells(lastRow, 7))
+    identityRange.ClearContents
+    identityRange.Interior.ColorIndex = xlNone
+    identityRange.Borders.LineStyle = xlNone
+    Set opsRange = ws.Range(ws.Cells(PE_OPS_SECTION_ROW, PE_OPS_COL_START), ws.Cells(lastRow, PE_OPS_LAST_COL))
+    opsRange.ClearContents
+    opsRange.Interior.ColorIndex = xlNone
+    opsRange.Borders.LineStyle = xlNone
     ws.Range("I5:M30").ClearContents
     ws.Range("I5:M30").Interior.ColorIndex = xlNone
     ws.Range("I5:M30").Borders.LineStyle = xlNone
@@ -721,48 +694,135 @@ Private Sub ClearLegacyPartEditorLayout(ByVal ws As Worksheet)
     ws.Range("J5:M30").Borders.LineStyle = xlNone
 End Sub
 
+Public Sub FormatPartEditorOpsRowRange(ByVal ws As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long)
+    Dim opsInputRange As Range
+    Dim avgRange As Range
+
+    If ws Is Nothing Then Exit Sub
+    If lastRow < firstRow Then Exit Sub
+
+    Set opsInputRange = ws.Range( _
+        ws.Cells(firstRow, PE_COL_OPER_SEQ), _
+        ws.Cells(lastRow, PE_COL_OPER_NOTES))
+    StyleEditableBlock opsInputRange
+
+    ' Oper Code is text so leading zeros are preserved.
+    ws.Range(ws.Cells(firstRow, PE_COL_OPER_CODE), ws.Cells(lastRow, PE_COL_OPER_CODE)).NumberFormat = "@"
+    ws.Range(ws.Cells(firstRow, PE_COL_PROCESS_HOURS), ws.Cells(lastRow, PE_COL_PROCESS_HOURS)).NumberFormat = "0.####"
+    ws.Range(ws.Cells(firstRow, PE_COL_MANUAL_AVG_EX), ws.Cells(lastRow, PE_COL_MANUAL_AVG_EX)).NumberFormat = "0.####"
+    ws.Range(ws.Cells(firstRow, PE_COL_BATCH_SIZE), ws.Cells(lastRow, PE_COL_BATCH_SIZE)).NumberFormat = "0.####"
+    ws.Range(ws.Cells(firstRow, PE_COL_OP_LINE), ws.Cells(lastRow, PE_COL_OP_LINE)).NumberFormat = "0"
+
+    Set avgRange = ws.Range( _
+        ws.Cells(firstRow, PE_COL_AVG_HOURS), _
+        ws.Cells(lastRow, PE_COL_AVG_EX))
+    avgRange.Interior.Color = RGB(235, 238, 242)
+    avgRange.Borders.Color = RGB(190, 198, 210)
+    avgRange.NumberFormat = "0.####"
+End Sub
+
+Public Sub FormatPartEditorRouteRowRange(ByVal ws As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long)
+    Dim routeRange As Range
+
+    If ws Is Nothing Then Exit Sub
+    If lastRow < firstRow Then Exit Sub
+
+    Set routeRange = ws.Range( _
+        ws.Cells(firstRow, PE_COL_ROUTE_DASH), _
+        ws.Cells(lastRow, PE_COL_ROUTE_OPER_CODE))
+    routeRange.Interior.Color = RGB(235, 238, 242)
+    routeRange.Borders.Color = RGB(190, 198, 210)
+    ws.Range(ws.Cells(firstRow, PE_COL_ROUTE_DASH), ws.Cells(lastRow, PE_COL_ROUTE_DASH)).NumberFormat = "@"
+    ws.Range(ws.Cells(firstRow, PE_COL_ROUTE_OPER_CODE), ws.Cells(lastRow, PE_COL_ROUTE_OPER_CODE)).NumberFormat = "@"
+End Sub
+
+Public Sub ApplyPartEditorOpsCheckboxesForRows(ByVal ws As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long)
+    Dim opsActive As Range
+    Dim opsShowHours As Range
+    Dim opsShowEx As Range
+
+    If ws Is Nothing Then Exit Sub
+    If lastRow < firstRow Then Exit Sub
+
+    On Error Resume Next
+    Set opsActive = ws.Range(ws.Cells(firstRow, PE_COL_OPER_ACTIVE), ws.Cells(lastRow, PE_COL_OPER_ACTIVE))
+    Set opsShowHours = ws.Range(ws.Cells(firstRow, PE_COL_USE_AVG_HOURS), ws.Cells(lastRow, PE_COL_USE_AVG_HOURS))
+    Set opsShowEx = ws.Range(ws.Cells(firstRow, PE_COL_USE_AVG_EX), ws.Cells(lastRow, PE_COL_USE_AVG_EX))
+    On Error GoTo 0
+
+    PrepareBooleanCheckboxCells opsActive
+    PrepareBooleanCheckboxCells opsShowHours
+    PrepareBooleanCheckboxCells opsShowEx
+
+    ApplyInCellCheckboxFormatting opsActive
+    ApplyInCellCheckboxFormatting opsShowHours
+    ApplyInCellCheckboxFormatting opsShowEx
+
+    ' Insert→Checkbox defaults cells to FALSE; leave Use Avg blank until the row has other data.
+    On Error Resume Next
+    opsShowHours.ClearContents
+    opsShowEx.ClearContents
+    On Error GoTo 0
+End Sub
+
+Public Sub ClearPartEditorExtraOpsRows(ByVal ws As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long)
+    Dim targetRange As Range
+
+    If ws Is Nothing Then Exit Sub
+    If lastRow < firstRow Then Exit Sub
+
+    Set targetRange = ws.Range( _
+        ws.Cells(firstRow, PE_COL_OPER_SEQ), _
+        ws.Cells(lastRow, PE_OPS_LAST_COL))
+    On Error Resume Next
+    targetRange.Validation.Delete
+    targetRange.ClearContents
+    targetRange.ClearFormats
+    targetRange.Interior.ColorIndex = xlNone
+    targetRange.Borders.LineStyle = xlNone
+    On Error GoTo 0
+End Sub
+
+Public Sub ClearPartEditorExtraRouteRows(ByVal ws As Worksheet, ByVal firstRow As Long, ByVal lastRow As Long)
+    Dim targetRange As Range
+
+    If ws Is Nothing Then Exit Sub
+    If lastRow < firstRow Then Exit Sub
+
+    Set targetRange = ws.Range( _
+        ws.Cells(firstRow, PE_COL_ROUTE_DASH), _
+        ws.Cells(lastRow, PE_COL_ROUTE_OPER_CODE))
+    On Error Resume Next
+    targetRange.Validation.Delete
+    targetRange.ClearContents
+    targetRange.ClearFormats
+    targetRange.Interior.ColorIndex = xlNone
+    targetRange.Borders.LineStyle = xlNone
+    On Error GoTo 0
+End Sub
+
 ' Microsoft 365 Insert → Checkbox: in-cell TRUE/FALSE formatting (not ActiveX / Form Controls).
 Private Sub EnsurePartEditorInCellCheckboxes(ByVal ws As Worksheet)
     Dim masterActive As Range
     Dim dashActive As Range
-    Dim opsActive As Range
-    Dim opsShowHours As Range
-    Dim opsShowEx As Range
 
     On Error Resume Next
     Set masterActive = ws.Cells(PE_ROW_ACTIVE, PE_VALUE_COL)
     Set dashActive = ws.Range( _
         ws.Cells(PE_DASH_DATA_START_ROW, PE_COL_DASH_ACTIVE), _
         ws.Cells(PE_DASH_DATA_START_ROW + PE_DASH_MAX_ROWS - 1, PE_COL_DASH_ACTIVE))
-    Set opsActive = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_OPER_ACTIVE), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_OPER_ACTIVE))
-    Set opsShowHours = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_HOURS), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_HOURS))
-    Set opsShowEx = ws.Range( _
-        ws.Cells(PE_OPS_DATA_START_ROW, PE_COL_USE_AVG_EX), _
-        ws.Cells(PE_OPS_DATA_START_ROW + PE_OPS_MAX_ROWS - 1, PE_COL_USE_AVG_EX))
     On Error GoTo 0
 
     PrepareBooleanCheckboxCells masterActive
     PrepareBooleanCheckboxCells dashActive
-    PrepareBooleanCheckboxCells opsActive
-    PrepareBooleanCheckboxCells opsShowHours
-    PrepareBooleanCheckboxCells opsShowEx
-
     ApplyInCellCheckboxFormatting masterActive
     ApplyInCellCheckboxFormatting dashActive
-    ApplyInCellCheckboxFormatting opsActive
-    ApplyInCellCheckboxFormatting opsShowHours
-    ApplyInCellCheckboxFormatting opsShowEx
 
-    ' Insert→Checkbox defaults cells to FALSE; keep master Active True and leave
-    ' Use Avg Hours/Ex blank until that operation row has other data.
+    ApplyPartEditorOpsCheckboxesForRows ws, PE_OPS_DATA_START_ROW, PartEditorOpsLastRow()
+
+    ' Insert→Checkbox defaults cells to FALSE; keep master Active True.
     On Error Resume Next
     masterActive.Value = True
-    opsShowHours.ClearContents
-    opsShowEx.ClearContents
     On Error GoTo 0
 End Sub
 
