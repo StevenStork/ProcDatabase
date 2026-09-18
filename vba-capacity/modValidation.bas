@@ -45,18 +45,30 @@ End Function
 Public Function JoinStringArray(ByVal items As Variant, ByVal separator As String) As String
     Dim itemIndex As Long
     Dim result As String
+    Dim itemText As String
 
     If Not IsArrayAllocated(items) Then Exit Function
 
     For itemIndex = LBound(items) To UBound(items)
-        If Len(CStr(items(itemIndex))) = 0 Then GoTo ContinueJoin
+        itemText = JoinStringArrayItem(items, itemIndex)
+        If Len(itemText) = 0 Then GoTo ContinueJoin
         If Len(result) > 0 Then result = result & separator
-        result = result & CStr(items(itemIndex))
+        result = result & itemText
 
 ContinueJoin:
     Next itemIndex
 
     JoinStringArray = result
+End Function
+
+Private Function JoinStringArrayItem(ByVal items As Variant, ByVal itemIndex As Long) As String
+    On Error Resume Next
+    JoinStringArrayItem = Trim$(CStr(items(itemIndex)))
+    If Err.Number <> 0 Then
+        Err.Clear
+        JoinStringArrayItem = Trim$(CStr(items(itemIndex, 1)))
+    End If
+    On Error GoTo 0
 End Function
 
 Public Function ValidateRequiredCode(ByVal codeValue As String, ByVal fieldLabel As String) As Boolean

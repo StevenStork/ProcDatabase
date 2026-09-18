@@ -51,21 +51,51 @@ Public Function FindWorksheetByName(ByVal sheetName As String) As Worksheet
 End Function
 
 ' Always returns a 2-D array (rows x 1) or Empty when the table/column has no data.
+' Excel may return a scalar, a 1-D vector, or a 2-D array depending on row count
+' and how the ListObject was loaded (including Power Query sheets).
 Public Function ListColumnValues2D(ByVal tbl As ListObject, ByVal columnName As String) As Variant
-    Dim values As Variant
-    Dim wrapped(1 To 1, 1 To 1) As Variant
-
     If tbl Is Nothing Then Exit Function
     If tbl.DataBodyRange Is Nothing Then Exit Function
     If Not TableHasColumn(tbl, columnName) Then Exit Function
 
-    values = tbl.ListColumns(columnName).DataBodyRange.Value2
-    If IsArray(values) Then
-        ListColumnValues2D = values
-    Else
+    ListColumnValues2D = CoerceColumnValues2D(tbl.ListColumns(columnName).DataBodyRange.Value2)
+End Function
+
+Private Function CoerceColumnValues2D(ByVal values As Variant) As Variant
+    Dim wrapped() As Variant
+    Dim rowCount As Long
+    Dim rowIndex As Long
+    Dim secondBound As Long
+
+    If IsError(values) Then Exit Function
+    If IsEmpty(values) Then Exit Function
+
+    If Not IsArray(values) Then
+        ReDim wrapped(1 To 1, 1 To 1)
         wrapped(1, 1) = values
-        ListColumnValues2D = wrapped
+        CoerceColumnValues2D = wrapped
+        Exit Function
     End If
+
+    On Error Resume Next
+    secondBound = UBound(values, 2)
+    If Err.Number = 0 Then
+        On Error GoTo 0
+        CoerceColumnValues2D = values
+        Exit Function
+    End If
+    Err.Clear
+    On Error GoTo 0
+
+    rowCount = UBound(values) - LBound(values) + 1
+    If rowCount < 1 Then Exit Function
+
+    ReDim wrapped(1 To rowCount, 1 To 1)
+    For rowIndex = 1 To rowCount
+        wrapped(rowIndex, 1) = values(LBound(values) + rowIndex - 1)
+    Next rowIndex
+
+    CoerceColumnValues2D = wrapped
 End Function
 
 Public Function TableColumnHasValue( _
@@ -102,23 +132,26 @@ Public Function ListActiveKeyCodes(ByVal tbl As ListObject, ByVal keyColumnName 
     Dim items() As String
     Dim itemCount As Long
     Dim keyValues As Variant
+    Dim activeValues As Variant
     Dim rowIndex As Long
     Dim codeValue As String
 
     itemCount = 0
-    ReDim items(0 To -1)
-
     keyValues = ListColumnValues2D(tbl, keyColumnName)
     If Not IsArray(keyValues) Then
-        ListActiveKeyCodes = items
+        ListActiveKeyCodes = Empty
         Exit Function
+    End If
+
+    If TableHasColumn(tbl, COL_ACTIVE) Then
+        activeValues = ListColumnValues2D(tbl, COL_ACTIVE)
     End If
 
     For rowIndex = 1 To UBound(keyValues, 1)
         codeValue = NormalizeCode(keyValues(rowIndex, 1))
         If Len(codeValue) = 0 Then GoTo ContinueActiveKey
-        If TableHasColumn(tbl, COL_ACTIVE) Then
-            If Not IsActiveFlag(GetCellValueByListRow(tbl, tbl.ListRows(rowIndex).Index, COL_ACTIVE)) Then GoTo ContinueActiveKey
+        If IsArray(activeValues) Then
+            If Not IsActiveFlag(activeValues(rowIndex, 1)) Then GoTo ContinueActiveKey
         End If
 
         If itemCount = 0 Then
@@ -132,7 +165,11 @@ Public Function ListActiveKeyCodes(ByVal tbl As ListObject, ByVal keyColumnName 
 ContinueActiveKey:
     Next rowIndex
 
-    ListActiveKeyCodes = items
+    If itemCount = 0 Then
+        ListActiveKeyCodes = Empty
+    Else
+        ListActiveKeyCodes = items
+    End If
 End Function
 
 Public Sub DeleteRowsMatchingKey( _
@@ -309,10 +346,13 @@ End Sub
 
 Public Function GetCellValueByListRow(ByVal tbl As ListObject, ByVal listRowIndex As Long, ByVal columnName As String) As Variant
     Dim lr As ListRow
+    Dim colIndex As Long
 
     On Error GoTo Fail
+    colIndex = TableColumnIndex(tbl, columnName)
+    If listRowIndex < 1 Or colIndex < 1 Then GoTo Fail
     Set lr = tbl.ListRows(listRowIndex)
-    GetCellValueByListRow = lr.Range.Cells(1, TableColumnIndex(tbl, columnName)).Value2
+    GetCellValueByListRow = lr.Range.Cells(1, colIndex).Value2
     Exit Function
 
 Fail:
